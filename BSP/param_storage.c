@@ -31,7 +31,7 @@
 #define DEF_MODBUS_ADDR    2
 #define DEF_BAUD_RATE      3
 #define DEF_PWD_OPERATOR   0
-#define DEF_PWD_ENGINEER   1234
+#define DEF_PWD_ENGINEER   123
 
 /* ===== 范围限制 ===== */
 #define METER_COEFF_MIN    0.001f
