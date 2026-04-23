@@ -9,6 +9,7 @@
  */
 /* Private includes ----------------------------------------------------------*/
 #include "bsp_usart.h"
+#include "param_storage.h"
 
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
@@ -60,7 +61,7 @@ uint8_t ValveConCloseTimes;       // 写阀关
 uint8_t ReadFlowRateTimes;
 uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
-#define FlowMeterComId                  2      // 流量计设备地址站号
+static uint16_t FlowMeterComId = 2;  /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
 #define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
 #define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
 #define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
@@ -749,6 +750,9 @@ void Modbus_Function_3(void)
     }
     if ((startaddress >= SpanValueStartMinAddress) && (startaddress <= SpanValueStartMaxAddress))
     {
+        /* 从 param_storage 同步到 SpanValueBuf (本地缓存) */
+        SpanLoValue = param_get_value_4ma();
+        SpanHiValue = param_get_value_20ma();
         if (MbBufferLen <= (SpanValueStartMaxAddress - startaddress + 2))
         {
             for (j = 0; j < MbBufferLen / 2; j++)
@@ -812,7 +816,6 @@ void Modbus_Function_4(void)
 /*对应MODBUS 0x10命令函数*/
 void Modbus_Function_10(void)
 {
-    uint32_t BackupBuf[2];
     uint8_t  i;
     uint16_t startaddress = 0;
     uint16_t MbBufferLen;
@@ -855,13 +858,9 @@ void Modbus_Function_10(void)
                 SpanValueBuf[(startaddress - SpanValueStartMinAddress) / 2 + i].str[3] = Uart2RxBuffer[7 + 2 * i + 2];
                 SpanValueBuf[(startaddress - SpanValueStartMinAddress) / 2 + i].str[2] = Uart2RxBuffer[7 + 2 * i + 3];
             }
-            BackupBuf[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) + ((uint32_t)SpanValueBuf[0].str[1] << 16) + ((uint32_t)SpanValueBuf[0].str[2] << 8) +
-                           SpanValueBuf[0].str[3];
-
-            BackupBuf[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) + ((uint32_t)SpanValueBuf[1].str[1] << 16) + ((uint32_t)SpanValueBuf[1].str[2] << 8) +
-                           SpanValueBuf[1].str[3];
-
-            WriteBufferFlash(2, ADDR_FLASH_PAGE_63, BackupBuf);
+            /* param_storage setter 写 Flash + 更新 RAM */
+            param_set_value_4ma(SpanLoValue);
+            param_set_value_20ma(SpanHiValue);
         }
         Uart2SendDataType.TxBuffer[0]                             = FlowMeterComId;
         Uart2SendDataType.TxBuffer[1]                             = 0x10;
@@ -881,6 +880,17 @@ void Modbus_Function_10(void)
         Uart2RxCounter            = 0;
     }
 }
+
+/**
+ * @brief   设置 Modbus 从站地址 (运行时)
+ */
+void bsp_usart_set_modbus_addr(uint16_t addr)
+{
+    if (addr >= 1 && addr <= 247) {
+        FlowMeterComId = addr;
+    }
+}
+
 /**
  * @Author: liyongtai
  * @description: 4个字节转换为IEEE 754浮点数

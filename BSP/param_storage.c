@@ -171,8 +171,15 @@ HAL_StatusTypeDef param_storage_init(void)
     s_params.damping_time  = DEF_DAMPING_TIME;
 
     /* Phase 2+: 暂用默认值, TODO: 后续从 Flash 读取 */
-    s_params.value_4ma       = DEF_VALUE_4MA;
-    s_params.value_20ma      = DEF_VALUE_20MA;
+    /* value_4ma / value_20ma 从 Flash Page 63 加载 (与 Data_Init 同源) */
+    {
+        uint32_t span_buf[2];
+        ReadBufferFlash(2, ADDR_FLASH_PAGE_63, span_buf);
+        s_params.value_4ma = (span_buf[0] == 0xFFFFFFFF)
+            ? DEF_VALUE_4MA : clamp_f(u32_to_float(span_buf[0]), VALUE_4MA_MIN, VALUE_4MA_MAX);
+        s_params.value_20ma = (span_buf[1] == 0xFFFFFFFF)
+            ? DEF_VALUE_20MA : clamp_f(u32_to_float(span_buf[1]), VALUE_20MA_MIN, VALUE_20MA_MAX);
+    }
     s_params.freq_output     = DEF_FREQ_OUTPUT;
     s_params.pulse_equiv     = DEF_PULSE_EQUIV;
     s_params.medium_density  = DEF_MEDIUM_DENSITY;
@@ -244,7 +251,7 @@ HAL_StatusTypeDef param_set_std_cond(uint8_t idx)
     packed = ((uint32_t)s_params.std_cond << 16) |
              ((uint32_t)s_params.flow_unit << 8) |
              ((uint32_t)s_params.total_unit);
-    return WriteBufferFlash(1, PARAM_PAGE_BASIC, &packed);
+    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_BASIC, &packed);
 }
 
 HAL_StatusTypeDef param_set_flow_unit(uint8_t idx)
@@ -254,7 +261,7 @@ HAL_StatusTypeDef param_set_flow_unit(uint8_t idx)
     packed = ((uint32_t)s_params.std_cond << 16) |
              ((uint32_t)s_params.flow_unit << 8) |
              ((uint32_t)s_params.total_unit);
-    return WriteBufferFlash(1, PARAM_PAGE_BASIC, &packed);
+    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_BASIC, &packed);
 }
 
 HAL_StatusTypeDef param_set_total_unit(uint8_t idx)
@@ -264,7 +271,7 @@ HAL_StatusTypeDef param_set_total_unit(uint8_t idx)
     packed = ((uint32_t)s_params.std_cond << 16) |
              ((uint32_t)s_params.flow_unit << 8) |
              ((uint32_t)s_params.total_unit);
-    return WriteBufferFlash(1, PARAM_PAGE_BASIC, &packed);
+    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_BASIC, &packed);
 }
 
 HAL_StatusTypeDef param_set_meter_coeff(float val)
@@ -272,7 +279,7 @@ HAL_StatusTypeDef param_set_meter_coeff(float val)
     uint32_t buf;
     s_params.meter_coeff = clamp_f(val, METER_COEFF_MIN, METER_COEFF_MAX);
     buf = float_to_u32(s_params.meter_coeff);
-    return WriteBufferFlash(1, PARAM_PAGE_METER, &buf);
+    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_METER, &buf);
 }
 
 HAL_StatusTypeDef param_set_medium_coeff(float val)
@@ -280,7 +287,7 @@ HAL_StatusTypeDef param_set_medium_coeff(float val)
     uint32_t buf;
     s_params.medium_coeff = clamp_f(val, MEDIUM_COEFF_MIN, MEDIUM_COEFF_MAX);
     buf = float_to_u32(s_params.medium_coeff);
-    return WriteBufferFlash(1, PARAM_PAGE_MEDIUM, &buf);
+    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_MEDIUM, &buf);
 }
 
 /* small_signal / filter_time / damping_time: 暂只更新 RAM, TODO 写 Flash */
@@ -302,17 +309,23 @@ HAL_StatusTypeDef param_set_damping_time(float val)
     return HAL_OK;
 }
 
-/* ===== Phase 2 输出 setter (TODO: 写 Flash) ===== */
+/* ===== Phase 2 输出 setter — 写 Flash Page 63 ===== */
 HAL_StatusTypeDef param_set_value_4ma(float val)
 {
+    uint32_t buf[2];
     s_params.value_4ma = clamp_f(val, VALUE_4MA_MIN, VALUE_4MA_MAX);
-    return HAL_OK;
+    buf[0] = float_to_u32(s_params.value_4ma);
+    buf[1] = float_to_u32(s_params.value_20ma);
+    return (HAL_StatusTypeDef)WriteBufferFlash(2, ADDR_FLASH_PAGE_63, buf);
 }
 
 HAL_StatusTypeDef param_set_value_20ma(float val)
 {
+    uint32_t buf[2];
     s_params.value_20ma = clamp_f(val, VALUE_20MA_MIN, VALUE_20MA_MAX);
-    return HAL_OK;
+    buf[0] = float_to_u32(s_params.value_4ma);
+    buf[1] = float_to_u32(s_params.value_20ma);
+    return (HAL_StatusTypeDef)WriteBufferFlash(2, ADDR_FLASH_PAGE_63, buf);
 }
 
 HAL_StatusTypeDef param_set_freq_output(float val)

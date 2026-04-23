@@ -139,6 +139,10 @@ int main(void)
     DacValue = 8000;
     Data_Init();
     param_storage_init();
+    bsp_usart_set_modbus_addr(param_get_modbus_addr());
+    /* SpanValueBuf 同步为 param_storage 的值 (Modbus 读响应缓存) */
+    SpanLoValue = param_get_value_4ma();
+    SpanHiValue = param_get_value_20ma();
     key_init();
     menu_init(NULL);
     __HAL_UART_CLEAR_IDLEFLAG(&huart1);
@@ -187,6 +191,8 @@ int main(void)
                     .p_module_state = &ModuleState,
                     .p_dac_value    = &DacValue,
                     .p_dac_buf      = DacValueBuf,
+                    .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
+                    .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
                 };
                 run_display_render(&input);
             }
@@ -200,7 +206,27 @@ int main(void)
         PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
         PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
         if ((!ForceDacOutFlag) && (!CalEnabledFlag))
-            DacValue = (uint16_t)(ConvertFunc(FlowRateValue.num, SpanLoValue, SpanHiValue, (float)DacZeroValue, (float)DacFullValue));
+        {
+            /* Step 3: 仪表系数 + 介质系数 */
+            float corrected_flow = FlowRateValue.num
+                * param_get_meter_coeff()
+                * param_get_medium_coeff();
+
+            /* DAC 线性换算: corrected_flow → 4~20mA PWM */
+            DacValue = (uint16_t)(ConvertFunc(corrected_flow,
+                param_get_value_4ma(), param_get_value_20ma(),
+                (float)DacZeroValue, (float)DacFullValue));
+
+            /* Step 4: 小信号切除 — 流量低于 [量程下限 + 量程×N%] 时输出零点 */
+            {
+                float span = param_get_value_20ma() - param_get_value_4ma();
+                if (span > 0.0f) {
+                    float threshold = span * param_get_small_signal() / 100.0f;
+                    if (corrected_flow < (param_get_value_4ma() + threshold))
+                        DacValue = DacZeroValue;
+                }
+            }
+        }
     }
     /* USER CODE END 3 */
 }

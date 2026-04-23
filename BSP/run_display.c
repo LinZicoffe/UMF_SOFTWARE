@@ -64,9 +64,7 @@ static void render_page_main(const run_display_input_t *p_in)
 
     len = (uint8_t)strlen(buf);
     x_start = (uint8_t)((128 - len * 11) / 2);
-    ssd1306_SetCursor(x_start, 14);
-    ssd1306_WriteString(buf, Font_11x18, White);
-    ssd1306_SetCursor(x_start, 32);
+    ssd1306_SetCursor(x_start, 22);
     ssd1306_WriteString(buf, Font_11x18, White);
 #endif
 
@@ -77,7 +75,7 @@ static void render_page_main(const run_display_input_t *p_in)
     ssd1306_SetCursor(30, 56);
     ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_6x8, White);
     ssd1306_SetCursor(96, 56);
-    ssd1306_WriteString((char *)(*(p_in->p_sum_unit) ? "m3/h" : "L/h"), Font_6x8, White);
+    ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_6x8, White);
 #endif
 }
 
@@ -93,7 +91,7 @@ static void render_page_aux(const run_display_input_t *p_in)
     snprintf(buf, sizeof(buf), "%.1f", p_in->p_flow_rate->num);
     ssd1306_SetCursor(42, 0); ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_SetCursor(90, 0);
-    ssd1306_WriteString((char *)(*(p_in->p_sum_unit) ? "m3/h" : "L/h"), Font_6x8, White);
+    ssd1306_WriteString((char *)p_in->p_flow_unit_str, Font_6x8, White);
 
     /* y=8: Vel (占位) */
     ssd1306_SetCursor(0, 8);  ssd1306_WriteString("Vel:", Font_6x8, White);
@@ -133,7 +131,7 @@ static void render_page_aux(const run_display_input_t *p_in)
     ssd1306_SetCursor(0, 56); ssd1306_WriteString("TOT:", Font_6x8, White);
     ssd1306_SetCursor(42, 56); ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_6x8, White);
     ssd1306_SetCursor(96, 56);
-    ssd1306_WriteString((char *)(*(p_in->p_sum_unit) ? "m3" : "L"), Font_6x8, White);
+    ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_6x8, White);
 #endif
 }
 

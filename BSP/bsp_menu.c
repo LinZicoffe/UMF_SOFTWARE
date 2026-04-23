@@ -335,9 +335,10 @@ static void save_param_val(screen_t scr, float val)
     case SCR_SET_TOTAL:    param_set_forward_total(val); break;
     case SCR_DAC_ZERO:     DacZeroValue = (uint16_t)val; break;
     case SCR_DAC_FULL:     DacFullValue = (uint16_t)val; break;
-    case SCR_SPAN_ZERO:    SpanLoValue = val;            break;
-    case SCR_SPAN_FULL:    SpanHiValue = val;            break;
-    case SCR_COMM_ADDR:    param_set_modbus_addr((uint16_t)val); break;
+    case SCR_SPAN_ZERO:    param_set_value_4ma(val);    SpanLoValue = val; break;
+    case SCR_SPAN_FULL:    param_set_value_20ma(val);   SpanHiValue = val; break;
+    case SCR_COMM_ADDR:    param_set_modbus_addr((uint16_t)val);
+                           bsp_usart_set_modbus_addr((uint16_t)val); break;
     default: break;
     }
 }

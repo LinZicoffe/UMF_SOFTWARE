@@ -74,5 +74,6 @@ extern void          EnableUart_IT_IDLE(UART_HandleTypeDef *huart, Uart_RecTypeD
 extern void          UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeDef *hdma_uart_rx);
 extern void          Uart1_Communication(void);
 extern void          Uart2_Communication(void);
+extern void          bsp_usart_set_modbus_addr(uint16_t addr);
 
 #endif

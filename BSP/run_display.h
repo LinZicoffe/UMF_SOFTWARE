@@ -26,6 +26,8 @@ typedef struct {
     const uint8_t               *p_module_state;
     const uint16_t              *p_dac_value;
     const uint16_t              *p_dac_buf;      /* [2]: DacZeroValue, DacFullValue */
+    const char                  *p_flow_unit_str;  /* 流量单位字符串, 由 param_get_flow_unit_str() 填充 */
+    const char                  *p_total_unit_str; /* 累积单位字符串, 由 param_get_total_unit_str() 填充 */
 } run_display_input_t;
 
 /* 运行显示配置 */
