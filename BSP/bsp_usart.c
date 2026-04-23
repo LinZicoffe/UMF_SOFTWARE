@@ -32,10 +32,10 @@ Uart_RecTypeDef  Uart2ReceiveType;
 Uart_SendTypeDef Uart1SendDataType;
 Uart_SendTypeDef Uart2SendDataType;
 uint8_t          Uart1RxBuffer[UART_RX_LEN]; // 数据处理区域
-uint8_t          Uart1HaveData;
+volatile uint8_t Uart1HaveData;
 uint8_t          Uart1RxCounter;
 uint8_t          Uart2RxBuffer[UART_RX_LEN]; // 数据处理区域
-uint8_t          Uart2HaveData;
+volatile uint8_t Uart2HaveData;
 uint8_t          Uart2RxCounter;
 uint8_t          ModbusCommEnable;
 
@@ -61,7 +61,7 @@ uint8_t ValveConCloseTimes;       // 写阀关
 uint8_t ReadFlowRateTimes;
 uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
-static uint16_t FlowMeterComId = 2;  /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
+static uint16_t s_modbus_addr = 2;   /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
 #define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
 #define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
 #define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
@@ -139,6 +139,7 @@ void UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeDef *hdma_uart_rx
             else
                 Uart1ReceiveType.RX_Size = 0;
             Uart1ReceiveType.RX_Flag = 1;
+            /* 背压策略: 上一帧未处理完时不重启 DMA, 避免覆盖缓冲区 */
             if (!Uart1HaveData)
             {
                 Uart1HaveData = 1;
@@ -158,6 +159,7 @@ void UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeDef *hdma_uart_rx
             else
                 Uart2ReceiveType.RX_Size = 0;
             Uart2ReceiveType.RX_Flag = 1;
+            /* 背压策略: 上一帧未处理完时不重启 DMA, 避免覆盖缓冲区 */
             if (!Uart2HaveData)
             {
                 Uart2HaveData = 1;
@@ -221,10 +223,10 @@ void Uart1_Send_Function(void)
         Uart1SendDataType.TxBuffer[0] = PREAMBLE;
         Uart1SendDataType.TxBuffer[1] = PREAMBLE;
         Uart1SendDataType.TxBuffer[2] = STARTCMD;
-        Uart1SendDataType.TxBuffer[3] = FLWRstCmd;
-        Uart1SendDataType.TxBuffer[4] = FLWRstCmdPra;
-        checkbuffer[0]                = FLWRstCmd;
-        checkbuffer[1]                = FLWRstCmdPra;
+        Uart1SendDataType.TxBuffer[3] = FLWClearCmd;
+        Uart1SendDataType.TxBuffer[4] = FLWClearCmdPra;
+        checkbuffer[0]                = FLWClearCmd;
+        checkbuffer[1]                = FLWClearCmdPra;
         Uart1SendDataType.TxBuffer[5] = GetCheckSum(checkbuffer, 2);
         Uart1SendDataType.TxBuffer[6] = EOFbyte;
         Uart1SendDataType.TX_Size     = 7;
@@ -237,10 +239,10 @@ void Uart1_Send_Function(void)
         Uart1SendDataType.TxBuffer[0] = PREAMBLE;
         Uart1SendDataType.TxBuffer[1] = PREAMBLE;
         Uart1SendDataType.TxBuffer[2] = STARTCMD;
-        Uart1SendDataType.TxBuffer[3] = FLWClearCmd;
-        Uart1SendDataType.TxBuffer[4] = FLWClearCmdPra;
-        checkbuffer[0]                = FLWClearCmd;
-        checkbuffer[1]                = FLWClearCmdPra;
+        Uart1SendDataType.TxBuffer[3] = FLWRstCmd;
+        Uart1SendDataType.TxBuffer[4] = FLWRstCmdPra;
+        checkbuffer[0]                = FLWRstCmd;
+        checkbuffer[1]                = FLWRstCmdPra;
         Uart1SendDataType.TxBuffer[5] = GetCheckSum(checkbuffer, 2);
         Uart1SendDataType.TxBuffer[6] = EOFbyte;
         Uart1SendDataType.TX_Size     = 7;
@@ -438,7 +440,7 @@ void Uart2_Communication(void)
     uint8_t  temp[2];
     if (Uart2HaveData == 1)                     // 接收完成标志=1处理，否则号?号
     {
-        if (Uart2RxBuffer[0] == FlowMeterComId) // 地址错误不应号
+        if (Uart2RxBuffer[0] == s_modbus_addr) // 地址错误不应号
         {
             crcresult = getCRC16(Uart2RxBuffer, Uart2RxCounter - 2);
             temp[1]   = crcresult & 0xff;
@@ -502,7 +504,7 @@ void Modbus_Function_1(void)
     uint16_t sendbytelength;
     uint16_t crcresult_1;
     uint8_t  i;
-    Uart2SendDataType.TxBuffer[0] = FlowMeterComId;
+    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
     Uart2SendDataType.TxBuffer[1] = 0x01;
     startaddress                  = (((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3]);
     MbBufferLen                   = (((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
@@ -544,7 +546,7 @@ void Modbus_Function_5(void)
     uint16_t tempdress            = 0;
     // uint16_t crcresult;
     tempdress                     = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
-    Uart2SendDataType.TxBuffer[0] = FlowMeterComId;
+    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
     Uart2SendDataType.TxBuffer[1] = 0x05;
     Uart2SendDataType.TxBuffer[2] = Uart2RxBuffer[2];
     Uart2SendDataType.TxBuffer[3] = Uart2RxBuffer[3];
@@ -667,7 +669,7 @@ void Modbus_Function_6(void)
     }
     if (tx_flat == 1)
     {
-        Uart2SendDataType.TxBuffer[0]                             = FlowMeterComId;
+        Uart2SendDataType.TxBuffer[0]                             = s_modbus_addr;
         Uart2SendDataType.TxBuffer[1]                             = 0x06;
         Uart2SendDataType.TxBuffer[2]                             = Uart2RxBuffer[2];
         Uart2SendDataType.TxBuffer[3]                             = Uart2RxBuffer[3];
@@ -695,7 +697,9 @@ void Modbus_Function_3(void)
     uint16_t crcresult_3;
     startaddress                  = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
     MbBufferLen                   = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
-    Uart2SendDataType.TxBuffer[0] = FlowMeterComId;
+    /* Modbus 缓冲区溢出防护: TX_Size = 2*Len + 3 + 2(CRC) <= UART_TX_LEN(150) */
+    if (MbBufferLen > 62) MbBufferLen = 62;
+    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
     Uart2SendDataType.TxBuffer[1] = 0x03;
     Uart2SendDataType.TxBuffer[2] = 2 * MbBufferLen;
     Uart2SendDataType.TX_Size     = 2 * MbBufferLen + 3;
@@ -786,11 +790,12 @@ void Modbus_Function_4(void)
     // uint8_t  i         = 3;
     uint16_t crcresult_4;
     tempdress                     = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
-    Uart2SendDataType.TxBuffer[0] = FlowMeterComId;
+    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
     Uart2SendDataType.TxBuffer[1] = 0x04;
     Uart2SendDataType.TxBuffer[2] = 2 * Uart2RxBuffer[5];
     temp                          = Uart2RxBuffer[5];
-    Uart2SendDataType.TX_Size     = 2 * Uart2RxBuffer[5] + 3;
+    if (temp > 62) temp = 62;   /* 缓冲区溢出防护 */
+    Uart2SendDataType.TX_Size     = 2 * temp + 3;
 
     if (tempdress == 19)
     { /*
@@ -816,6 +821,7 @@ void Modbus_Function_4(void)
 /*对应MODBUS 0x10命令函数*/
 void Modbus_Function_10(void)
 {
+    uint32_t BackupBuf[2];
     uint8_t  i;
     uint16_t startaddress = 0;
     uint16_t MbBufferLen;
@@ -858,11 +864,16 @@ void Modbus_Function_10(void)
                 SpanValueBuf[(startaddress - SpanValueStartMinAddress) / 2 + i].str[3] = Uart2RxBuffer[7 + 2 * i + 2];
                 SpanValueBuf[(startaddress - SpanValueStartMinAddress) / 2 + i].str[2] = Uart2RxBuffer[7 + 2 * i + 3];
             }
-            /* param_storage setter 写 Flash + 更新 RAM */
+            BackupBuf[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) + ((uint32_t)SpanValueBuf[0].str[1] << 16) + ((uint32_t)SpanValueBuf[0].str[2] << 8) +
+                           SpanValueBuf[0].str[3];
+            BackupBuf[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) + ((uint32_t)SpanValueBuf[1].str[1] << 16) + ((uint32_t)SpanValueBuf[1].str[2] << 8) +
+                           SpanValueBuf[1].str[3];
+            WriteBufferFlash(2, ADDR_FLASH_PAGE_63, BackupBuf);
+            /* 同步到 param_storage RAM 缓存 */
             param_set_value_4ma(SpanLoValue);
             param_set_value_20ma(SpanHiValue);
         }
-        Uart2SendDataType.TxBuffer[0]                             = FlowMeterComId;
+        Uart2SendDataType.TxBuffer[0]                             = s_modbus_addr;
         Uart2SendDataType.TxBuffer[1]                             = 0x10;
         Uart2SendDataType.TxBuffer[2]                             = Uart2RxBuffer[2];
         Uart2SendDataType.TxBuffer[3]                             = Uart2RxBuffer[3];
@@ -887,7 +898,7 @@ void Modbus_Function_10(void)
 void bsp_usart_set_modbus_addr(uint16_t addr)
 {
     if (addr >= 1 && addr <= 247) {
-        FlowMeterComId = addr;
+        s_modbus_addr = addr;
     }
 }
 

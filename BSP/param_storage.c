@@ -171,15 +171,9 @@ HAL_StatusTypeDef param_storage_init(void)
     s_params.damping_time  = DEF_DAMPING_TIME;
 
     /* Phase 2+: 暂用默认值, TODO: 后续从 Flash 读取 */
-    /* value_4ma / value_20ma 从 Flash Page 63 加载 (与 Data_Init 同源) */
-    {
-        uint32_t span_buf[2];
-        ReadBufferFlash(2, ADDR_FLASH_PAGE_63, span_buf);
-        s_params.value_4ma = (span_buf[0] == 0xFFFFFFFF)
-            ? DEF_VALUE_4MA : clamp_f(u32_to_float(span_buf[0]), VALUE_4MA_MIN, VALUE_4MA_MAX);
-        s_params.value_20ma = (span_buf[1] == 0xFFFFFFFF)
-            ? DEF_VALUE_20MA : clamp_f(u32_to_float(span_buf[1]), VALUE_20MA_MIN, VALUE_20MA_MAX);
-    }
+    /* value_4ma / value_20ma: 使用默认值, 由 main.c 在 Data_Init() 后同步 */
+    s_params.value_4ma       = DEF_VALUE_4MA;
+    s_params.value_20ma      = DEF_VALUE_20MA;
     s_params.freq_output     = DEF_FREQ_OUTPUT;
     s_params.pulse_equiv     = DEF_PULSE_EQUIV;
     s_params.medium_density  = DEF_MEDIUM_DENSITY;
@@ -309,23 +303,17 @@ HAL_StatusTypeDef param_set_damping_time(float val)
     return HAL_OK;
 }
 
-/* ===== Phase 2 输出 setter — 写 Flash Page 63 ===== */
+/* ===== Phase 2 输出 setter — RAM only, Flash 由 FC10 BackupBuf 路径持久化 ===== */
 HAL_StatusTypeDef param_set_value_4ma(float val)
 {
-    uint32_t buf[2];
     s_params.value_4ma = clamp_f(val, VALUE_4MA_MIN, VALUE_4MA_MAX);
-    buf[0] = float_to_u32(s_params.value_4ma);
-    buf[1] = float_to_u32(s_params.value_20ma);
-    return (HAL_StatusTypeDef)WriteBufferFlash(2, ADDR_FLASH_PAGE_63, buf);
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_value_20ma(float val)
 {
-    uint32_t buf[2];
     s_params.value_20ma = clamp_f(val, VALUE_20MA_MIN, VALUE_20MA_MAX);
-    buf[0] = float_to_u32(s_params.value_4ma);
-    buf[1] = float_to_u32(s_params.value_20ma);
-    return (HAL_StatusTypeDef)WriteBufferFlash(2, ADDR_FLASH_PAGE_63, buf);
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_freq_output(float val)

@@ -191,16 +191,24 @@ S03 主菜单 (5 项)
 
 - **param_storage → 运行时桥接**: 菜单参数真正接入系统运行
   - Modbus 从站地址运行时可配 (菜单保存后立即生效)
-  - 4mA/20mA 量程值统一由 param_storage 管理 (Flash Page 63)，SpanValueBuf 退化为 Modbus 读缓存
+  - 4mA/20mA 量程值由 param_storage RAM 缓存管理, Flash 持久化保持原有 BackupBuf 路径
   - 仪表系数 × 介质系数接入 DAC 流量计算
   - 小信号切除: 流量低于 [量程下限 + 量程×N%] 时 DAC 输出零点
   - S01/S02 显示单位从 param_storage 读取 (通过 INPUT 结构体传入，不直接耦合)
 - **OLED 显示优化**: S01 瞬时流量从双行加粗改为单行显示
-- **菜单系统 BUG 修复**:
+- **BUG 修复**:
+  - FlowClearCmdFlag/FlowRstCmdFlag 命令映射反转 (已有代码 BUG)
+  - ISR 共享变量添加 volatile (Timer3Uart1/2TimeBase10ms, Uart1/2HaveData)
+  - DAC 校准值菜单修改后持久化到 Flash
+  - Flash Page 63 存储格式一致性修正 (Data_Init 与 param_storage 使用同一路径)
   - 密码输入 3 位 (修正原 4 位越界)
   - 密码门控逻辑修正
   - render_list 清屏修复
   - handle_readonly 按键响应修正
+- **安全加固**: Modbus FC03/FC04 缓冲区溢出防护 (MbBufferLen 上限检查)
+- **代码清理**: 删除旧按键变量 (13 个), ISR 减少无效分支
+- **命名规范**: static 变量使用 s_ 前缀 (s_modbus_addr)
+- **注释补充**: DMA 背压策略说明
 
 ### v1.3.0 (2026-04-23)
 

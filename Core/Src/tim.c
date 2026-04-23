@@ -22,9 +22,9 @@
 #include "key.h"
 #include "bsp_menu.h"
 /* USER CODE BEGIN 0 */
-uint8_t  Timer3Uart1TimeBase10ms;
+volatile uint8_t  Timer3Uart1TimeBase10ms;
 volatile uint8_t  DisplayTimeBase;
-uint8_t  Timer3Uart2TimeBase10ms;
+volatile uint8_t  Timer3Uart2TimeBase10ms;
 uint8_t  Timer3InitEnabled;
 uint32_t Time3InitTimeBase;
 /* USER CODE END 0 */
@@ -338,16 +338,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         Timer3Uart2TimeBase10ms++;
         if (Timer3InitEnabled)
             Time3InitTimeBase++;
-        if (keysetTimeEnable)
-            keysetTimeBase++;
-        if (keyaddTimeEnable)
-            keyaddTimeBase++;
-        if (keysubTimeEnable)
-            keysubTimeBase++;
-        if (keyadd10TimeEnable)
-            keyadd10TimeBase++;
-        if (keysub10TimeEnable)
-            keysub10TimeBase++;
     }
 }
 /**

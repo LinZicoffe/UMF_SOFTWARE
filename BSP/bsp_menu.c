@@ -333,8 +333,10 @@ static void save_param_val(screen_t scr, float val)
     case SCR_TOTAL_FACTOR: param_set_total_factor(val);  break;
     case SCR_PRESET_TOTAL: param_set_preset_total(val);  break;
     case SCR_SET_TOTAL:    param_set_forward_total(val); break;
-    case SCR_DAC_ZERO:     DacZeroValue = (uint16_t)val; break;
-    case SCR_DAC_FULL:     DacFullValue = (uint16_t)val; break;
+    case SCR_DAC_ZERO:     DacZeroValue = (uint16_t)val;
+                           WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf); break;
+    case SCR_DAC_FULL:     DacFullValue = (uint16_t)val;
+                           WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf); break;
     case SCR_SPAN_ZERO:    param_set_value_4ma(val);    SpanLoValue = val; break;
     case SCR_SPAN_FULL:    param_set_value_20ma(val);   SpanHiValue = val; break;
     case SCR_COMM_ADDR:    param_set_modbus_addr((uint16_t)val);

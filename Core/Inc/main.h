@@ -119,21 +119,7 @@ extern "C"
 #define FlowPassiveRd_ENABLED  DacOutputBitCon |= 0X0002 // modbus adr:0x:6
 #define FlowPassiveRd_DISABLED DacOutputBitCon &= 0XFFFd
 
-    extern uint8_t  KeyaddFlag;
-    extern uint8_t  KeysubFlag;
-    extern uint8_t  keysetFlag;
-    extern uint32_t keysetTimeBase;
-    extern uint32_t keyaddTimeBase;
-    extern uint32_t keysubTimeBase;
-    extern uint8_t  keysetTimeEnable;
-    extern uint8_t  keyaddTimeEnable;
-    extern uint8_t  keysubTimeEnable;
     extern uint8_t  DisplayEnabled;
-
-    extern uint32_t keyadd10TimeBase;
-    extern uint32_t keysub10TimeBase;
-    extern uint8_t  keyadd10TimeEnable;
-    extern uint8_t  keysub10TimeEnable;
 
     /* USER CODE END Private defines */
 

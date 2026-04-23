@@ -59,19 +59,6 @@ uint16_t    DacValue;
 uint8_t     CalEnabledFlag;
 uint8_t     ForceDacOutFlag;
 uint8_t     DisplayEnabled = 1;
-uint8_t     KeyaddFlag;
-uint8_t     KeysubFlag;
-uint8_t     keysetFlag;
-uint32_t    keysetTimeBase;
-uint32_t    keyaddTimeBase;
-uint32_t    keysubTimeBase;
-uint8_t     keysetTimeEnable;
-uint8_t     keyaddTimeEnable;
-uint8_t     keysubTimeEnable;
-uint32_t    keyadd10TimeBase;
-uint32_t    keysub10TimeBase;
-uint8_t     keyadd10TimeEnable;
-uint8_t     keysub10TimeEnable;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
