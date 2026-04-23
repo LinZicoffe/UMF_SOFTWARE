@@ -27,6 +27,8 @@
 /* USER CODE BEGIN Includes */
 #include "bmp.h"
 #include "key.h"
+#include "bsp_menu.h"
+#include "param_storage.h"
 #include "run_display.h"
 #include "ssd1306.h"
 /* USER CODE END Includes */
@@ -136,6 +138,9 @@ int main(void)
     /* USER CODE BEGIN 2 */
     DacValue = 8000;
     Data_Init();
+    param_storage_init();
+    key_init();
+    menu_init(NULL);
     __HAL_UART_CLEAR_IDLEFLAG(&huart1);
     __HAL_UART_CLEAR_IDLEFLAG(&huart2);
     EnableUart_IT_IDLE(&huart1, &Uart1ReceiveType);
@@ -152,36 +157,43 @@ int main(void)
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
-        // OLED_DrawLine(0,0,128,64,1);
-        // OLED_Refresh();
+        /* 按键事件 + 菜单处理 */
+        {
+            key_event_t evt = key_get_event();
+            menu_status_t menu_st;
+            if (menu_process(evt, &menu_st)) {
+                /* 菜单已激活并渲染 */
+            }
+            else if (evt == KEY_UP && !menu_is_active()) {
+                run_display_prev_page();
+            }
+            else if (evt == KEY_DOWN && !menu_is_active()) {
+                run_display_next_page();
+            }
+        }
 
-         //LED_ShowPicture(16, 16, 8, 16, BMP, 1);
-
-        // OLED_Refresh();
-        // Time_Delay(500);
-        // OLED_Clear();
-
-        if ((DisplayTimeBase >= 20) && DisplayEnabled)
+        /* 运行显示刷新 (200ms) */
+        if ((DisplayTimeBase >= 20) && DisplayEnabled && !menu_is_active())
         {
             DisplayTimeBase = 0;
-            run_display_render();
+            {
+                const run_display_input_t input = {
+                    .p_flow_rate    = &FlowRateValue,
+                    .p_temperature  = &FlowTemperature,
+                    .p_pressure     = &FlowPressure,
+                    .p_cumulative   = &Cumulativeflow,
+                    .p_flow_sum_buf = strFlowSumBuf,
+                    .p_sum_unit     = &Sumunit,
+                    .p_module_state = &ModuleState,
+                    .p_dac_value    = &DacValue,
+                    .p_dac_buf      = DacValueBuf,
+                };
+                run_display_render(&input);
+            }
             ssd1306_UpdateScreen();
         }
 
-        // OLED_ShowString(0,32,"abcdefgh:",16,1);
-        // OLED_ShowNum(48,0,12345678,8,16,1);
-        //
-        // OLED_ShowNum(104,0,567,3,16,1);
-        /*
-                OLED_ShowChinese(0, 0, 0, 16, 1);    // 中
-                OLED_ShowChinese(18, 0, 1, 16, 1);   // 景
-                OLED_ShowChinese(36, 0, 2, 16, 1);   // 园
-                OLED_ShowChinese(54, 0, 3, 16, 1);   // 电
-                OLED_ShowChinese(72, 0, 4, 16, 1);   // 子
-                OLED_ShowChinese(90, 0, 5, 16, 1);   // 技
-                OLED_ShowChinese(108, 0, 6, 16, 1);  // 术
-        */
-
+        /* 原有逻辑 */
         HAL_IWDG_Refresh(&hiwdg);
         Uart1_Communication();
         Uart2_Communication();
@@ -189,8 +201,6 @@ int main(void)
         PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
         if ((!ForceDacOutFlag) && (!CalEnabledFlag))
             DacValue = (uint16_t)(ConvertFunc(FlowRateValue.num, SpanLoValue, SpanHiValue, (float)DacZeroValue, (float)DacFullValue));
-
-        keyFunc();
     }
     /* USER CODE END 3 */
 }

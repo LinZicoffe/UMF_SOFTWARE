@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "tim.h"
 #include "key.h"
+#include "bsp_menu.h"
 /* USER CODE BEGIN 0 */
 uint8_t  Timer3Uart1TimeBase10ms;
 volatile uint8_t  DisplayTimeBase;
@@ -330,7 +331,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     if (htim == (&htim3))
     {
-        keyscan();
+        key_scan_10ms();
+        menu_tick_10ms();
         DisplayTimeBase++;
         Timer3Uart1TimeBase10ms++;
         Timer3Uart2TimeBase10ms++;

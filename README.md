@@ -8,8 +8,9 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - **Modbus RTU 从站**: USART2 作为 Modbus RTU 从站（地址 2），支持功能码 01/03/04/05/06/10
 - **4~20mA DAC 输出**: TIM1/TIM4 PWM 模拟输出，支持零点和满度校准
 - **OLED 显示**: SSD1306 128×64，SPI bit-bang 驱动，支持 S01 主界面和 S02 辅助变量页切换
-- **参数存储**: Flash 模拟 EEPROM，存储量程范围和 DAC 校准值
-- **按键菜单**: 密码保护（556）进入参数设置，支持 Flow-L / Flow-H / DA-ZERO / DA-FULL
+- **参数存储**: Flash 模拟 EEPROM，Page 60~63 存储仪表参数、量程范围和 DAC 校准值
+- **菜单系统**: 5 层导航栈 + 6 种界面模式 (列表/数值/枚举/密码/只读/确认) + 两级密码门控 (操作员/工程师)
+- **全参数配置**: 基本设置、输出设置、介质/工况、累积器、累计总量管理、校准、系统设置共 41 个屏幕
 
 ## 硬件平台
 
@@ -20,7 +21,7 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 | 流量模组 | UFL-1A (USART1, PA9/PA10, 自定义 BCD 协议) |
 | Modbus | RS-485 (USART2, PA2/PA3, PA1=DE) |
 | DAC 输出 | PWM (TIM1_CH1=PA8 高字节, TIM4_CH1=PB6 低字节) |
-| 按键 | K_MOV=PC15(确认), K_ADD=PA11(增加), K_SUB=PA0(减少) |
+| 按键 | K_MOV=PC15(向下), K_ADD=PA11(向上), K_SUB=PA0(确认) |
 | 指示灯 | PB5 (电源 LED) |
 
 ## 构建方法
@@ -59,7 +60,9 @@ UMF_SOFTWARE/
 │       └── usart.c                # UART HAL 配置
 ├── BSP/                           # 板级支持包
 │   ├── bsp_usart.c/h             # USART1 BCD 协议 + USART2 Modbus RTU 从站
-│   ├── key.c/h                   # 按键扫描 + 菜单状态机 (case 0~60)
+│   ├── key.c/h                   # 事件驱动按键驱动 (消抖 + 组合键检测)
+│   ├── bsp_menu.c/h              # 菜单系统 (5层导航栈 + 6种模式 + 密码门控)
+│   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Flash 持久化)
 │   ├── eeprom.c/h                # Flash 模拟 EEPROM (Page 63/64)
 │   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char)
 │   └── run_display.c/h           # 运行显示模块 (S01 主界面 + S02 辅助页)
@@ -67,7 +70,7 @@ UMF_SOFTWARE/
 │   ├── ssd1306_conf.h            # afiskon 库硬件配置 (引脚/字体/SPI 模式)
 │   ├── ssd1306.c/h               # afiskon SSD1306 驱动 (bit-bang SPI 适配)
 │   ├── ssd1306_fonts.c/h         # 字体数据 (6x8, 7x10, 11x18)
-│   ├── oled.c/h                  # 旧版 OLED 驱动 (保留，菜单模式仍使用)
+│   ├── oled.c/h                  # 旧版 OLED 驱动 (保留)
 │   ├── oledfont.h                # 旧版字体数据
 │   └── bmp.h                     # 位图资源 (度符号)
 ├── Drivers/                       # STM32 HAL + CMSIS 库
@@ -75,6 +78,8 @@ UMF_SOFTWARE/
 │   ├── UMF.ewp                   # 工程配置
 │   ├── Project.eww               # 工作空间
 │   └── startup_stm32f103xb.s     # 启动文件
+├── UMF_HMI_Screen_Design.md      # UMF HMI 界面设计规格书 (S03~S43)
+├── CMF_HMI_Screen_Design_REF.md  # CMF 科里奥利 HMI 参考设计文档
 ├── CLAUDE.md                      # AI 开发辅助文档
 └── README.md                      # 本文件
 ```
@@ -99,12 +104,46 @@ UFL-1A 模组 ──USART1 (DMA+IDLE)──→ BCD 解码 ──→ 流量/温�
 
 | 页面 | 内容 | 切换方式 |
 |------|------|----------|
-| **S01 主界面** | 压力/温度/通信状态(状态栏) + 瞬时流量(大字) + 累积流量 | K_ADD/K_SUB |
-| **S02 辅助页** | 流量/流速/温度/压力/DAC电流/频率/通信状态/累积量 | K_ADD/K_SUB |
+| **S01 主界面** | 压力/温度/通信状态(状态栏) + 瞬时流量(大字) + 累积流量 | K_DOWN/K_UP |
+| **S02 辅助页** | 流量/流速/温度/压力/DAC电流/频率/通信状态/累积量 | K_DOWN/K_UP |
 
 ### 菜单系统
 
-密码 556 进入，线性状态机: Flow-L → Flow-H → DA-ZERO → DA-FULL → END
+导航栈架构，6 种界面模式，两级密码门控：
+
+```
+S03 主菜单 (5 项)
+  ├── 1.Display      → 返回运行显示
+  ├── 2.Parameter    → S04 密码 (操作员 000 / 工程师 1234) → S05 基本设置 (11 项)
+  │   ├── S06~S13    基本参数 (标况/仪表系数/介质系数/流量单位/累积单位/小信号/滤波/阻尼)
+  │   ├── S14~S18    输出设置 (4mA/20mA/频率/脉冲当量)
+  │   ├── S19~S24    介质/工况 (密度/管径/气压/气温/雷诺数)
+  │   └── S25~S27    累积器设置 (累积单位/累积系数/预置值)
+  ├── 3.Totalizer    → S04 密码 (工程师) → S28 累计总量管理 (5 项)
+  ├── 4.Calibration  → S04 密码 (工程师) → S34 校准 (4 项)
+  └── 5.System       → S04 密码 (工程师) → S39 系统设置 (4 项)
+```
+
+| 模式 | 用途 | 交互 |
+|------|------|------|
+| M1 列表 (LIST) | 菜单导航 | K_UP/K_DOWN 移动, K_ENTER 进入, K1+K2 返回 |
+| M2 数值 (NUMERIC) | 参数编辑 | K_UP +step, K_DOWN -step, K_ENTER 保存, K1+K2 取消 |
+| M3 枚举 (ENUM) | 选项切换 | K_UP/K_DOWN 切换, K_ENTER 确认 |
+| M4 只读 (READONLY) | 数据查看 | 任意键返回 |
+| M5 确认 (CONFIRM) | 危险操作 | K_UP/K_DOWN YES/NO, K_ENTER 执行 |
+| M6 密码 (PASSWORD) | 身份验证 | K_UP/K_DOWN 改数字, K_ENTER 下一位 |
+
+### 按键映射
+
+| 按键 | 引脚 | 菜单功能 | 编辑功能 |
+|------|------|---------|---------|
+| K1 (K_MOV) | PC15 | 向下选择 | 数值 -step |
+| K2 (K_SUB) | PA0  | 确认/进入 | 确认/下一位 |
+| K3 (K_ADD) | PA11 | 向上选择 | 数值 +step |
+| K1+K2 | — | 返回上一级 | 取消退出 |
+| K1+K2+K3 | — | 返回主界面 | 返回主界面 |
+
+> **注意**: 面板实际接线与 CubeMX 引脚命名不同 — PA0(K_SUB) 实为确认键, PC15(K_MOV) 实为向下键。
 
 ### Modbus 寄存器映射
 
@@ -121,7 +160,7 @@ UFL-1A 模组 ──USART1 (DMA+IDLE)──→ BCD 解码 ──→ 流量/温�
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash | 64KB | ~41KB | ~23KB |
+| Flash | 64KB | ~45KB | ~19KB |
 | RAM | 20KB | ~7KB | ~13KB |
 
 ## 调试指南
@@ -133,11 +172,27 @@ UFL-1A 模组 ──USART1 (DMA+IDLE)──→ BCD 解码 ──→ 流量/温�
 ### 常见问题
 1. **系统不启动** — 检查时钟配置和晶振连接
 2. **显示异常** — 检查 OLED 接线和 SPI bit-bang 引脚
-3. **按键无响应** — 验证 GPIO 配置（注意 key.h 宏名与引脚交叉映射）
+3. **按键无响应** — 验证 GPIO 配置（注意面板接线与 CubeMX 命名相反）
 4. **通信失败** — 检查串口配置和 DMA 设置
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v1.3.0 (2026-04-23)
+
+- **菜单系统重写**: 5 层导航栈架构替换原线性状态机
+  - 新增 S03 主菜单 (5 项: 显示/参数/总量/校准/系统)
+  - 新增 S04 密码输入 (4 位数字, 操作员/工程师两级门控)
+  - 实现 6 种界面模式: 列表/数值编辑/枚举选择/密码/只读/确认
+  - 覆盖 S03~S43 共 41 个屏幕 (基本设置/输出/介质/累积器/总量/校准/系统)
+- **参数存储扩展**: `param_basic_t` 从 8 字段扩展至 25 字段
+  - 新增: 输出设置(4项), 介质/工况(5项), 累积器(2项), 累计总量(2项), 系统(2项), 密码(2项)
+  - 新增枚举: `pulse_equiv_t`, `baud_rate_t`
+  - Flash Page 60~62 存储策略保持向后兼容
+- **按键驱动重写**: 事件驱动模式 (消抖 + 组合键 + 释放触发)
+  - 修正面板接线映射: PC15=向下, PA0=确认, PA11=向上
+- **主循环重构**: `menu_process()` 统一调度菜单/运行显示按键分发
+- **设计文档**: 新增 `UMF_HMI_Screen_Design.md` (界面规格书), `CMF_HMI_Screen_Design_REF.md` (参考文档)
 
 ### v1.2.0 (2026-04-23)
 
@@ -145,7 +200,7 @@ UFL-1A 模组 ──USART1 (DMA+IDLE)──→ BCD 解码 ──→ 流量/温�
   - bit-bang SPI 底层实现（修复 CS 引脚管理）
   - 新增 S01 主界面（状态栏 + 瞬时流量大字 + 累积流量）
   - 新增 S02 辅助变量页（8 行参数监控）
-  - 运行模式 K_ADD/K_SUB 按键翻页
+  - 运行模式 K_DOWN/K_UP 按键翻页
 - **ISR 安全**: `DisplayTimeBase` 添加 `volatile` 修饰
 - **模块化**: 新增 `run_display` 模块，遵循模块设计原则
 - **编译修复**: bmp.h `static const` 修复重复定义，tim.h 声明同步 `volatile`
@@ -167,4 +222,4 @@ liyongtai (nylyt)
 
 ## 许可
 
-版权所有 (c) 2020-2024 liyongtai。保留所有权利。
+版权所有 (c) 2020-2026 liyongtai。保留所有权利。

@@ -1131,6 +1131,12 @@
             <file>
                 <name>$PROJ_DIR$\..\BSP\run_display.c</name>
             </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\param_storage.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\bsp_menu.c</name>
+            </file>
         </group>
         <group>
             <name>EWARM</name>
@@ -1140,9 +1146,6 @@
         </group>
         <group>
             <name>OLED</name>
-            <file>
-                <name>$PROJ_DIR$\..\OLED\oled.c</name>
-            </file>
             <file>
                 <name>$PROJ_DIR$\..\OLED\ssd1306.c</name>
             </file>

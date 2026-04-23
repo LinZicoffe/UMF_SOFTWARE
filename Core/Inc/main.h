@@ -35,7 +35,6 @@ extern "C"
 #include "bsp_usart.h"
 #include "eeprom.h"
 
-#include "oled.h"
     /* USER CODE END Includes */
 
     /* Exported types ------------------------------------------------------------*/
