@@ -1,0 +1,54 @@
+# IAR EWARM 构建产物
+EWARM/UMF/Obj/
+EWARM/UMF/Exe/
+EWARM/UMF/List/
+EWARM/UMF/Debug/
+EWARM/UMF/Release/
+EWARM/UMF/BrowseInfo/
+EWARM/UMF/.ninja_deps
+EWARM/UMF/.ninja_log
+EWARM/UMF/.UMF_build_cache
+EWARM/UMF/BrowseInfo/
+EWARM/**/settings/
+*.dep
+*.dt7
+*.wsdt
+*.pbi
+*.xcl
+*.pbd
+*.pbd.browse
+*.pbw
+*.ewd
+
+# IAR 工作空间临时文件
+*.ewt
+*.tmp
+
+# 编译输出
+*.o
+*.d
+*.map
+*.hex
+*.bin
+*.out
+*.elf
+
+# IDE 临时文件
+.vscode/
+.cursor/
+*.swp
+*~
+
+# OS 生成文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 参考库目录（第三方 git 仓库，不跟踪）
+OLED github/
+
+# 备份文件
+EWARM/Backup*
+
+# PDF 技术文档
+*.pdf
