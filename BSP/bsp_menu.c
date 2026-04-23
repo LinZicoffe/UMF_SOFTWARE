@@ -84,9 +84,8 @@ typedef struct {
     uint8_t     cursor;         /* LIST/ENUM: 选中项; PASSWORD: 编辑位 */
     uint8_t     scroll;         /* LIST: 滚动窗口起始 */
     float       edit_val;       /* NUMERIC: 临时编辑值 */
-    uint8_t     pwd_digits[4];  /* PASSWORD: 4位数字 */
+    uint8_t     pwd_digits[3];  /* PASSWORD: 3位数字 */
     uint8_t     pwd_target;     /* PASSWORD: 成功后跳转的目标屏幕 */
-    uint8_t     pwd_level;      /* PASSWORD: 0=操作员或工程师, 1=仅工程师 */
     uint8_t     pwd_err_timer;  /* PASSWORD: 错误倒计时 */
     uint8_t     confirm_sel;    /* CONFIRM: 0=NO(安全默认), 1=YES */
     uint8_t     enum_val;       /* ENUM: 临时枚举值 */
@@ -449,6 +448,8 @@ static void handle_confirm(key_event_t evt);
 /* ===== 渲染: M1 列表 ===== */
 static void render_list(nav_frame_t *f)
 {
+    ssd1306_Fill(Black);
+
 #ifdef SSD1306_INCLUDE_FONT_6x8
     const list_item_t *items;
     uint8_t count;
@@ -600,11 +601,11 @@ static void render_password(nav_frame_t *f)
     ssd1306_SetCursor(22, 0);
     ssd1306_WriteString("Password", Font_11x18, White);
 
-    /* 4 位数字: 光标位反色 */
+    /* 3 位数字: 光标位反色 */
     {
-        uint8_t x_start = 34;
+        uint8_t x_start = 40;  /* 3×16=48 像素, 居中: (128-48)/2=40 */
         uint8_t i;
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < 3; i++) {
             buf[0] = (char)('0' + f->pwd_digits[i]);
             buf[1] = '\0';
             if (i == f->cursor) {
@@ -622,8 +623,8 @@ static void render_password(nav_frame_t *f)
 #endif
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
-    ssd1306_SetCursor(24, 48);
-    ssd1306_WriteString("Range:0000~9999", Font_6x8, White);
+    ssd1306_SetCursor(32, 48);
+    ssd1306_WriteString("Range:000~999", Font_6x8, White);
 #endif
 }
 
@@ -734,11 +735,6 @@ static void render_current_frame(void)
     if (s_nav_depth < 0) return;
     f = &s_nav_stack[s_nav_depth];
 
-    /* LIST 模式在 render_list 中自行 ssd1306_Fill */
-    if (f->mode != MODE_LIST) {
-        /* 其他模式在各自 render 中自行 Fill */
-    }
-
     switch (f->mode) {
     case MODE_LIST:     render_list(f);     break;
     case MODE_NUMERIC:  render_numeric(f);  break;
@@ -770,18 +766,13 @@ static void handle_list(key_event_t evt)
         break;
     case KEY_ENTER: {
         uint8_t target = items[f->cursor].target;
-        if (f->screen_id == SCR_MAIN_MENU) {
-            if (f->cursor == 0) {
-                /* "1.Display" → 返回运行显示 */
-                menu_exit();
-                return;
-            }
-            /* 2~5: 推入密码屏幕 */
-            nav_push(MODE_PASSWORD, SCR_PASSWORD);
-            s_nav_stack[s_nav_depth].pwd_target = target;
-            s_nav_stack[s_nav_depth].pwd_level = (f->cursor >= 2) ? 1 : 0;
-        } else {
-            /* 子菜单项: 判定模式并 push */
+        if (f->screen_id == SCR_MAIN_MENU && f->cursor == 0) {
+            /* "1.Display" → 返回运行显示 */
+            menu_exit();
+            return;
+        }
+        /* 判定模式并 push (入口已验证密码, 子菜单直接进入) */
+        {
             menu_mode_t m = detect_mode((screen_t)target);
             nav_push(m, (screen_t)target);
             init_mode_state(&s_nav_stack[s_nav_depth]);
@@ -884,21 +875,15 @@ static void handle_password(key_event_t evt)
             (uint8_t)((f->pwd_digits[f->cursor] + 9) % 10);
         break;
     case KEY_ENTER:
-        if (f->cursor < 3) {
+        if (f->cursor < 2) {
             f->cursor++;
         } else {
-            /* 第 4 位: 验证密码 */
-            uint16_t pwd = (uint16_t)(f->pwd_digits[0] * 1000 +
-                          f->pwd_digits[1] * 100 +
-                          f->pwd_digits[2] * 10 +
-                          f->pwd_digits[3]);
-            uint8_t ok = 0;
-            if (f->pwd_level == 0) {
-                ok = (uint8_t)(pwd == param_get_pwd_operator() ||
-                               pwd == param_get_pwd_engineer());
-            } else {
-                ok = (uint8_t)(pwd == param_get_pwd_engineer());
-            }
+            /* 第 3 位: 验证密码 */
+            uint16_t pwd = (uint16_t)(f->pwd_digits[0] * 100 +
+                          f->pwd_digits[1] * 10 +
+                          f->pwd_digits[2]);
+            uint8_t ok = (uint8_t)(pwd == param_get_pwd_operator() ||
+                                   pwd == param_get_pwd_engineer());
             if (ok) {
                 /* 成功: 弹出密码帧, 推入目标 */
                 nav_pop();  /* 弹出密码帧 */
@@ -927,10 +912,17 @@ static void handle_password(key_event_t evt)
 /* ===== 处理: M4 只读显示 ===== */
 static void handle_readonly(key_event_t evt)
 {
-    (void)evt;  /* 任意键返回 */
-    nav_pop();
-    if (s_nav_depth < 0) { menu_exit(); return; }
-    render_current_frame();
+    switch (evt) {
+    case KEY_ENTER:
+    case KEY_BACK:
+        nav_pop();
+        if (s_nav_depth < 0) { menu_exit(); return; }
+        render_current_frame();
+        break;
+    default:
+        /* UP/DOWN 不响应, 避免意外退出 */
+        break;
+    }
 }
 
 /* ===== 处理: M5 确认对话框 ===== */
@@ -977,10 +969,11 @@ void menu_init(const menu_config_t *p_cfg)
 
 uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
 {
-    /* 1. 菜单未激活: KEY_ENTER 进入主菜单 */
+    /* 1. 菜单未激活: KEY_ENTER 进入密码验证 */
     if (s_nav_depth < 0) {
         if (key_evt == KEY_ENTER) {
-            nav_push(MODE_LIST, SCR_MAIN_MENU);
+            nav_push(MODE_PASSWORD, SCR_PASSWORD);
+            s_nav_stack[s_nav_depth].pwd_target = (uint8_t)SCR_MAIN_MENU;
             s_idle_counter = 0;
             render_current_frame();
         }
