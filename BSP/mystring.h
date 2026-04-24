@@ -9,7 +9,7 @@
  */
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef _MYSTRING_H_
-#define _MYSTING_H_
+#define _MYSTRING_H_
 /* Includes ------------------------------------------------------------------*/
 #include "string.h"
 /* Exported constants --------------------------------------------------------*/

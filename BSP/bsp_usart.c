@@ -37,11 +37,8 @@ uint8_t          Uart1RxCounter;
 uint8_t          Uart2RxBuffer[UART_RX_LEN]; // 数据处理区域
 volatile uint8_t Uart2HaveData;
 uint8_t          Uart2RxCounter;
-uint8_t          ModbusCommEnable;
 
-uint8_t               RecvOKflag;      // modbus 接收OK
-Uart_SendfloatTypeDef InputBuffer[10]; /*input区域共40个字节*/
-uint8_t               ModbusErrorCode; // 通讯错误故障代码
+	Uart_SendfloatTypeDef InputBuffer[10]; /*input区域共40个字节*/
 uint64_t              Cumulativeflow;  // MODBUS ADDRESS 4X:40041
 unsigned char         strFlowSumBuf[20];
 unsigned char         strFlowRateBuf[20];
@@ -55,10 +52,6 @@ uint8_t FlowRstCmdFlag;           // 流量模组复位
 uint8_t FlowPassiveReadCmdFlag;
 uint8_t FlowPassiveReadCmdEnable; // TRUE:模组被动发送数据
 uint8_t FlowActiveReadCmdEnable;  // TRUE:模组主动发送数据
-uint8_t CommCntValue;             //
-uint8_t ValveConOpenTimes;        // 写阀开
-uint8_t ValveConCloseTimes;       // 写阀关
-uint8_t ReadFlowRateTimes;
 uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
 static uint16_t s_modbus_addr = 2;   /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
@@ -325,6 +318,8 @@ void Uart1_Receive_Function(void)
 
     if (Uart1HaveData == 1) // 接收完成标志=1处理，否则退出
     {
+        /* BCD 协议帧最小长度: 帧头(2) + 数据(25) + 校验(1) = 28 字节 */
+        if (Uart1RxCounter < 28) { Uart1RxCounter = 0; Uart1HaveData = 0; return; }
         checksum = GetCheckSum(Uart1RxBuffer, Uart1RxCounter - 2);
         if ((checksum == Uart1RxBuffer[Uart1RxCounter - 2]) && (Uart1RxBuffer[Uart1RxCounter - 1] == EOFbyte))
         {
@@ -440,6 +435,8 @@ void Uart2_Communication(void)
     uint8_t  temp[2];
     if (Uart2HaveData == 1)                     // 接收完成标志=1处理，否则号?号
     {
+        /* Modbus RTU 最小帧: 地址(1)+功能码(1)+数据(4)+CRC(2) = 8 */
+        if (Uart2RxCounter < 8) { Uart2RxCounter = 0; Uart2HaveData = 0; return; }
         if (Uart2RxBuffer[0] == s_modbus_addr) // 地址错误不应号
         {
             crcresult = getCRC16(Uart2RxBuffer, Uart2RxCounter - 2);
@@ -514,7 +511,8 @@ void Modbus_Function_1(void)
         sendbytelength = MbBufferLen / 8 + 1;
     else
         sendbytelength = MbBufferLen / 8;
-    if ((startaddress + MbBufferLen) < (BitBufLength * 16))
+    if ((startaddress + MbBufferLen) < (BitBufLength * 16) &&
+        (quotient + 1) < BitBufLength)
     {
         for (i = 0; i < sendbytelength; i++)
         {
@@ -792,9 +790,9 @@ void Modbus_Function_4(void)
     tempdress                     = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
     Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
     Uart2SendDataType.TxBuffer[1] = 0x04;
-    Uart2SendDataType.TxBuffer[2] = 2 * Uart2RxBuffer[5];
     temp                          = Uart2RxBuffer[5];
     if (temp > 62) temp = 62;   /* 缓冲区溢出防护 */
+    Uart2SendDataType.TxBuffer[2] = 2 * temp;
     Uart2SendDataType.TX_Size     = 2 * temp + 3;
 
     if (tempdress == 19)

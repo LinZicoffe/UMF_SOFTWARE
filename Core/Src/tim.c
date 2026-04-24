@@ -25,8 +25,8 @@
 volatile uint8_t  Timer3Uart1TimeBase10ms;
 volatile uint8_t  DisplayTimeBase;
 volatile uint8_t  Timer3Uart2TimeBase10ms;
-uint8_t  Timer3InitEnabled;
-uint32_t Time3InitTimeBase;
+volatile uint8_t  Timer3InitEnabled;
+volatile uint32_t Time3InitTimeBase;
 /* USER CODE END 0 */
 
 TIM_HandleTypeDef htim1;
@@ -350,6 +350,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
  */
 void PWMConfig(TIM_HandleTypeDef *htim, uint32_t frequency, uint16_t CCR)
 {
+    if (frequency == 0) return;  /* 防止除零 HardFault */
     uint32_t pulsedef;
     uint32_t AutoReloadPreloadvalue;
     if (frequency >= 200)

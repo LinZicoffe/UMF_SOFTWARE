@@ -127,9 +127,9 @@ int main(void)
     Data_Init();
     param_storage_init();
     bsp_usart_set_modbus_addr(param_get_modbus_addr());
-    /* SpanValueBuf 同步为 param_storage 的值 (Modbus 读响应缓存) */
-    SpanLoValue = param_get_value_4ma();
-    SpanHiValue = param_get_value_20ma();
+    /* 将 Flash Page 63 真实值同步到 param_storage (方向: SpanValueBuf → param) */
+    param_set_value_4ma(SpanLoValue);
+    param_set_value_20ma(SpanHiValue);
     key_init();
     menu_init(NULL);
     __HAL_UART_CLEAR_IDLEFLAG(&huart1);
@@ -200,9 +200,15 @@ int main(void)
                 * param_get_medium_coeff();
 
             /* DAC 线性换算: corrected_flow → 4~20mA PWM */
-            DacValue = (uint16_t)(ConvertFunc(corrected_flow,
-                param_get_value_4ma(), param_get_value_20ma(),
-                (float)DacZeroValue, (float)DacFullValue));
+            {
+                float dac_raw = ConvertFunc(corrected_flow,
+                    param_get_value_4ma(), param_get_value_20ma(),
+                    (float)DacZeroValue, (float)DacFullValue);
+                /* Clamp: 防止负值或超限值导致 uint16_t 异常 */
+                if (dac_raw < (float)DacZeroValue) dac_raw = (float)DacZeroValue;
+                if (dac_raw > (float)DacFullValue)  dac_raw = (float)DacFullValue;
+                DacValue = (uint16_t)dac_raw;
+            }
 
             /* Step 4: 小信号切除 — 流量低于 [量程下限 + 量程×N%] 时输出零点 */
             {
@@ -325,8 +331,7 @@ float lin_clac_x8_y8(int32_t xn, int32_t x[], int32_t y[], int8_t m)
     }
     tmp       = (y[i] - y[i - 1]);
     data_temp = x[i] - x[i - 1];
-    if (!data_temp)
-        data_temp = 1;
+    if (data_temp == 0) return (float)y[i - 1];
     yn = (float)tmp * (xn - x[i - 1]) / (float)data_temp + y[i - 1];
     return (yn);
 }
@@ -353,6 +358,7 @@ void Data_Init(void)
         DacZeroValue = 12100;
     if (!DacFullValue)
         DacFullValue = 60000;
+    if (DacZeroValue >= DacFullValue) { DacZeroValue = 12100; DacFullValue = 60000; }
 }
 /* USER CODE END 4 */
 

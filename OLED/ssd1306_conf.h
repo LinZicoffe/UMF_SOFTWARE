@@ -33,4 +33,7 @@
 /* bit-bang SPI 自定义标志 — ssd1306.c 中用条件编译选择 bit-bang 路径 */
 #define SSD1306_BITBANG_SPI
 
+/* 画弧功能 — 需要 <math.h>, 在无 FPU 芯片上增加 4~8KB Flash。默认禁用 */
+/* #define SSD1306_ENABLE_ARC */
+
 #endif /* SSD1306_CONF_H */

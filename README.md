@@ -187,6 +187,25 @@ S03 主菜单 (5 项)
 
 ## 版本日志
 
+### v1.5.0 (2026-04-24)
+
+- **初始化顺序修复**: `Data_Init()` → `param_storage_init()` 后，Span 值同步方向反转，确保 Flash Page 63 真实值不被硬编码默认值 (0.0/100.0) 覆盖
+- **Flash 安全加固**: 写入函数 (`WriteBufferFlash`/`WriteBufferFlash_16`) 补充 `HAL_FLASH_Lock()`；读取函数移除不必要的 `HAL_FLASH_Unlock()`
+- **DAC 输出 clamp**: `ConvertFunc()` 返回值 clamp 到 `[DacZeroValue, DacFullValue]`，防止负值导致 uint16_t 异常
+- **通信协议防护**:
+  - BCD 帧最小长度校验 (<28 字节畸形帧直接丢弃)
+  - Modbus RTU 最小帧长度检查 (<8 字节丢弃)
+  - FC01 位控制 `(quotient+1)` 越界防护
+  - FC04 字节计数先 clamp 再写入 TxBuffer
+- **除零保护**: `PWMConfig()` 频率为 0 时直接返回；`lin_clac_x8_y8()` 除零时返回前一个插值点
+- **ISR 变量 volatile**: `Timer3InitEnabled`/`Time3InitTimeBase` 添加 `volatile` 修饰
+- **数据一致性**:
+  - 菜单 Span 修改同步持久化到 Flash Page 63
+  - 工厂复位同步清除 DAC/Span Flash 数据
+  - `Data_Init` 添加 `DacZeroValue < DacFullValue` 不变式检查
+- **Flash 预算优化**: SSD1306 画弧函数 (`DrawArc`/`DrawArcWithRadiusLine`) 及辅助函数用 `#ifdef SSD1306_ENABLE_ARC` 条件编译包裹，默认禁用，节省 4~8KB Flash
+- **代码清理**: 删除 7 个未使用全局变量，`render_numeric` 缓冲区扩大到 32 字节，`mystring.h` 头文件保护宏拼写修正
+
 ### v1.4.1 (2026-04-24)
 
 - **BUG 修复**: SSD1306 寻址模式不匹配导致显示闪屏/内容移位

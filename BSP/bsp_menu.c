@@ -337,8 +337,20 @@ static void save_param_val(screen_t scr, float val)
                            WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf); break;
     case SCR_DAC_FULL:     DacFullValue = (uint16_t)val;
                            WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf); break;
-    case SCR_SPAN_ZERO:    param_set_value_4ma(val);    SpanLoValue = val; break;
-    case SCR_SPAN_FULL:    param_set_value_20ma(val);   SpanHiValue = val; break;
+    case SCR_SPAN_ZERO:    param_set_value_4ma(val);    SpanLoValue = val;
+                           { uint32_t bk[2];
+                             bk[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) | ((uint32_t)SpanValueBuf[0].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[0].str[2] << 8)  | ((uint32_t)SpanValueBuf[0].str[3]);
+                             bk[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) | ((uint32_t)SpanValueBuf[1].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[1].str[2] << 8)  | ((uint32_t)SpanValueBuf[1].str[3]);
+                             WriteBufferFlash(2, ADDR_FLASH_PAGE_63, bk); } break;
+    case SCR_SPAN_FULL:    param_set_value_20ma(val);   SpanHiValue = val;
+                           { uint32_t bk[2];
+                             bk[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) | ((uint32_t)SpanValueBuf[0].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[0].str[2] << 8)  | ((uint32_t)SpanValueBuf[0].str[3]);
+                             bk[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) | ((uint32_t)SpanValueBuf[1].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[1].str[2] << 8)  | ((uint32_t)SpanValueBuf[1].str[3]);
+                             WriteBufferFlash(2, ADDR_FLASH_PAGE_63, bk); } break;
     case SCR_COMM_ADDR:    param_set_modbus_addr((uint16_t)val);
                            bsp_usart_set_modbus_addr((uint16_t)val); break;
     default: break;
@@ -496,7 +508,7 @@ static void render_list(nav_frame_t *f)
 static void render_numeric(nav_frame_t *f)
 {
     const num_desc_t *desc = &c_num_desc[f->screen_id];
-    char buf[16];
+    char buf[32];
 
     ssd1306_Fill(Black);
 
@@ -946,6 +958,16 @@ static void handle_confirm(key_event_t evt)
                 param_set_reverse_total(0.0f);
             } else if (f->screen_id == SCR_FACTORY_RST) {
                 param_storage_reset_defaults();
+                /* 同步复位 DAC/Span 到默认值 */
+                DacZeroValue = 12100;
+                DacFullValue = 60000;
+                WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf);
+                SpanLoValue = 0.0f;
+                SpanHiValue = 100.0f;
+                { uint32_t bk[2]; union { float f; uint32_t u; } cvt;
+                  cvt.f = 0.0f;   bk[0] = cvt.u;
+                  cvt.f = 100.0f; bk[1] = cvt.u;
+                  WriteBufferFlash(2, ADDR_FLASH_PAGE_63, bk); }
             }
         }
         nav_pop();

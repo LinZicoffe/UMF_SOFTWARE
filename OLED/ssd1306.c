@@ -1,5 +1,7 @@
 #include "ssd1306.h"
+#ifdef SSD1306_ENABLE_ARC
 #include <math.h>
+#endif
 #include <stdlib.h>
 #include <string.h>  // For memcpy
 
@@ -366,6 +368,7 @@ void ssd1306_Polyline(const SSD1306_VERTEX *par_vertex, uint16_t par_size, SSD13
     return;
 }
 
+#ifdef SSD1306_ENABLE_ARC
 /* Convert Degrees to Radians */
 static float ssd1306_DegToRad(float par_deg) {
     return par_deg * (3.14f / 180.0f);
@@ -382,12 +385,14 @@ static uint16_t ssd1306_NormalizeTo0_360(uint16_t par_deg) {
     }
     return loc_angle;
 }
+#endif /* SSD1306_ENABLE_ARC */
 
 /*
  * DrawArc. Draw angle is beginning from 4 quart of trigonometric circle (3pi/2)
  * start_angle in degree
  * sweep in degree
  */
+#ifdef SSD1306_ENABLE_ARC
 void ssd1306_DrawArc(uint8_t x, uint8_t y, uint8_t radius, uint16_t start_angle, uint16_t sweep, SSD1306_COLOR color) {
     static const uint8_t CIRCLE_APPROXIMATION_SEGMENTS = 36;
     float approx_degree;
@@ -397,9 +402,9 @@ void ssd1306_DrawArc(uint8_t x, uint8_t y, uint8_t radius, uint16_t start_angle,
     uint32_t count;
     uint32_t loc_sweep;
     float rad;
-    
+
     loc_sweep = ssd1306_NormalizeTo0_360(sweep);
-    
+
     count = (ssd1306_NormalizeTo0_360(start_angle) * CIRCLE_APPROXIMATION_SEGMENTS) / 360;
     approx_segments = (loc_sweep * CIRCLE_APPROXIMATION_SEGMENTS) / 360;
     approx_degree = loc_sweep / (float)approx_segments;
@@ -407,7 +412,7 @@ void ssd1306_DrawArc(uint8_t x, uint8_t y, uint8_t radius, uint16_t start_angle,
     {
         rad = ssd1306_DegToRad(count*approx_degree);
         xp1 = x + (int8_t)(sinf(rad)*radius);
-        yp1 = y + (int8_t)(cosf(rad)*radius);    
+        yp1 = y + (int8_t)(cosf(rad)*radius);
         count++;
         if(count != approx_segments) {
             rad = ssd1306_DegToRad(count*approx_degree);
@@ -415,10 +420,10 @@ void ssd1306_DrawArc(uint8_t x, uint8_t y, uint8_t radius, uint16_t start_angle,
             rad = ssd1306_DegToRad(loc_sweep);
         }
         xp2 = x + (int8_t)(sinf(rad)*radius);
-        yp2 = y + (int8_t)(cosf(rad)*radius);    
+        yp2 = y + (int8_t)(cosf(rad)*radius);
         ssd1306_Line(xp1,yp1,xp2,yp2,color);
     }
-    
+
     return;
 }
 
@@ -439,20 +444,20 @@ void ssd1306_DrawArcWithRadiusLine(uint8_t x, uint8_t y, uint8_t radius, uint16_
     uint32_t count;
     uint32_t loc_sweep;
     float rad;
-    
+
     loc_sweep = ssd1306_NormalizeTo0_360(sweep);
-    
+
     count = (ssd1306_NormalizeTo0_360(start_angle) * CIRCLE_APPROXIMATION_SEGMENTS) / 360;
     approx_segments = (loc_sweep * CIRCLE_APPROXIMATION_SEGMENTS) / 360;
     approx_degree = loc_sweep / (float)approx_segments;
 
     rad = ssd1306_DegToRad(count*approx_degree);
     uint8_t first_point_x = x + (int8_t)(sinf(rad)*radius);
-    uint8_t first_point_y = y + (int8_t)(cosf(rad)*radius);   
+    uint8_t first_point_y = y + (int8_t)(cosf(rad)*radius);
     while (count < approx_segments) {
         rad = ssd1306_DegToRad(count*approx_degree);
         xp1 = x + (int8_t)(sinf(rad)*radius);
-        yp1 = y + (int8_t)(cosf(rad)*radius);    
+        yp1 = y + (int8_t)(cosf(rad)*radius);
         count++;
         if (count != approx_segments) {
             rad = ssd1306_DegToRad(count*approx_degree);
@@ -460,15 +465,16 @@ void ssd1306_DrawArcWithRadiusLine(uint8_t x, uint8_t y, uint8_t radius, uint16_
             rad = ssd1306_DegToRad(loc_sweep);
         }
         xp2 = x + (int8_t)(sinf(rad)*radius);
-        yp2 = y + (int8_t)(cosf(rad)*radius);    
+        yp2 = y + (int8_t)(cosf(rad)*radius);
         ssd1306_Line(xp1,yp1,xp2,yp2,color);
     }
-    
+
     // Radius line
     ssd1306_Line(x,y,first_point_x,first_point_y,color);
     ssd1306_Line(x,y,xp2,yp2,color);
     return;
 }
+#endif /* SSD1306_ENABLE_ARC */
 
 /* Draw circle by Bresenhem's algorithm */
 void ssd1306_DrawCircle(uint8_t par_x,uint8_t par_y,uint8_t par_r,SSD1306_COLOR par_color) {

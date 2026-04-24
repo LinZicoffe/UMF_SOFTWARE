@@ -84,6 +84,7 @@ uint16_t WriteBufferFlash(uint8_t Len, uint32_t Page_Address, uint32_t WriteBuff
         Address = Address + 4;
         temp++;
     }
+    HAL_FLASH_Lock();
     return flashstatus;
 }
 
@@ -147,6 +148,7 @@ uint16_t WriteBufferFlash_16(uint8_t Len, uint32_t Page_Address, uint16_t WriteB
         Address = Address + 2;
         temp++;
     }
+    HAL_FLASH_Lock();
     return flashstatus;
 }
 
@@ -167,9 +169,6 @@ void ReadBufferFlash(uint8_t Len, uint32_t Page_Address, uint32_t ReadBuffer[])
     uint8_t  fillcount;
     Length    = Len + 1;
     fillcount = 240 / Length;
-    /* Unlock the Flash Program Erase controller */
-    HAL_FLASH_Unlock();
-    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_BSY | FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPERR);
     Address = Page_Address - Length * 4;
     TopData = 0;
     temp    = 0;
@@ -208,8 +207,6 @@ void ReadBufferFlash_16(uint8_t Len, uint32_t Page_Address, uint16_t ReadBuffer[
     uint8_t  fillcount;
     Length    = Len + 1;
     fillcount = 480 / Length;
-    HAL_FLASH_Unlock();
-    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_BSY | FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPERR);
     Address = Page_Address - Length * 2;
     TopData = 0;
     temp    = 0;
