@@ -133,8 +133,7 @@ void ssd1306_Init(void) {
     ssd1306_SetDisplayOn(0); //display off
 
     ssd1306_WriteCommand(0x20); //Set Memory Addressing Mode
-    ssd1306_WriteCommand(0x00); // 00b,Horizontal Addressing Mode; 01b,Vertical Addressing Mode;
-                                // 10b,Page Addressing Mode (RESET); 11b,Invalid
+    ssd1306_WriteCommand(0x02); // 10b = Page Addressing Mode (与 UpdateScreen 的 0xB0 命令一致)
 
     ssd1306_WriteCommand(0xB0); //Set Page Start Address for Page Addressing Mode,0-7
 

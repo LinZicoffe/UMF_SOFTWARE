@@ -31,7 +31,6 @@ static void render_page_main(const run_display_input_t *p_in)
 {
     char buf[16];
     float rate;
-    uint32_t int_part, frac_part;
     uint8_t len, x_start;
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
@@ -55,12 +54,18 @@ static void render_page_main(const run_display_input_t *p_in)
 
 #ifdef SSD1306_INCLUDE_FONT_11x18
     /* Zone B: 瞬时流量 (y=14, 双行加粗) */
+    /* 4 位有效数字自适应小数位 */
     rate = p_in->p_flow_rate->num;
     if (rate < 0.0f) rate = 0.0f;
-    int_part  = (uint32_t)rate;
-    frac_part = (uint32_t)((rate - (float)int_part) * 10.0f + 0.5f);
-    if (frac_part > 9) frac_part = 9;
-    snprintf(buf, sizeof(buf), "%lu.%lu", (unsigned long)int_part, (unsigned long)frac_part);
+    if (rate >= 1000.0f) {
+        snprintf(buf, sizeof(buf), "%.0f", rate);       /* >=1000: 无小数, 如 1234 */
+    } else if (rate >= 100.0f) {
+        snprintf(buf, sizeof(buf), "%.1f", rate);       /* 100~999: 1 位小数, 如 123.4 */
+    } else if (rate >= 10.0f) {
+        snprintf(buf, sizeof(buf), "%.2f", rate);       /* 10~99: 2 位小数, 如 12.34 */
+    } else {
+        snprintf(buf, sizeof(buf), "%.3f", rate);       /* 0~9: 3 位小数, 如 1.234 */
+    }
 
     len = (uint8_t)strlen(buf);
     x_start = (uint8_t)((128 - len * 11) / 2);
