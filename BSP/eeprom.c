@@ -167,6 +167,8 @@ void ReadBufferFlash(uint8_t Len, uint32_t Page_Address, uint32_t ReadBuffer[])
     uint32_t Address;
     uint8_t  Length;
     uint8_t  fillcount;
+    /* 预置哨兵值: Flash 为空时调用方通过判断 0xFFFFFFFFu 可知未找到有效数据 */
+    for (i = 0; i < Len; i++) ReadBuffer[i] = 0xFFFFFFFFu;
     Length    = Len + 1;
     fillcount = 240 / Length;
     Address = Page_Address - Length * 4;
@@ -205,6 +207,8 @@ void ReadBufferFlash_16(uint8_t Len, uint32_t Page_Address, uint16_t ReadBuffer[
     uint32_t Address;
     uint8_t  Length;
     uint8_t  fillcount;
+    /* 预置哨兵值: Flash 为空时调用方通过判断 0xFFFFu 可知未找到有效数据 */
+    for (i = 0; i < Len; i++) ReadBuffer[i] = 0xFFFFu;
     Length    = Len + 1;
     fillcount = 480 / Length;
     Address = Page_Address - Length * 2;

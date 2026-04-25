@@ -87,6 +87,11 @@ extern "C"
 
     /* USER CODE BEGIN Private defines */
 
+/* DAC 零点/满度 Flash 存储页
+ * STM32F103C8 仅 64KB (Page 0~63)，原 ADDR_FLASH_PAGE_64(0x08010000) 越界。
+ * 迁移至 Page 59 (0x0800EC00)，与代码段安全隔离。 */
+#define DAC_FLASH_PAGE_ADDR     ADDR_FLASH_PAGE_59
+
 #define DacValueStartMinAddress 20 // MODBUS:03function code DAC
 #define DacValueStartMaxAddress 21
 #define DacValueLength          2

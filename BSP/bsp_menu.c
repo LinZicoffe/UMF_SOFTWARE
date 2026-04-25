@@ -337,9 +337,9 @@ static void save_param_val(screen_t scr, float val)
     case SCR_PRESET_TOTAL: param_set_preset_total(val);  break;
     case SCR_SET_TOTAL:    param_set_forward_total(val); break;
     case SCR_DAC_ZERO:     DacZeroValue = (uint16_t)val;
-                           WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf); break;
+                           WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf); break;
     case SCR_DAC_FULL:     DacFullValue = (uint16_t)val;
-                           WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf); break;
+                           WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf); break;
     case SCR_SPAN_ZERO:    param_set_value_4ma(val);    SpanLoValue = val;
                            { uint32_t bk[2];
                              bk[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) | ((uint32_t)SpanValueBuf[0].str[1] << 16) |
@@ -1371,7 +1371,7 @@ static void handle_confirm(key_event_t evt)
                 /* 同步复位 DAC/Span 到默认值 */
                 DacZeroValue = 12100;
                 DacFullValue = 60000;
-                WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf);
+                WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf);
                 SpanLoValue = 0.0f;
                 SpanHiValue = 100.0f;
                 { uint32_t bk[2]; union { float f; uint32_t u; } cvt;

@@ -72,10 +72,26 @@
 #define MODBUS_ADDR_MIN    ((uint16_t)1)
 #define MODBUS_ADDR_MAX    ((uint16_t)247)
 
-/* Flash 页分配 (不与现有 Page 63 冲突) */
-#define PARAM_PAGE_BASIC   ADDR_FLASH_PAGE_60  /* std_cond + flow_unit + total_unit */
-#define PARAM_PAGE_METER   ADDR_FLASH_PAGE_61  /* meter_coeff */
-#define PARAM_PAGE_MEDIUM  ADDR_FLASH_PAGE_62  /* medium_coeff */
+/* Flash 页分配
+ * Page 59: DAC 零点/满度 (由 main.h DAC_FLASH_PAGE_ADDR 定义)
+ * Page 60: 基本参数 (std_cond + flow_unit + total_unit)
+ * Page 61: 仪表系数 (meter_coeff)
+ * Page 62: 介质系数 (medium_coeff)
+ * Page 63: Span 量程 (由 bsp_usart/bsp_menu 直接管理)
+ *
+ * 新增分组 (Page 55~58):
+ * Page 55: 信号处理组 [small_signal, filter_time, damping_time]
+ * Page 56: 输出配置组 [freq_output, pulse_equiv, language]
+ * Page 57: 介质工况组 [medium_density, pipe_diameter, gas_ref_press, gas_ref_temp, reynolds_k]
+ * Page 58: 系统/累积组 [modbus_addr, baud_rate, total_factor, preset_total]
+ */
+#define PARAM_PAGE_BASIC         ADDR_FLASH_PAGE_60
+#define PARAM_PAGE_METER         ADDR_FLASH_PAGE_61
+#define PARAM_PAGE_MEDIUM        ADDR_FLASH_PAGE_62
+#define PARAM_PAGE_SIGNAL        ADDR_FLASH_PAGE_55
+#define PARAM_PAGE_OUTPUT        ADDR_FLASH_PAGE_56
+#define PARAM_PAGE_MEDIUM_PARAM  ADDR_FLASH_PAGE_57
+#define PARAM_PAGE_SYSTEM        ADDR_FLASH_PAGE_58
 
 /* ===== 枚举字符串 ===== */
 static const char * const s_std_cond_str[STD_COND_COUNT] = {
@@ -120,6 +136,8 @@ static uint16_t clamp_u16(uint16_t val, uint16_t lo, uint16_t hi)
     return val;
 }
 
+/* ===== 分组 Flash 写入辅助 — static ===== */
+
 /* float 与 uint32_t 互转 (通过 union, 避免 strict-aliasing) */
 static uint32_t float_to_u32(float f)
 {
@@ -133,6 +151,49 @@ static float u32_to_float(uint32_t u)
     union { float f; uint32_t u; } cvt;
     cvt.u = u;
     return cvt.f;
+}
+
+/* 信号处理组: [small_signal, filter_time, damping_time] */
+static HAL_StatusTypeDef flush_signal_group(void)
+{
+    uint32_t buf[3];
+    buf[0] = float_to_u32(s_params.small_signal);
+    buf[1] = float_to_u32(s_params.filter_time);
+    buf[2] = float_to_u32(s_params.damping_time);
+    return (HAL_StatusTypeDef)WriteBufferFlash(3, PARAM_PAGE_SIGNAL, buf);
+}
+
+/* 输出配置组: [freq_output, pulse_equiv, language] */
+static HAL_StatusTypeDef flush_output_group(void)
+{
+    uint32_t buf[3];
+    buf[0] = float_to_u32(s_params.freq_output);
+    buf[1] = (uint32_t)s_params.pulse_equiv;
+    buf[2] = (uint32_t)s_params.language;
+    return (HAL_StatusTypeDef)WriteBufferFlash(3, PARAM_PAGE_OUTPUT, buf);
+}
+
+/* 介质工况组: [medium_density, pipe_diameter, gas_ref_press, gas_ref_temp, reynolds_k] */
+static HAL_StatusTypeDef flush_medium_param_group(void)
+{
+    uint32_t buf[5];
+    buf[0] = float_to_u32(s_params.medium_density);
+    buf[1] = float_to_u32(s_params.pipe_diameter);
+    buf[2] = float_to_u32(s_params.gas_ref_press);
+    buf[3] = float_to_u32(s_params.gas_ref_temp);
+    buf[4] = float_to_u32(s_params.reynolds_k);
+    return (HAL_StatusTypeDef)WriteBufferFlash(5, PARAM_PAGE_MEDIUM_PARAM, buf);
+}
+
+/* 系统/累积组: [modbus_addr, baud_rate, total_factor, preset_total] */
+static HAL_StatusTypeDef flush_system_group(void)
+{
+    uint32_t buf[4];
+    buf[0] = (uint32_t)s_params.modbus_addr;
+    buf[1] = (uint32_t)s_params.baud_rate;
+    buf[2] = float_to_u32(s_params.total_factor);
+    buf[3] = float_to_u32(s_params.preset_total);
+    return (HAL_StatusTypeDef)WriteBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
 }
 
 /* ===== Public API ===== */
@@ -166,31 +227,68 @@ HAL_StatusTypeDef param_storage_init(void)
     s_params.medium_coeff = (buf == 0xFFFFFFFF) ? DEF_MEDIUM_COEFF : u32_to_float(buf);
     s_params.medium_coeff = clamp_f(s_params.medium_coeff, MEDIUM_COEFF_MIN, MEDIUM_COEFF_MAX);
 
-    /* Phase 1: 暂用默认值 */
-    s_params.small_signal  = DEF_SMALL_SIGNAL;
-    s_params.filter_time   = DEF_FILTER_TIME;
-    s_params.damping_time  = DEF_DAMPING_TIME;
+    /* 读取信号处理组 (Page 55) */
+    {
+        uint32_t buf[3];
+        ReadBufferFlash(3, PARAM_PAGE_SIGNAL, buf);
+        s_params.small_signal = (buf[0] == 0xFFFFFFFFu) ? DEF_SMALL_SIGNAL :
+                                clamp_f(u32_to_float(buf[0]), SMALL_SIGNAL_MIN, SMALL_SIGNAL_MAX);
+        s_params.filter_time  = (buf[1] == 0xFFFFFFFFu) ? DEF_FILTER_TIME :
+                                clamp_f(u32_to_float(buf[1]), FILTER_TIME_MIN, FILTER_TIME_MAX);
+        s_params.damping_time = (buf[2] == 0xFFFFFFFFu) ? DEF_DAMPING_TIME :
+                                clamp_f(u32_to_float(buf[2]), DAMPING_TIME_MIN, DAMPING_TIME_MAX);
+    }
 
-    /* Phase 2+: 暂用默认值, TODO: 后续从 Flash 读取 */
-    /* value_4ma / value_20ma: 使用默认值, 由 main.c 在 Data_Init() 后同步 */
-    s_params.value_4ma       = DEF_VALUE_4MA;
-    s_params.value_20ma      = DEF_VALUE_20MA;
-    s_params.freq_output     = DEF_FREQ_OUTPUT;
-    s_params.pulse_equiv     = DEF_PULSE_EQUIV;
-    s_params.medium_density  = DEF_MEDIUM_DENSITY;
-    s_params.pipe_diameter   = DEF_PIPE_DIAMETER;
-    s_params.gas_ref_press   = DEF_GAS_REF_PRESS;
-    s_params.gas_ref_temp    = DEF_GAS_REF_TEMP;
-    s_params.reynolds_k      = DEF_REYNOLDS_K;
-    s_params.total_factor    = DEF_TOTAL_FACTOR;
-    s_params.preset_total    = DEF_PRESET_TOTAL;
-    s_params.forward_total   = DEF_FORWARD_TOTAL;
-    s_params.reverse_total   = DEF_REVERSE_TOTAL;
-    s_params.modbus_addr     = DEF_MODBUS_ADDR;
-    s_params.baud_rate       = DEF_BAUD_RATE;
-    s_params.language        = DEF_LANGUAGE;
-    s_params.pwd_operator    = DEF_PWD_OPERATOR;
-    s_params.pwd_engineer    = DEF_PWD_ENGINEER;
+    /* 读取输出配置组 (Page 56) */
+    {
+        uint32_t buf[3];
+        ReadBufferFlash(3, PARAM_PAGE_OUTPUT, buf);
+        s_params.freq_output  = (buf[0] == 0xFFFFFFFFu) ? DEF_FREQ_OUTPUT :
+                                clamp_f(u32_to_float(buf[0]), FREQ_OUTPUT_MIN, FREQ_OUTPUT_MAX);
+        s_params.pulse_equiv  = (buf[1] == 0xFFFFFFFFu) ? DEF_PULSE_EQUIV :
+                                clamp_u8((uint8_t)buf[1], 0, (uint8_t)(PULSE_EQUIV_COUNT - 1));
+        s_params.language     = (buf[2] == 0xFFFFFFFFu) ? DEF_LANGUAGE :
+                                clamp_u8((uint8_t)buf[2], 0, (uint8_t)(LANG_COUNT - 1));
+    }
+
+    /* 读取介质工况组 (Page 57) */
+    {
+        uint32_t buf[5];
+        ReadBufferFlash(5, PARAM_PAGE_MEDIUM_PARAM, buf);
+        s_params.medium_density = (buf[0] == 0xFFFFFFFFu) ? DEF_MEDIUM_DENSITY :
+                                  clamp_f(u32_to_float(buf[0]), MEDIUM_DENSITY_MIN, MEDIUM_DENSITY_MAX);
+        s_params.pipe_diameter  = (buf[1] == 0xFFFFFFFFu) ? DEF_PIPE_DIAMETER :
+                                  clamp_f(u32_to_float(buf[1]), PIPE_DIAMETER_MIN, PIPE_DIAMETER_MAX);
+        s_params.gas_ref_press  = (buf[2] == 0xFFFFFFFFu) ? DEF_GAS_REF_PRESS :
+                                  clamp_f(u32_to_float(buf[2]), GAS_REF_PRESS_MIN, GAS_REF_PRESS_MAX);
+        s_params.gas_ref_temp   = (buf[3] == 0xFFFFFFFFu) ? DEF_GAS_REF_TEMP :
+                                  clamp_f(u32_to_float(buf[3]), GAS_REF_TEMP_MIN, GAS_REF_TEMP_MAX);
+        s_params.reynolds_k     = (buf[4] == 0xFFFFFFFFu) ? DEF_REYNOLDS_K :
+                                  clamp_f(u32_to_float(buf[4]), REYNOLDS_K_MIN, REYNOLDS_K_MAX);
+    }
+
+    /* 读取系统/累积组 (Page 58) */
+    {
+        uint32_t buf[4];
+        ReadBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
+        s_params.modbus_addr  = (buf[0] == 0xFFFFFFFFu) ? DEF_MODBUS_ADDR :
+                                clamp_u16((uint16_t)buf[0], MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
+        s_params.baud_rate    = (buf[1] == 0xFFFFFFFFu) ? DEF_BAUD_RATE :
+                                clamp_u8((uint8_t)buf[1], 0, (uint8_t)(BAUD_RATE_COUNT - 1));
+        s_params.total_factor = (buf[2] == 0xFFFFFFFFu) ? DEF_TOTAL_FACTOR :
+                                clamp_f(u32_to_float(buf[2]), TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
+        s_params.preset_total = (buf[3] == 0xFFFFFFFFu) ? DEF_PRESET_TOTAL :
+                                clamp_f(u32_to_float(buf[3]), PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
+    }
+
+    /* value_4ma / value_20ma: 由 main.c 在 Data_Init() 后从 Span 页同步 */
+    s_params.value_4ma     = DEF_VALUE_4MA;
+    s_params.value_20ma    = DEF_VALUE_20MA;
+    /* 累计总量: 频繁变化，不写 Flash，断电后从 0 重算 */
+    s_params.forward_total = DEF_FORWARD_TOTAL;
+    s_params.reverse_total = DEF_REVERSE_TOTAL;
+    s_params.pwd_operator  = DEF_PWD_OPERATOR;
+    s_params.pwd_engineer  = DEF_PWD_ENGINEER;
 
     return HAL_OK;
 }
@@ -287,23 +385,22 @@ HAL_StatusTypeDef param_set_medium_coeff(float val)
     return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_MEDIUM, &buf);
 }
 
-/* small_signal / filter_time / damping_time: 暂只更新 RAM, TODO 写 Flash */
 HAL_StatusTypeDef param_set_small_signal(float val)
 {
     s_params.small_signal = clamp_f(val, SMALL_SIGNAL_MIN, SMALL_SIGNAL_MAX);
-    return HAL_OK;
+    return flush_signal_group();
 }
 
 HAL_StatusTypeDef param_set_filter_time(float val)
 {
     s_params.filter_time = clamp_f(val, FILTER_TIME_MIN, FILTER_TIME_MAX);
-    return HAL_OK;
+    return flush_signal_group();
 }
 
 HAL_StatusTypeDef param_set_damping_time(float val)
 {
     s_params.damping_time = clamp_f(val, DAMPING_TIME_MIN, DAMPING_TIME_MAX);
-    return HAL_OK;
+    return flush_signal_group();
 }
 
 /* ===== Phase 2 输出 setter — RAM only, Flash 由 FC10 BackupBuf 路径持久化 ===== */
@@ -322,60 +419,60 @@ HAL_StatusTypeDef param_set_value_20ma(float val)
 HAL_StatusTypeDef param_set_freq_output(float val)
 {
     s_params.freq_output = clamp_f(val, FREQ_OUTPUT_MIN, FREQ_OUTPUT_MAX);
-    return HAL_OK;
+    return flush_output_group();
 }
 
 HAL_StatusTypeDef param_set_pulse_equiv(uint8_t idx)
 {
     s_params.pulse_equiv = clamp_u8(idx, 0, (uint8_t)(PULSE_EQUIV_COUNT - 1));
-    return HAL_OK;
+    return flush_output_group();
 }
 
-/* ===== Phase 2 介质/工况 setter (TODO: 写 Flash) ===== */
+/* ===== Phase 2 介质/工况 setter ===== */
 HAL_StatusTypeDef param_set_medium_density(float val)
 {
     s_params.medium_density = clamp_f(val, MEDIUM_DENSITY_MIN, MEDIUM_DENSITY_MAX);
-    return HAL_OK;
+    return flush_medium_param_group();
 }
 
 HAL_StatusTypeDef param_set_pipe_diameter(float val)
 {
     s_params.pipe_diameter = clamp_f(val, PIPE_DIAMETER_MIN, PIPE_DIAMETER_MAX);
-    return HAL_OK;
+    return flush_medium_param_group();
 }
 
 HAL_StatusTypeDef param_set_gas_ref_press(float val)
 {
     s_params.gas_ref_press = clamp_f(val, GAS_REF_PRESS_MIN, GAS_REF_PRESS_MAX);
-    return HAL_OK;
+    return flush_medium_param_group();
 }
 
 HAL_StatusTypeDef param_set_gas_ref_temp(float val)
 {
     s_params.gas_ref_temp = clamp_f(val, GAS_REF_TEMP_MIN, GAS_REF_TEMP_MAX);
-    return HAL_OK;
+    return flush_medium_param_group();
 }
 
 HAL_StatusTypeDef param_set_reynolds_k(float val)
 {
     s_params.reynolds_k = clamp_f(val, REYNOLDS_K_MIN, REYNOLDS_K_MAX);
-    return HAL_OK;
+    return flush_medium_param_group();
 }
 
-/* ===== Phase 2 累积器 setter (TODO: 写 Flash) ===== */
+/* ===== Phase 2 累积器 setter ===== */
 HAL_StatusTypeDef param_set_total_factor(float val)
 {
     s_params.total_factor = clamp_f(val, TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
-    return HAL_OK;
+    return flush_system_group();
 }
 
 HAL_StatusTypeDef param_set_preset_total(float val)
 {
     s_params.preset_total = clamp_f(val, PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
-    return HAL_OK;
+    return flush_system_group();
 }
 
-/* ===== Phase 3 累计总量 setter (TODO: 写 Flash) ===== */
+/* ===== Phase 3 累计总量 setter (频繁变化，不持久化，断电后重置) ===== */
 HAL_StatusTypeDef param_set_forward_total(float val)
 {
     s_params.forward_total = clamp_f(val, FORWARD_TOTAL_MIN, FORWARD_TOTAL_MAX);
@@ -388,23 +485,23 @@ HAL_StatusTypeDef param_set_reverse_total(float val)
     return HAL_OK;
 }
 
-/* ===== Phase 4 系统 setter (TODO: 写 Flash) ===== */
+/* ===== Phase 4 系统 setter ===== */
 HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr)
 {
     s_params.modbus_addr = clamp_u16(addr, MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
-    return HAL_OK;
+    return flush_system_group();
 }
 
 HAL_StatusTypeDef param_set_baud_rate(uint8_t idx)
 {
     s_params.baud_rate = clamp_u8(idx, 0, (uint8_t)(BAUD_RATE_COUNT - 1));
-    return HAL_OK;
+    return flush_system_group();
 }
 
 HAL_StatusTypeDef param_set_language(uint8_t idx)
 {
     s_params.language = clamp_u8(idx, 0, (uint8_t)(LANG_COUNT - 1));
-    return HAL_OK;
+    return flush_output_group();
 }
 
 /* ===== 枚举字符串 ===== */
@@ -465,8 +562,13 @@ HAL_StatusTypeDef param_storage_reset_defaults(void)
     param_set_modbus_addr(DEF_MODBUS_ADDR);
     param_set_baud_rate(DEF_BAUD_RATE);
     param_set_language(DEF_LANGUAGE);
-    /* 密码 */
+    /* 密码 (仅 RAM，不持久化) */
     s_params.pwd_operator = DEF_PWD_OPERATOR;
     s_params.pwd_engineer = DEF_PWD_ENGINEER;
+    /* 将所有分组同步写入 Flash */
+    flush_signal_group();
+    flush_output_group();
+    flush_medium_param_group();
+    flush_system_group();
     return HAL_OK;
 }

@@ -8,7 +8,7 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - **Modbus RTU 从站**: USART2 作为 Modbus RTU 从站（地址 2），支持功能码 01/03/04/05/06/10
 - **4~20mA DAC 输出**: TIM1/TIM4 PWM 模拟输出，支持零点和满度校准
 - **OLED 显示**: SSD1306 128×64，SPI bit-bang 驱动，支持 S01 主界面和 S02 辅助变量页切换
-- **参数存储**: Flash 模拟 EEPROM，Page 60~63 存储仪表参数、量程范围和 DAC 校准值
+- **参数存储**: Flash 模拟 EEPROM，Page 55~63 分组存储仪表参数、量程范围和 DAC 校准值
 - **菜单系统**: 5 层导航栈 + 6 种界面模式 (列表/数值/枚举/密码/只读/确认) + 两级密码门控 (操作员/工程师)
 - **中英文双语菜单**: 16x16 中文字模渲染，菜单系统全面支持中英文切换（S44 Language 设置）
 - **全参数配置**: 基本设置、输出设置、介质/工况、累积器、累计总量管理、校准、系统设置共 42 个屏幕
@@ -64,7 +64,7 @@ UMF_SOFTWARE/
 │   ├── key.c/h                   # 事件驱动按键驱动 (消抖 + 组合键检测)
 │   ├── bsp_menu.c/h              # 菜单系统 (5层导航栈 + 6种模式 + 密码门控)
 │   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Flash 持久化)
-│   ├── eeprom.c/h                # Flash 模拟 EEPROM (Page 63/64)
+│   ├── eeprom.c/h                # Flash 模拟 EEPROM (磨损均衡日志结构, Page 55~63)
 │   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char)
 │   └── run_display.c/h           # 运行显示模块 (S01 主界面 + S02 辅助页)
 ├── OLED/                          # OLED 显示驱动
@@ -199,7 +199,7 @@ S03 主菜单 (5 项)
   - 菜单系统全面支持双语: 列表/数值/枚举/密码/只读/确认 6 种模式均有中文渲染函数
   - 中文字符使用 0x80~0xFF 编码索引，ASCII 字符保持原有渲染
   - 系统设置从 4 项扩展至 5 项 (新增 Language 首项)
-  - 屏幕总数从 44 增至 45 (S44 Language)
+  - 屏幕总数从 41 增至 42 (新增 S44 Language)
 - **小信号切除下限调整**: 最小值从 0.5% 改为 0.0%，允许完全禁用小信号切除
 - **Span 默认值保护**: 空 Flash (0xFFFFFFFF) 解析时恢复默认值 (0.0/100.0)，防止首次上电异常
 - **IAR 工程文件**: `chinese_font.c` 已添加到 `UMF.ewp` OLED 分组
@@ -207,6 +207,16 @@ S03 主菜单 (5 项)
 
 ### v1.5.0 (2026-04-24)
 
+- **Flash 地址越界修复**: DAC 零点/满度存储从 `ADDR_FLASH_PAGE_64`（0x08010000，超出 64KB 范围）迁移到 `ADDR_FLASH_PAGE_59`（0x0800EC00），消除 HardFault 风险
+  - 新增 `DAC_FLASH_PAGE_ADDR` 宏统一管理，涉及 `main.h`、`main.c`、`bsp_menu.c`、`bsp_usart.c` 共 5 处替换
+- **Flash 参数持久化补充**: 新增 4 个存储页（Page 55~58），各 setter 自动写 Flash：
+  - Page 55：信号处理组 (小信号切除值、滤波时间、阻尼时间)
+  - Page 56：输出配置组 (频率输出、脉冲当量、语言)
+  - Page 57：介质工况组 (密度、管径、气体参考压力/温度、雷诺系数)
+  - Page 58：系统组 (Modbus 地址、波特率、总量系数、预设总量)
+- **ReadBufferFlash 哨兵值**: 函数入口预置 `0xFFFFFFFFu` / `0xFFFFu`，Flash 全空时调用方可安全判断
+- **ConvertFunc 精度修复**: 去除 `float→int32_t` 截断，改为纯 float 线性插值
+- **Modbus FC01 响应修复**: 字节从跳位写入 `TxBuffer[3,5,7…]` 改为连续写入 `TxBuffer[3,4,5,6…]`
 - **初始化顺序修复**: `Data_Init()` → `param_storage_init()` 后，Span 值同步方向反转，确保 Flash Page 63 真实值不被硬编码默认值 (0.0/100.0) 覆盖
 - **Flash 安全加固**: 写入函数 (`WriteBufferFlash`/`WriteBufferFlash_16`) 补充 `HAL_FLASH_Lock()`；读取函数移除不必要的 `HAL_FLASH_Unlock()`
 - **DAC 输出 clamp**: `ConvertFunc()` 返回值 clamp 到 `[DacZeroValue, DacFullValue]`，防止负值导致 uint16_t 异常

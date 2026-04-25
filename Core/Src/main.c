@@ -67,7 +67,6 @@ void SystemClock_Config(void);
 void  Time_Delay(uint32_t nCount);
 void  FlashProtect(void);
 void  Data_Init(void);
-float lin_clac_x8_y8(int32_t xn, int32_t x[], int32_t y[], int8_t m);
 float ConvertFunc(float pv, float x0, float x1, float y0, float y1);
 /* USER CODE END PFP */
 /* Private user code ---------------------------------------------------------*/
@@ -296,44 +295,9 @@ void FlashProtect(void)
  */
 float ConvertFunc(float pv, float x0, float x1, float y0, float y1)
 {
-    float   ret;
-    int32_t lin_x[2];
-    int32_t lin_y[2];
-    lin_x[0] = (int32_t)x0;
-    lin_x[1] = (int32_t)x1;
-    lin_y[0] = (int32_t)y0;
-    lin_y[1] = (int32_t)y1;
-    ret      = lin_clac_x8_y8((int32_t)pv, lin_x, lin_y, 2);
-    return ret;
-}
-
-/******************************************************************************
-  1。函数名称：lin_clac_x8_y8()--------全程线性插值计算
-  2。条件： 1。已知一条曲线的若干个标定点坐标(x[],y[])
-            2. 所有标定点坐标按照递增序列排列
-            3。已知该曲线上一点的X坐标序列
-  3。功能： 求该点所对应的y坐标
-
-  4。常量说明 m，数组长度
- 4。入口：xn:已知的X坐标，x[]:x坐标序列;y[]:y坐标序列
- 5。出口：被求点y坐标
- ******************************************************************************/
-float lin_clac_x8_y8(int32_t xn, int32_t x[], int32_t y[], int8_t m)
-{
-    int8_t  i;
-    float   yn;
-    int32_t tmp;
-    int32_t data_temp;
-    for (i = 1; i < (m - 1); i++)
-    {
-        if (xn <= x[i])
-            break;
-    }
-    tmp       = (y[i] - y[i - 1]);
-    data_temp = x[i] - x[i - 1];
-    if (data_temp == 0) return (float)y[i - 1];
-    yn = (float)tmp * (xn - x[i - 1]) / (float)data_temp + y[i - 1];
-    return (yn);
+    float span = x1 - x0;
+    if (span == 0.0f) return y0;
+    return y0 + (pv - x0) * (y1 - y0) / span;
 }
 /**
  * @Author: liyongtai
@@ -358,7 +322,7 @@ void Data_Init(void)
     if (BackupBuf[1] == 0xFFFFFFFF) SpanHiValue = 100.0f;
     if (SpanLoValue >= SpanHiValue) { SpanLoValue = 0.0f; SpanHiValue = 100.0f; }
 
-    ReadBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf);
+    ReadBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf);
     if (DacZeroValue < 100)
         DacZeroValue = 12100;
     if (!DacFullValue)

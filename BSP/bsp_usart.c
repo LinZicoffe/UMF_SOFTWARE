@@ -514,15 +514,18 @@ void Modbus_Function_1(void)
     if ((startaddress + MbBufferLen) < (BitBufLength * 16) &&
         (quotient + 1) < BitBufLength)
     {
-        for (i = 0; i < sendbytelength; i++)
+        /* 从 BitControlBuf[quotient] 的第 remainder 位开始，连续提取 sendbytelength 字节
+         * 每次合并两个相邻寄存器得到 16 位窗口，低字节先发送 (Modbus 线圈顺序) */
+        uint8_t bpos = 3;
+        for (i = 0; i < sendbytelength; )
         {
-            Uart2SendDataType.TxBuffer[3 + 2 * i] =
-                (uint8_t)(((SWAPWORD(BitControlBuf[quotient])) >> (remainder - 0)) + ((SWAPWORD(BitControlBuf[quotient + 1])) << (16 - remainder)));
+            uint16_t w = (uint16_t)(((uint32_t)SWAPWORD(BitControlBuf[quotient]) >> remainder) |
+                                    ((uint32_t)SWAPWORD(BitControlBuf[quotient + 1]) << (16 - remainder)));
+            Uart2SendDataType.TxBuffer[bpos++] = (uint8_t)(w & 0xFF);
             i++;
-            if (i == sendbytelength)
-                break;
-            Uart2SendDataType.TxBuffer[3 + 2 * i] =
-                (uint8_t)((((SWAPWORD(BitControlBuf[quotient])) >> (remainder - 0)) + ((SWAPWORD(BitControlBuf[quotient + 1])) << (16 - remainder))) >> 8);
+            if (i >= sendbytelength) break;
+            Uart2SendDataType.TxBuffer[bpos++] = (uint8_t)(w >> 8);
+            i++;
             quotient++;
         }
     }
@@ -848,7 +851,7 @@ void Modbus_Function_10(void)
                 {
                     DacValue = DacFullValue;
                 }
-                WriteBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf);
+                WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf);
             }
         }
         if ((startaddress >= SpanValueStartMinAddress) && (startaddress <= SpanValueStartMaxAddress))
