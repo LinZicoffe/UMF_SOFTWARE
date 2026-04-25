@@ -32,13 +32,14 @@
 #define DEF_BAUD_RATE      3
 #define DEF_PWD_OPERATOR   0
 #define DEF_PWD_ENGINEER   123
+#define DEF_LANGUAGE       0
 
 /* ===== 范围限制 ===== */
 #define METER_COEFF_MIN    0.001f
 #define METER_COEFF_MAX    99.999f
 #define MEDIUM_COEFF_MIN   0.100f
 #define MEDIUM_COEFF_MAX   10.000f
-#define SMALL_SIGNAL_MIN   0.5f
+#define SMALL_SIGNAL_MIN   0.0f
 #define SMALL_SIGNAL_MAX   10.0f
 #define FILTER_TIME_MIN    0.1f
 #define FILTER_TIME_MAX    100.0f
@@ -187,6 +188,7 @@ HAL_StatusTypeDef param_storage_init(void)
     s_params.reverse_total   = DEF_REVERSE_TOTAL;
     s_params.modbus_addr     = DEF_MODBUS_ADDR;
     s_params.baud_rate       = DEF_BAUD_RATE;
+    s_params.language        = DEF_LANGUAGE;
     s_params.pwd_operator    = DEF_PWD_OPERATOR;
     s_params.pwd_engineer    = DEF_PWD_ENGINEER;
 
@@ -236,6 +238,7 @@ float    param_get_reverse_total(void) { return s_params.reverse_total; }
 uint16_t param_get_modbus_addr(void) { return s_params.modbus_addr; }
 uint8_t  param_get_baud_rate(void)   { return s_params.baud_rate; }
 uint16_t param_get_pwd_engineer(void) { return s_params.pwd_engineer; }
+uint8_t  param_get_language(void)    { return s_params.language; }
 
 /* ===== Phase 1 setter ===== */
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx)
@@ -398,6 +401,12 @@ HAL_StatusTypeDef param_set_baud_rate(uint8_t idx)
     return HAL_OK;
 }
 
+HAL_StatusTypeDef param_set_language(uint8_t idx)
+{
+    s_params.language = clamp_u8(idx, 0, (uint8_t)(LANG_COUNT - 1));
+    return HAL_OK;
+}
+
 /* ===== 枚举字符串 ===== */
 const char *param_get_std_cond_str(uint8_t idx)
 {
@@ -455,6 +464,7 @@ HAL_StatusTypeDef param_storage_reset_defaults(void)
     /* Phase 4 系统 */
     param_set_modbus_addr(DEF_MODBUS_ADDR);
     param_set_baud_rate(DEF_BAUD_RATE);
+    param_set_language(DEF_LANGUAGE);
     /* 密码 */
     s_params.pwd_operator = DEF_PWD_OPERATOR;
     s_params.pwd_engineer = DEF_PWD_ENGINEER;

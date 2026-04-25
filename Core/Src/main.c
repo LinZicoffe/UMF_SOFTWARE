@@ -353,6 +353,11 @@ void Data_Init(void)
     SpanValueBuf[1].str[2] = (uint8_t)(BackupBuf[1] >> 8);
     SpanValueBuf[1].str[3] = (uint8_t)(BackupBuf[1] >> 0);
 
+    /* Span 默认值保护: 空 Flash 解析为 NaN 或异常值时恢复默认 */
+    if (BackupBuf[0] == 0xFFFFFFFF) SpanLoValue = 0.0f;
+    if (BackupBuf[1] == 0xFFFFFFFF) SpanHiValue = 100.0f;
+    if (SpanLoValue >= SpanHiValue) { SpanLoValue = 0.0f; SpanHiValue = 100.0f; }
+
     ReadBufferFlash_16(2, ADDR_FLASH_PAGE_64, DacValueBuf);
     if (DacZeroValue < 100)
         DacZeroValue = 12100;

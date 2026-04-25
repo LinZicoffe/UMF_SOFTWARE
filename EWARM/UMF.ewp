@@ -1152,6 +1152,9 @@
             <file>
                 <name>$PROJ_DIR$\..\OLED\ssd1306_fonts.c</name>
             </file>
+            <file>
+                <name>$PROJ_DIR$\..\OLED\chinese_font.c</name>
+            </file>
         </group>
         <group>
             <name>User</name>

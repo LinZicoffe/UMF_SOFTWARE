@@ -54,6 +54,13 @@ typedef enum {
     BAUD_RATE_COUNT
 } baud_rate_t;
 
+/* 语言 */
+typedef enum {
+    LANG_ENGLISH = 0,
+    LANG_CHINESE = 1,
+    LANG_COUNT
+} language_t;
+
 /* ===== 参数集合结构体 ===== */
 
 typedef struct {
@@ -63,7 +70,7 @@ typedef struct {
     float    medium_coeff;   /* 介质系数 0.100~10.000, 默认 1.0 */
     uint8_t  flow_unit;      /* 流量单位索引 (flow_unit_t) */
     uint8_t  total_unit;     /* 累积单位索引 (total_unit_t) */
-    float    small_signal;   /* 小信号切除 0.5~10.0 (%) */
+    float    small_signal;   /* 小信号切除 0.0~10.0 (%) */
     float    filter_time;    /* 滤波参数 0.1~100.0 (秒) */
     float    damping_time;   /* 阻尼时间 0.1~100.0 (秒) */
 
@@ -91,6 +98,7 @@ typedef struct {
     /* --- Phase 4: 系统 --- */
     uint16_t modbus_addr;    /* 1~247, 默认 2 */
     uint8_t  baud_rate;      /* baud_rate_t, 默认 3 (38400) */
+    uint8_t  language;       /* language_t, 默认 0 (English) */
 
     /* --- 密码 --- */
     uint16_t pwd_operator;   /* 默认 0 */
@@ -141,6 +149,7 @@ float    param_get_reverse_total(void);
 uint16_t param_get_modbus_addr(void);
 uint8_t  param_get_baud_rate(void);
 uint16_t param_get_pwd_engineer(void);
+uint8_t  param_get_language(void);
 
 /* ===== Phase 1 setter ===== */
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx);
@@ -176,6 +185,7 @@ HAL_StatusTypeDef param_set_reverse_total(float val);
 /* ===== Phase 4 系统 setter ===== */
 HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr);
 HAL_StatusTypeDef param_set_baud_rate(uint8_t idx);
+HAL_StatusTypeDef param_set_language(uint8_t idx);
 
 /* ===== 枚举字符串 (菜单渲染用) ===== */
 const char *param_get_std_cond_str(uint8_t idx);

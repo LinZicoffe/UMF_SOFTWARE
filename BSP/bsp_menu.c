@@ -15,6 +15,7 @@
 #include "param_storage.h"
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
+#include "chinese_font.h"
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
@@ -72,7 +73,8 @@ typedef enum {
     SCR_COMM_ADDR    = 41,
     SCR_BAUD_RATE    = 42,
     SCR_DEVICE_INFO  = 43,
-    SCR_COUNT        = 44
+    SCR_LANGUAGE     = 44,
+    SCR_COUNT        = 45
 } screen_t;
 
 /* ===== 导航栈帧 ===== */
@@ -169,14 +171,15 @@ static const list_item_t c_calib_set[] = {
 };
 #define CALIB_SET_COUNT  4
 
-/* S39 系统设置 (4 项) */
+/* S39 系统设置 (5 项) */
 static const list_item_t c_system_set[] = {
+    { "Language",     SCR_LANGUAGE    },
     { "Factory Rst",  SCR_FACTORY_RST },
     { "Comm Addr",    SCR_COMM_ADDR   },
     { "Baud Rate",    SCR_BAUD_RATE   },
     { "Device Info",  SCR_DEVICE_INFO },
 };
-#define SYSTEM_SET_COUNT  4
+#define SYSTEM_SET_COUNT  5
 
 /* ===== 数值参数描述符 ===== */
 typedef struct {
@@ -191,7 +194,7 @@ static const num_desc_t c_num_desc[SCR_COUNT] = {
     /* 数值编辑屏幕 — 未指定的索引为 {0,0,0,0,""} (step=0 表示无效) */
     [SCR_METER_COEFF]  = { 0.001f,  99.999f,   0.001f, 3, "" },
     [SCR_MEDIUM_COEFF] = { 0.100f,  10.000f,   0.001f, 3, "" },
-    [SCR_SMALL_SIGNAL] = { 0.5f,    10.0f,     0.1f,   1, "%" },
+    [SCR_SMALL_SIGNAL] = { 0.0f,    10.0f,     0.1f,   1, "%" },
     [SCR_FILTER_TIME]  = { 0.1f,    100.0f,    0.1f,   1, "s" },
     [SCR_DAMPING_TIME] = { 0.1f,    100.0f,    0.1f,   1, "s" },
     [SCR_4MA_VALUE]    = { -9999.0f,99999.0f,  0.1f,   1, "" },
@@ -258,7 +261,7 @@ static menu_mode_t detect_mode(screen_t scr)
     /* 枚举屏幕 */
     if (scr == SCR_STD_COND || scr == SCR_FLOW_UNIT ||
         scr == SCR_TOTAL_UNIT || scr == SCR_PULSE_EQUIV ||
-        scr == SCR_BAUD_RATE)
+        scr == SCR_BAUD_RATE || scr == SCR_LANGUAGE)
         return MODE_ENUM;
 
     /* 只读屏幕 */
@@ -365,6 +368,7 @@ static uint8_t load_enum_idx(screen_t scr)
     case SCR_TOTAL_UNIT:  return param_get_total_unit();
     case SCR_PULSE_EQUIV: return param_get_pulse_equiv();
     case SCR_BAUD_RATE:   return param_get_baud_rate();
+    case SCR_LANGUAGE:    return param_get_language();
     default:              return 0;
     }
 }
@@ -377,6 +381,7 @@ static void save_enum_idx(screen_t scr, uint8_t idx)
     case SCR_TOTAL_UNIT:  param_set_total_unit(idx);  break;
     case SCR_PULSE_EQUIV: param_set_pulse_equiv(idx); break;
     case SCR_BAUD_RATE:   param_set_baud_rate(idx);   break;
+    case SCR_LANGUAGE:    param_set_language(idx);    break;
     default: break;
     }
 }
@@ -447,6 +452,7 @@ static const char *get_screen_title(screen_t scr)
     case SCR_COMM_ADDR:    return "Comm Addr";
     case SCR_BAUD_RATE:    return "Baud Rate";
     case SCR_DEVICE_INFO:  return "Device Info";
+    case SCR_LANGUAGE:     return "Language";
     default:               return "Menu";
     }
 }
@@ -460,9 +466,401 @@ static void handle_password(key_event_t evt);
 static void handle_readonly(key_event_t evt);
 static void handle_confirm(key_event_t evt);
 
+/* ===== 中英文双语支持 ===== */
+
+/* 语言枚举字符串 */
+static const char * const s_language_str[LANG_COUNT] = { "English", "Chinese" };
+
+/* 中文模式判定 */
+static uint8_t is_cn_mode(void) { return (uint8_t)(param_get_language() == LANG_CHINESE); }
+
+/* 中文标题字符串 — 返回 NULL 表示无中文标题 (降级英文) */
+static const char *get_cn_title(screen_t scr)
+{
+    switch (scr) {
+    case SCR_MAIN_MENU:    return "\x80\x81\x82";           /* 主菜单 */
+    case SCR_PASSWORD:     return "\xB8\xDD";               /* 密码 */
+    case SCR_BASIC_LIST:   return "\x9E\x9F\x9C\x9D";       /* 基本设置 */
+    case SCR_STD_COND:     return "\xA0\xA1";               /* 标况 */
+    case SCR_METER_COEFF:  return "\xA2\xA3\xA4\x9B";       /* 仪表系数 */
+    case SCR_MEDIUM_COEFF: return "\xA5\xA6\xA4\x9B";       /* 介质系数 */
+    case SCR_FLOW_UNIT:    return "\x89\x8A\x82\xA8";       /* 流量单位 */
+    case SCR_TOTAL_UNIT:   return "\x8B\xC5\x82\xA8";       /* 累积单位 */
+    case SCR_SMALL_SIGNAL: return "\xA9\xAA\xAB\xAC\xAD";   /* 小信号切除 */
+    case SCR_FILTER_TIME:  return "\xAE\xAF\x9A\x9B";       /* 滤波参数 */
+    case SCR_DAMPING_TIME: return "\xB0\xB1\x88\xB2";       /* 阻尼时间 */
+    case SCR_OUTPUT_LIST:  return "\xB3\xB4\x9C\x9D";       /* 输出设置 */
+    case SCR_4MA_VALUE:    return "4mA\x8A\xD1";            /* 4mA量程 */
+    case SCR_20MA_VALUE:   return "20mA\x8A\xD1";           /* 20mA量程 */
+    case SCR_FREQ_OUTPUT:  return "\x8F\x90\xB3\xB4";       /* 频率输出 */
+    case SCR_PULSE_EQUIV:  return "\xB5\xB6\xB7\x8A";       /* 脉冲当量 */
+    case SCR_MEDIUM_LIST:  return "\xA5\xA6\xA7\xA1";       /* 介质工况 */
+    case SCR_DENSITY:      return "\xB8\x93";               /* 密度 */
+    case SCR_PIPE_DIA:     return "\xBA\xBB\xBC\xBD";       /* 管道内径 */
+    case SCR_GAS_PRESS:    return "\xBE\xBF\x94\x95";       /* 气体压力 */
+    case SCR_GAS_TEMP:     return "\x92\x93";               /* 温度 */
+    case SCR_REYNOLDS:     return "\xC0\xC1\xC2\xC3";       /* 雷诺修正 */
+    case SCR_TOTALIZER_LIST: return "\x8B\xC5\xC4\x9C\x9D"; /* 累积器设置 */
+    case SCR_TOTAL_FACTOR: return "\x8B\xC5\xA4\x9B";       /* 累积系数 */
+    case SCR_PRESET_TOTAL: return "\xCB\x9C\x8D\x8A";       /* 预设总量 */
+    case SCR_ACCUM_LIST:   return "\x8B\x8C\x8D\x8A";       /* 累计总量 */
+    case SCR_FWD_TOTAL:    return "\xC3\xC7\x8D\x8A";       /* 正向总量 */
+    case SCR_REV_TOTAL:    return "\xC6\xC7\x8D\x8A";       /* 反向总量 */
+    case SCR_NET_TOTAL:    return "\xC8\x8D\x8A";           /* 净总量 */
+    case SCR_CLEAR_TOTALS: return "\xC9\xCA\xE8\xE9";       /* 清零所有 */
+    case SCR_SET_TOTAL:    return "\x9C\x9D\x8D\x8A";       /* 设置总量 */
+    case SCR_CALIB_LIST:   return "\xCD\xCE";               /* 校准 */
+    case SCR_DAC_ZERO:     return "\xCA\xCF\xCD\xCE";       /* 零点校准 */
+    case SCR_DAC_FULL:     return "\xD0\x93\xCD\xCE";       /* 满度校准 */
+    case SCR_SPAN_ZERO:    return "\xCA\xCF\x8A\xD1";       /* 零点量程 */
+    case SCR_SPAN_FULL:    return "\xD0\x93\x8A\xD1";       /* 满度量程 */
+    case SCR_SYSTEM_LIST:  return "\xA4\xD2\x9C\x9D";       /* 系统设置 */
+    case SCR_FACTORY_RST:  return "\xD3\xD4\xB4\xD5";       /* 恢复出厂 */
+    case SCR_COMM_ADDR:    return "\xD6\xD7\xD8\xD9";       /* 通讯地址 */
+    case SCR_BAUD_RATE:    return "\xAF\xDA\x90";           /* 波特率 */
+    case SCR_DEVICE_INFO:  return "\x9C\xDB\xAA\xDC";       /* 设备信息 */
+    default:               return NULL;
+    }
+}
+
+/* 中文列表项标签 */
+static const char *get_cn_list_label(screen_t scr, uint8_t idx)
+{
+    switch (scr) {
+    case SCR_MAIN_MENU:
+        switch (idx) {
+        case 0: return "\x83\x84\x85\x86";     /* 运行显示 */
+        case 1: return "\x9A\x9B\x9C\x9D";     /* 参数设置 */
+        case 2: return "\x8B\x8C\x8D\x8A";     /* 累计总量 */
+        case 3: return "\xCD\xCE";             /* 校准 */
+        case 4: return "\xA4\xD2\x9C\x9D";     /* 系统设置 */
+        default: return NULL;
+        }
+    case SCR_BASIC_LIST:
+        switch (idx) {
+        case 0:  return "\xA0\xA1";             /* 标况 */
+        case 1:  return "\xA2\xA3\xA4\x9B";     /* 仪表系数 */
+        case 2:  return "\xA5\xA6\xA4\x9B";     /* 介质系数 */
+        case 3:  return "\x89\x8A\x82\xA8";     /* 流量单位 */
+        case 4:  return "\x8B\xC5\x82\xA8";     /* 累积单位 */
+        case 5:  return "\xA9\xAA\xAB\xAC\xAD"; /* 小信号切除 */
+        case 6:  return "\xAE\xAF\x9A\x9B";     /* 滤波参数 */
+        case 7:  return "\xB0\xB1\x88\xB2";     /* 阻尼时间 */
+        case 8:  return "\xB3\xB4\x9C\x9D";     /* 输出设置 */
+        case 9:  return "\xA5\xA6\xA7\xA1";     /* 介质工况 */
+        case 10: return "\x8B\xC5\xC4\x9C\x9D"; /* 累积器设置 */
+        default: return NULL;
+        }
+    case SCR_OUTPUT_LIST:
+        switch (idx) {
+        case 0: return "4mA\x8A\xD1";           /* 4mA量程 */
+        case 1: return "20mA\x8A\xD1";          /* 20mA量程 */
+        case 2: return "\x8F\x90\xB3\xB4";     /* 频率输出 */
+        case 3: return "\xB5\xB6\xB7\x8A";     /* 脉冲当量 */
+        default: return NULL;
+        }
+    case SCR_MEDIUM_LIST:
+        switch (idx) {
+        case 0: return "\xB8\x93";             /* 密度 */
+        case 1: return "\xBA\xBB\xBC\xBD";     /* 管道内径 */
+        case 2: return "\xBE\xBF\x94\x95";     /* 气体压力 */
+        case 3: return "\x92\x93";             /* 温度 */
+        case 4: return "\xC0\xC1\xC2\xC3";     /* 雷诺修正 */
+        default: return NULL;
+        }
+    case SCR_TOTALIZER_LIST:
+        switch (idx) {
+        case 0: return "\x8B\xC5\x82\xA8";     /* 累积单位 */
+        case 1: return "\x8B\xC5\xA4\x9B";     /* 累积系数 */
+        case 2: return "\xCB\x9C\x8D\x8A";     /* 预设总量 */
+        default: return NULL;
+        }
+    case SCR_ACCUM_LIST:
+        switch (idx) {
+        case 0: return "\xC3\xC7\x8D\x8A";     /* 正向总量 */
+        case 1: return "\xC6\xC7\x8D\x8A";     /* 反向总量 */
+        case 2: return "\xC8\x8D\x8A";         /* 净总量 */
+        case 3: return "\xC9\xCA\xE8\xE9";     /* 清零所有 */
+        case 4: return "\x9C\x9D\x8D\x8A";     /* 设置总量 */
+        default: return NULL;
+        }
+    case SCR_CALIB_LIST:
+        switch (idx) {
+        case 0: return "\xCA\xCF\xCD\xCE";     /* 零点校准 */
+        case 1: return "\xD0\x93\xCD\xCE";     /* 满度校准 */
+        case 2: return "\xCA\xCF\x8A\xD1";     /* 零点量程 */
+        case 3: return "\xD0\x93\x8A\xD1";     /* 满度量程 */
+        default: return NULL;
+        }
+    case SCR_SYSTEM_LIST:
+        switch (idx) {
+        case 0: return "Language";              /* Language (保持英文) */
+        case 1: return "\xD3\xD4\xB4\xD5";     /* 恢复出厂 */
+        case 2: return "\xD6\xD7\xD8\xD9";     /* 通讯地址 */
+        case 3: return "\xAF\xDA\x90";         /* 波特率 */
+        case 4: return "\x9C\xDB\xAA\xDC";     /* 设备信息 */
+        default: return NULL;
+        }
+    default: return NULL;
+    }
+}
+
+/* ===== 中文渲染函数 ===== */
+
+/* 绘制中文标题栏 (16px 高, 反色) */
+static void draw_cn_title(screen_t scr)
+{
+    const char *title = get_cn_title(scr);
+    if (!title) title = get_screen_title(scr);
+    ssd1306_FillRectangle(0, 0, 127, 15, White);
+    ssd1306_WriteMixedStr(2, 0, title, Black);
+}
+
+/* M1 列表 — 中文模式 */
+static void render_list_cn(nav_frame_t *f)
+{
+    const list_item_t *items;
+    uint8_t count, i;
+    uint8_t visible_rows = 3; /* 16px/行, 3 项可见 */
+    const char *label;
+
+    ssd1306_Fill(Black);
+
+    get_list_data(f->screen_id, &items, &count);
+    if (!items || count == 0) return;
+
+    /* 标题栏 16px (反色) */
+    draw_cn_title(f->screen_id);
+
+    /* 滚动窗口 */
+    if (f->cursor >= visible_rows)
+        f->scroll = (uint8_t)(f->cursor - visible_rows + 1);
+    else
+        f->scroll = 0;
+
+    /* 列表项: 16px 行高 */
+    for (i = 0; i < visible_rows && (f->scroll + i) < count; i++) {
+        uint8_t y = (uint8_t)(16 + i * 16);
+        uint8_t idx = (uint8_t)(f->scroll + i);
+        int is_sel = (idx == f->cursor);
+
+        label = get_cn_list_label(f->screen_id, idx);
+        if (!label) label = items[idx].label; /* 降级英文 */
+
+        if (is_sel) {
+            ssd1306_FillRectangle(0, y, 127, (uint8_t)(y + 15), White);
+        }
+        ssd1306_WriteMixedStr(4, y, label, is_sel ? Black : White);
+    }
+}
+
+/* M2 数值编辑 — 中文模式 */
+static void render_numeric_cn(nav_frame_t *f)
+{
+    const num_desc_t *desc = &c_num_desc[f->screen_id];
+    char buf[32];
+
+    ssd1306_Fill(Black);
+    draw_cn_title(f->screen_id);
+
+#ifdef SSD1306_INCLUDE_FONT_11x18
+    /* 数值居中 */
+    snprintf(buf, sizeof(buf), "%.*f", (int)desc->decimals, f->edit_val);
+    {
+        uint8_t x_start = (uint8_t)((128 - strlen(buf) * 11) / 2);
+        ssd1306_SetCursor(x_start, 18);
+        ssd1306_WriteString(buf, Font_11x18, White);
+    }
+#endif
+
+#ifdef SSD1306_INCLUDE_FONT_6x8
+    snprintf(buf, sizeof(buf), "Min:%.*f Max:%.*f",
+             (int)desc->decimals, desc->min_val,
+             (int)desc->decimals, desc->max_val);
+    ssd1306_SetCursor(0, 40);
+    ssd1306_WriteString(buf, Font_6x8, White);
+
+    snprintf(buf, sizeof(buf), "Step:%.*f %s", (int)desc->decimals, desc->step, desc->unit);
+    ssd1306_SetCursor(0, 50);
+    ssd1306_WriteString(buf, Font_6x8, White);
+#endif
+}
+
+/* M3 枚举选择 — 中文模式 */
+static void render_enum_cn(nav_frame_t *f)
+{
+    char buf[16];
+    const char * const *opts = NULL;
+    uint8_t opt_count = 0;
+    int8_t start;
+    uint8_t i;
+
+    /* 获取枚举选项 */
+    switch (f->screen_id) {
+    case SCR_STD_COND:    opts = param_get_std_cond_strings();    opt_count = STD_COND_COUNT;    break;
+    case SCR_FLOW_UNIT:   opts = param_get_flow_unit_strings();   opt_count = FLOW_UNIT_COUNT;   break;
+    case SCR_TOTAL_UNIT:  opts = param_get_total_unit_strings();  opt_count = TOTAL_UNIT_COUNT;  break;
+    case SCR_PULSE_EQUIV: opts = param_get_pulse_equiv_strings(); opt_count = PULSE_EQUIV_COUNT; break;
+    case SCR_BAUD_RATE:   opts = param_get_baud_rate_strings();   opt_count = BAUD_RATE_COUNT;   break;
+    case SCR_LANGUAGE:    opts = s_language_str;                  opt_count = LANG_COUNT;        break;
+    default: break;
+    }
+    if (!opts) return;
+
+    ssd1306_Fill(Black);
+    draw_cn_title(f->screen_id);
+
+#ifdef SSD1306_INCLUDE_FONT_11x18
+    /* 选项列表 (标题16px后, 每项16px, 最多2项) */
+    start = (int8_t)f->enum_val - 1;
+    if (start < 0) start = 0;
+    if (start + 1 >= (int8_t)opt_count) start = (int8_t)(opt_count - 2);
+    if (start < 0) start = 0;
+
+    for (i = 0; i < 2 && (start + (int8_t)i) < (int8_t)opt_count; i++) {
+        uint8_t y = (uint8_t)(20 + i * 22);
+        int is_sel = ((uint8_t)(start + i) == f->enum_val);
+        if (is_sel) {
+            ssd1306_FillRectangle(0, y, 127, (uint8_t)(y + 17), White);
+        }
+        snprintf(buf, sizeof(buf), " %s", opts[start + i]);
+        ssd1306_SetCursor(2, y);
+        ssd1306_WriteString(buf, Font_11x18, is_sel ? Black : White);
+    }
+#endif
+}
+
+/* M6 密码输入 — 中文模式 */
+static void render_password_cn(nav_frame_t *f)
+{
+    char buf[16];
+    ssd1306_Fill(Black);
+
+    /* 错误倒计时 */
+    if (f->pwd_err_timer > 0) {
+#ifdef SSD1306_INCLUDE_FONT_11x18
+        ssd1306_WriteMixedStr(32, 10, "\xB8\xDD", White);   /* 密码 */
+        ssd1306_WriteMixedStr(40, 36, "\xDE\xDF""!", White); /* 错误! */
+#endif
+        return;
+    }
+
+#ifdef SSD1306_INCLUDE_FONT_11x18
+    /* 标题: 密码 */
+    ssd1306_WriteMixedStr(48, 0, "\xB8\xDD", White);
+
+    /* 3 位数字 */
+    {
+        uint8_t x_start = 40;
+        uint8_t i;
+        for (i = 0; i < 3; i++) {
+            buf[0] = (char)('0' + f->pwd_digits[i]);
+            buf[1] = '\0';
+            if (i == f->cursor) {
+                ssd1306_FillRectangle(x_start, 22, (uint8_t)(x_start + 10), 39, White);
+                ssd1306_SetCursor(x_start, 24);
+                ssd1306_WriteString(buf, Font_11x18, Black);
+            } else {
+                ssd1306_SetCursor(x_start, 24);
+                ssd1306_WriteString(buf, Font_11x18, White);
+            }
+            x_start += 16;
+        }
+    }
+#endif
+
+#ifdef SSD1306_INCLUDE_FONT_6x8
+    ssd1306_WriteMixedStr(8, 48, "\xE0\xE1:000~999", White); /* 范围:000~999 */
+#endif
+}
+
+/* M4 只读显示 — 中文模式 */
+static void render_readonly_cn(nav_frame_t *f)
+{
+    char buf[16];
+    float val = load_readonly_val(f->screen_id);
+
+    ssd1306_Fill(Black);
+    draw_cn_title(f->screen_id);
+
+#ifdef SSD1306_INCLUDE_FONT_11x18
+    snprintf(buf, sizeof(buf), "%.1f", val);
+    {
+        uint8_t x_start = (uint8_t)((128 - strlen(buf) * 11) / 2);
+        ssd1306_SetCursor(x_start, 18);
+        ssd1306_WriteString(buf, Font_11x18, White);
+    }
+#endif
+
+#ifdef SSD1306_INCLUDE_FONT_6x8
+    /* 单位 */
+    {
+        const char *unit_str = param_get_total_unit_str(param_get_total_unit());
+        ssd1306_SetCursor(100, 20);
+        ssd1306_WriteString((char *)unit_str, Font_6x8, White);
+    }
+
+    /* 设备信息: 保持英文内容 */
+    if (f->screen_id == SCR_DEVICE_INFO) {
+        snprintf(buf, sizeof(buf), "Addr:%d", param_get_modbus_addr());
+        ssd1306_SetCursor(0, 24);
+        ssd1306_WriteString(buf, Font_6x8, White);
+        {
+            const char * const *baud_strs = param_get_baud_rate_strings();
+            snprintf(buf, sizeof(buf), "Baud:%s", baud_strs[param_get_baud_rate()]);
+            ssd1306_SetCursor(0, 34);
+            ssd1306_WriteString(buf, Font_6x8, White);
+        }
+        ssd1306_SetCursor(0, 44);
+        ssd1306_WriteString("FW:v1.0.0", Font_6x8, White);
+    } else {
+        /* [只读] */
+        ssd1306_WriteMixedStr(40, 44, "[\xE2\xE3]", White);
+    }
+#endif
+}
+
+/* M5 确认对话框 — 中文模式 */
+static void render_confirm_cn(nav_frame_t *f)
+{
+    ssd1306_Fill(Black);
+
+    /* 标题 */
+    {
+        const char *title = get_cn_title(f->screen_id);
+        if (title) {
+#ifdef SSD1306_INCLUDE_FONT_11x18
+            ssd1306_WriteMixedStr(8, 0, title, White);
+#endif
+        }
+    }
+
+#ifdef SSD1306_INCLUDE_FONT_6x8
+    /* 警告信息 */
+    if (f->screen_id == SCR_CLEAR_TOTALS) {
+        ssd1306_WriteMixedStr(20, 22, "\xE8\xE9\xEA\xC9\xCA", White); /* 所有将清零 */
+    } else if (f->screen_id == SCR_FACTORY_RST) {
+        ssd1306_WriteMixedStr(16, 22, "\xEA\xD3\xD4\xB4\xD5", White); /* 将恢复出厂 */
+    }
+
+    /* 确认 / 取消 */
+    if (f->confirm_sel == 1) {
+        ssd1306_FillRectangle(8, 46, 72, 56, White);
+        ssd1306_WriteMixedStr(12, 48, "\xE4\xE5", Black);   /* 确认 */
+        ssd1306_WriteMixedStr(84, 48, "\xE6\xE7", White);   /* 取消 */
+    } else {
+        ssd1306_WriteMixedStr(12, 48, "\xE4\xE5", White);   /* 确认 */
+        ssd1306_FillRectangle(80, 46, 120, 56, White);
+        ssd1306_WriteMixedStr(84, 48, "\xE6\xE7", Black);   /* 取消 */
+    }
+#endif
+}
+
 /* ===== 渲染: M1 列表 ===== */
 static void render_list(nav_frame_t *f)
 {
+    if (is_cn_mode()) { render_list_cn(f); return; }
+
     ssd1306_Fill(Black);
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
@@ -507,6 +905,8 @@ static void render_list(nav_frame_t *f)
 /* ===== 渲染: M2 数值编辑 ===== */
 static void render_numeric(nav_frame_t *f)
 {
+    if (is_cn_mode()) { render_numeric_cn(f); return; }
+
     const num_desc_t *desc = &c_num_desc[f->screen_id];
     char buf[32];
 
@@ -547,6 +947,8 @@ static void render_numeric(nav_frame_t *f)
 /* ===== 渲染: M3 枚举选择 ===== */
 static void render_enum(nav_frame_t *f)
 {
+    if (is_cn_mode()) { render_enum_cn(f); return; }
+
     char buf[16];
     const char * const *opts = NULL;
     uint8_t opt_count = 0;
@@ -560,6 +962,7 @@ static void render_enum(nav_frame_t *f)
     case SCR_TOTAL_UNIT:  opts = param_get_total_unit_strings();  opt_count = TOTAL_UNIT_COUNT;  break;
     case SCR_PULSE_EQUIV: opts = param_get_pulse_equiv_strings(); opt_count = PULSE_EQUIV_COUNT; break;
     case SCR_BAUD_RATE:   opts = param_get_baud_rate_strings();   opt_count = BAUD_RATE_COUNT;   break;
+    case SCR_LANGUAGE:    opts = s_language_str;                  opt_count = LANG_COUNT;        break;
     default: break;
     }
     if (!opts) return;
@@ -596,6 +999,8 @@ static void render_enum(nav_frame_t *f)
 /* ===== 渲染: M6 密码输入 ===== */
 static void render_password(nav_frame_t *f)
 {
+    if (is_cn_mode()) { render_password_cn(f); return; }
+
     char buf[16];
 
     ssd1306_Fill(Black);
@@ -646,6 +1051,8 @@ static void render_password(nav_frame_t *f)
 /* ===== 渲染: M4 只读显示 ===== */
 static void render_readonly(nav_frame_t *f)
 {
+    if (is_cn_mode()) { render_readonly_cn(f); return; }
+
     char buf[16];
     float val = load_readonly_val(f->screen_id);
 
@@ -701,6 +1108,8 @@ static void render_readonly(nav_frame_t *f)
 /* ===== 渲染: M5 确认对话框 ===== */
 static void render_confirm(nav_frame_t *f)
 {
+    if (is_cn_mode()) { render_confirm_cn(f); return; }
+
     ssd1306_Fill(Black);
 
 #ifdef SSD1306_INCLUDE_FONT_11x18
@@ -847,6 +1256,7 @@ static void handle_enum(key_event_t evt)
     case SCR_TOTAL_UNIT:  max_val = (uint8_t)(TOTAL_UNIT_COUNT - 1);  break;
     case SCR_PULSE_EQUIV: max_val = (uint8_t)(PULSE_EQUIV_COUNT - 1); break;
     case SCR_BAUD_RATE:   max_val = (uint8_t)(BAUD_RATE_COUNT - 1);   break;
+    case SCR_LANGUAGE:    max_val = (uint8_t)(LANG_COUNT - 1);        break;
     default: break;
     }
 
