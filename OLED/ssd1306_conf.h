@@ -28,7 +28,7 @@
 #define SSD1306_INCLUDE_FONT_6x8       /* 状态栏 + 辅助页 ≈1.1KB */
 #define SSD1306_INCLUDE_FONT_7x10      /* 备用 ≈1.9KB */
 #define SSD1306_INCLUDE_FONT_11x18     /* 瞬时流量大字 ≈3.4KB */
-/* #define SSD1306_INCLUDE_FONT_16x26  Flash 不够，禁用 (~5KB) */
+#define SSD1306_INCLUDE_FONT_16x26    /* 瞬时流量大字 ≈5KB, 剩余Flash~14KB */
 
 /* bit-bang SPI 自定义标志 — ssd1306.c 中用条件编译选择 bit-bang 路径 */
 #define SSD1306_BITBANG_SPI

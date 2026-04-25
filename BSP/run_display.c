@@ -52,21 +52,36 @@ static void render_page_main(const run_display_input_t *p_in)
     ssd1306_WriteString((char *)(*(p_in->p_module_state) ? "Tx Err" : "Tx ok"), Font_6x8, White);
 #endif
 
-#ifdef SSD1306_INCLUDE_FONT_11x18
-    /* Zone B: 瞬时流量 (y=14, 双行加粗) */
-    /* 4 位有效数字自适应小数位 */
+#ifdef SSD1306_INCLUDE_FONT_16x26
+    /* Zone B: 瞬时流量 (16×26 大字, 垂直居中于状态栏与累积栏之间) */
     rate = p_in->p_flow_rate->num;
     if (rate < 0.0f) rate = 0.0f;
     if (rate >= 1000.0f) {
-        snprintf(buf, sizeof(buf), "%.0f", rate);       /* >=1000: 无小数, 如 1234 */
+        snprintf(buf, sizeof(buf), "%.0f", rate);
     } else if (rate >= 100.0f) {
-        snprintf(buf, sizeof(buf), "%.1f", rate);       /* 100~999: 1 位小数, 如 123.4 */
+        snprintf(buf, sizeof(buf), "%.1f", rate);
     } else if (rate >= 10.0f) {
-        snprintf(buf, sizeof(buf), "%.2f", rate);       /* 10~99: 2 位小数, 如 12.34 */
+        snprintf(buf, sizeof(buf), "%.2f", rate);
     } else {
-        snprintf(buf, sizeof(buf), "%.3f", rate);       /* 0~9: 3 位小数, 如 1.234 */
+        snprintf(buf, sizeof(buf), "%.3f", rate);
     }
-
+    len = (uint8_t)strlen(buf);
+    x_start = (uint8_t)((128 - len * 16) / 2);
+    ssd1306_SetCursor(x_start, 19);
+    ssd1306_WriteString(buf, Font_16x26, White);
+#elif defined(SSD1306_INCLUDE_FONT_11x18)
+    /* Zone B: 瞬时流量 (11×18, 4位有效数字自适应小数位) */
+    rate = p_in->p_flow_rate->num;
+    if (rate < 0.0f) rate = 0.0f;
+    if (rate >= 1000.0f) {
+        snprintf(buf, sizeof(buf), "%.0f", rate);
+    } else if (rate >= 100.0f) {
+        snprintf(buf, sizeof(buf), "%.1f", rate);
+    } else if (rate >= 10.0f) {
+        snprintf(buf, sizeof(buf), "%.2f", rate);
+    } else {
+        snprintf(buf, sizeof(buf), "%.3f", rate);
+    }
     len = (uint8_t)strlen(buf);
     x_start = (uint8_t)((128 - len * 11) / 2);
     ssd1306_SetCursor(x_start, 22);

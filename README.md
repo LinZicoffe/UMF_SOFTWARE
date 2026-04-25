@@ -70,7 +70,7 @@ UMF_SOFTWARE/
 ├── OLED/                          # OLED 显示驱动
 │   ├── ssd1306_conf.h            # afiskon 库硬件配置 (引脚/字体/SPI 模式)
 │   ├── ssd1306.c/h               # afiskon SSD1306 驱动 (bit-bang SPI 适配)
-│   ├── ssd1306_fonts.c/h         # 字体数据 (6x8, 7x10, 11x18)
+│   ├── ssd1306_fonts.c/h         # 字体数据 (6x8, 7x10, 11x18, 16x26)
 │   ├── chinese_font.c/h         # 16x16 中文字模数据 + 混合字符串渲染 (WriteMixedStr)
 │   ├── chinese_font_data.h      # 中文字模索引定义 (CHI_xxx 宏)
 │   ├── generate_chinese_font.py # 中文字模生成脚本 (Hzk16 格式)
@@ -191,6 +191,14 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v1.7.0 (2026-04-25)
+
+- **S01 瞬时流量字体放大**: 从 Font_11x18 (11×18px) 升级为 Font_16x26 (16×26px)
+  - 启用 `SSD1306_INCLUDE_FONT_16x26`，Flash 增加约 5KB（剩余 ~14KB）
+  - Zone B 垂直居中于状态栏与累积栏之间 (y=19)
+  - 保留 Font_11x18 降级路径 (`#elif` 分支)
+  - 无需修改 IAR 工程文件，`ssd1306_fonts.c` 已在工程中通过宏控制编译
 
 ### v1.6.0 (2026-04-25)
 
