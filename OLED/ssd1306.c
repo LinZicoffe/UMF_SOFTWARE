@@ -36,7 +36,6 @@ static void bitbang_spi_write(uint8_t byte)
     for (int8_t i = 7; i >= 0; i--) {
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_RESET);  /* SCL LOW */
         __NOP();
-        __NOP();
         HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin,
             (byte & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET);               /* SDA */
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_SET);    /* SCL HIGH */

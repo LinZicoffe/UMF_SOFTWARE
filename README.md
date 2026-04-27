@@ -192,6 +192,13 @@ S03 主菜单 (5 项)
 
 ## 版本日志
 
+### v1.7.2 (2026-04-27)
+
+- **DAC 输出初始化修复**: `DacValue` 初始化从任意值 `8000` 改为 `DacZeroValue`（零点 4mA 对应值），消除上电首次 PWM 输出异常
+- **主循环顺序修正**: DAC 线性换算移至 `PWMConfig()` 之前，确保 PWM 输出使用当轮计算的最新值而非滞后一轮
+- **TIM1 MOE 安全使能**: `PWMConfig()` 中对 TIM1 高级定时器每次设置 CCR 前显式调用 `__HAL_TIM_MOE_ENABLE()`，防止异常事件导致主输出禁用
+- **OLED SPI 时序微调**: `bitbang_spi_write()` SCL LOW 后从 2 个 NOP 减为 1 个 NOP
+
 ### v1.7.1 (2026-04-27)
 
 - **OLED SPI 时序优化**: bit-bang SPI 关键位置添加 `__NOP()` 延时，改善数据建立/保持时间裕量

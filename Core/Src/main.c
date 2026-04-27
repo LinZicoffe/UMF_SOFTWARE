@@ -122,8 +122,8 @@ int main(void)
     MX_TIM3_Init();
     MX_TIM4_Init();
     /* USER CODE BEGIN 2 */
-    DacValue = 8000;
     Data_Init();
+    DacValue = DacZeroValue;  /* 初始化为零点值 (4mA)，避免初始输出异常 */
     param_storage_init();
     bsp_usart_set_modbus_addr(param_get_modbus_addr());
     /* 将 Flash Page 63 真实值同步到 param_storage (方向: SpanValueBuf → param) */
@@ -189,8 +189,8 @@ int main(void)
         HAL_IWDG_Refresh(&hiwdg);
         Uart1_Communication();
         Uart2_Communication();
-        PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
-        PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
+
+        /* DAC 换算 (先计算，再输出 PWM) */
         if ((!ForceDacOutFlag) && (!CalEnabledFlag))
         {
             /* Step 3: 仪表系数 + 介质系数 */
@@ -219,6 +219,10 @@ int main(void)
                 }
             }
         }
+
+        /* PWM 输出 — 在 DAC 换算之后，确保使用最新 DacValue */
+        PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
+        PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
     }
     /* USER CODE END 3 */
 }

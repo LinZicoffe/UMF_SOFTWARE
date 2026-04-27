@@ -382,8 +382,11 @@ void PWMConfig(TIM_HandleTypeDef *htim, uint32_t frequency, uint16_t CCR)
     pulsedef = ((uint32_t)CCR * (AutoReloadPreloadvalue + 1)) / 255;
     __HAL_TIM_SetAutoreload(htim, AutoReloadPreloadvalue);
     if (htim == (&htim1))
-        __HAL_TIM_SetCompare(htim, TIM_CHANNEL_1, pulsedef); // PWM占空比填充值设置
+    {
+        __HAL_TIM_MOE_ENABLE(htim);  /* TIM1 高级定时器: 确保主输出使能 */
+        __HAL_TIM_SetCompare(htim, TIM_CHANNEL_1, pulsedef);
+    }
     if (htim == (&htim4))
-        __HAL_TIM_SetCompare(htim, TIM_CHANNEL_1, pulsedef); // PWM占空比填充值设置
+        __HAL_TIM_SetCompare(htim, TIM_CHANNEL_1, pulsedef);
 }
 /* USER CODE END 1 */
