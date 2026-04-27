@@ -192,6 +192,16 @@ S03 主菜单 (5 项)
 
 ## 版本日志
 
+### v1.7.1 (2026-04-27)
+
+- **OLED SPI 时序优化**: bit-bang SPI 关键位置添加 `__NOP()` 延时，改善数据建立/保持时间裕量
+  - `bitbang_spi_write()`: SCL LOW 后插入 2 个 NOP
+  - `ssd1306_WriteCommand()`: 字节发送后 CS 拉高前插入 2 个 NOP
+  - `ssd1306_WriteData()`: CS LOW 后 DC 切换前插入 2 个 NOP
+- **开发工具集成**: 新增 Claude Code 嵌入式开发 Skills (IAR 编译/Modbus 调试/串口监视/外设驱动适配/STM32 HAL 指导/编译烧录流水线)
+- **CLAUDE.md 文档更新**: 新增"已安装 Skill 及使用方法"章节
+- **新增参考文档**: `embed-ai-tool-guide.md` 嵌入式 AI 工具使用指南
+
 ### v1.7.0 (2026-04-25)
 
 - **S01 瞬时流量字体放大**: 从 Font_11x18 (11×18px) 升级为 Font_16x26 (16×26px)

@@ -35,6 +35,8 @@ static void bitbang_spi_write(uint8_t byte)
 {
     for (int8_t i = 7; i >= 0; i--) {
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_RESET);  /* SCL LOW */
+        __NOP();
+        __NOP();
         HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin,
             (byte & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET);               /* SDA */
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_SET);    /* SCL HIGH */
@@ -58,12 +60,16 @@ void ssd1306_WriteCommand(uint8_t byte) {
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(SSD1306_DC_Port, SSD1306_DC_Pin, GPIO_PIN_RESET);
     bitbang_spi_write(byte);
+    __NOP();
+    __NOP();
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_SET);
 }
 
 /* 写数据: CS LOW → DC HIGH → bit-bang 发送 N 字节 → CS HIGH */
 void ssd1306_WriteData(uint8_t* buffer, size_t buff_size) {
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_RESET);
+    __NOP();
+    __NOP();
     HAL_GPIO_WritePin(SSD1306_DC_Port, SSD1306_DC_Pin, GPIO_PIN_SET);
     for (size_t i = 0; i < buff_size; i++) {
         bitbang_spi_write(buffer[i]);

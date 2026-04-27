@@ -395,6 +395,128 @@ s_current_page = (run_page_t)((s_current_page + 1) % RUN_PAGE_COUNT);
 5. Warning[Pe550]→ 删除未使用变量，或用 (void) 消除
 ```
 
+## 已安装 Skill 及使用方法
+
+项目已安装以下嵌入式开发 Skill（位于 `.claude/skills/`），在对话中通过自然语言或 `/skill名` 调用。
+
+### build-iar — IAR 命令行编译
+
+触发方式: "用 IAR 编译" 或 `/build-iar`
+
+```bash
+# 探测 IAR 环境
+python .claude/skills/build-iar/scripts/iar_builder.py --detect
+
+# 扫描工作区 .ewp 工程文件
+python .claude/skills/build-iar/scripts/iar_builder.py --scan
+
+# 列出可用配置
+python .claude/skills/build-iar/scripts/iar_builder.py --list-configs --project EWARM/UMF.ewp
+
+# 执行编译（指定工程和配置）
+python .claude/skills/build-iar/scripts/iar_builder.py --project EWARM/UMF.ewp --config Debug
+```
+
+### stm32-hal-development — STM32 HAL 开发指导
+
+触发方式: "STM32 HAL 开发" 或 `/stm32-hal-development`
+
+- CubeMX USER CODE 区域保护规则、外设配置最佳实践
+- BSP 驱动架构模板: `skills/stm32-hal-development/assets/bsp-template.c/h`
+- 参考文档: `skills/stm32-hal-development/references/` 下含核心指南、外设驱动指南、API 速查、故障排查、用法示例
+
+### peripheral-driver — 外设驱动搜索与适配
+
+触发方式: "帮我适配 XXX 驱动" 或 `/peripheral-driver`
+
+```bash
+# 扫描已有驱动代码，生成适配建议
+python .claude/skills/peripheral-driver/scripts/bsp_adapter.py --scan ./downloaded_driver/
+
+# 将开源驱动适配到 BSP 规范
+python .claude/skills/peripheral-driver/scripts/bsp_adapter.py \
+  --adapt ./downloaded_driver/ --device SSD1306 --handle hspi1 \
+  --output ./BSP/
+
+# 无开源库时，生成 BSP 骨架
+python .claude/skills/peripheral-driver/scripts/bsp_adapter.py \
+  --scaffold --device AT24C02 --bus i2c --handle hi2c1 --addr 0x50 \
+  --output ./BSP/
+```
+
+### modbus-debug — Modbus RTU/TCP 调试
+
+触发方式: "调试 Modbus" 或 `/modbus-debug`
+
+依赖: `pip install pymodbus pyserial`
+
+```bash
+# 读保持寄存器 (FC03)
+python .claude/skills/modbus-debug/scripts/modbus_tool.py \
+  --port COM3 --slave 2 --read --address 0 --count 10
+
+# 写寄存器 (FC06/FC16)
+python .claude/skills/modbus-debug/scripts/modbus_tool.py \
+  --port COM3 --slave 2 --write --address 20 --values 100,200
+
+# 扫描从站地址
+python .claude/skills/modbus-debug/scripts/modbus_tool.py \
+  --port COM3 --scan --scan-range 1-247
+
+# TCP 模式
+python .claude/skills/modbus-debug/scripts/modbus_tool.py \
+  --tcp --host 192.168.1.100 --slave 1 --read --address 0 --count 10
+```
+
+### serial-monitor — 串口监视
+
+触发方式: "看串口" 或 `/serial-monitor`
+
+依赖: `pip install pyserial`
+
+```bash
+# 列出可用串口
+python .claude/skills/serial-monitor/scripts/serial_monitor.py --list
+
+# 抓取 10 秒日志
+python .claude/skills/serial-monitor/scripts/serial_monitor.py \
+  --port COM3 --baud 115200 --duration 10
+
+# 持续监视（带时间戳）
+python .claude/skills/serial-monitor/scripts/serial_monitor.py \
+  --port COM3 --baud 115200 --monitor --timestamp
+
+# 等待特定输出后自动复位
+python .claude/skills/serial-monitor/scripts/serial_monitor.py \
+  --port COM3 --baud 115200 --wait-reset --auto-reset
+```
+
+### workflow — 编译+烧录+监控流水线
+
+触发方式: "编译烧录" 或 `/workflow`
+
+```bash
+# 探测环境
+python .claude/skills/workflow/scripts/workflow_runner.py --detect
+
+# 查看可用流水线
+python .claude/skills/workflow/scripts/workflow_runner.py --list
+
+# 执行编译→烧录→监控
+python .claude/skills/workflow/scripts/workflow_runner.py \
+  --run build-flash-monitor --build-system iar --project .
+```
+
+### Skill 通用使用模式
+
+| 场景 | 触发方式 |
+|------|----------|
+| 自然语言描述 | "帮我用 IAR 编译"、"调试 Modbus 从站地址 2" |
+| 斜杠命令 | `/build-iar`、`/modbus-debug`、`/serial-monitor` |
+| 流水线 | `/workflow` 自动串联编译→烧录→监控 |
+
+> **注意**: IAR 编译仅限 Windows 环境。脚本使用 Python 标准库，无额外依赖（modbus-debug 和 serial-monitor 除外）。
+
 ## Git 与文档管理规则
 
 - **项目文档**: `README.md` 为项目主文档，包含功能描述、构建方法、文件结构、版本历史等
