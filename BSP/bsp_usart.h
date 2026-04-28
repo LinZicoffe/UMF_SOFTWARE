@@ -63,6 +63,12 @@ extern Uart_SendfloatTypeDef InputBuffer[10];
 
 extern uint64_t Cumulativeflow;
 #define CumulativeflowAddress 40 // MODBUS ADDRESS 4X:40041
+
+/* 模拟参数寄存器地址 */
+#define SimSwitchAddress       48  /* 模拟总开关 (uint16, 1 reg) */
+#define SimFlowRateAddress     50  /* 模拟瞬时流量 (float, 2 regs) */
+#define SimTemperatureAddress  52  /* 模拟温度 (float, 2 regs) */
+#define SimCumulativeAddress   54  /* 模拟累积流量 (float, 2 regs) */
 extern unsigned char strFlowSumBuf[20];
 extern unsigned char strFlowRateBuf[20];
 extern unsigned char         strFlowRate_2Buf[10];
@@ -75,5 +81,11 @@ extern void          UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeD
 extern void          Uart1_Communication(void);
 extern void          Uart2_Communication(void);
 extern void          bsp_usart_set_modbus_addr(uint16_t addr);
+
+/* 模拟参数 API — 自动选择真实值或模拟值 */
+uint8_t              sim_is_active(void);
+float                effective_flow_rate(void);
+float                effective_temperature(void);
+const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf);
 
 #endif

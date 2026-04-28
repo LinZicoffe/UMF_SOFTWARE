@@ -10,6 +10,7 @@
 /* Private includes ----------------------------------------------------------*/
 #include "bsp_usart.h"
 #include "param_storage.h"
+#include <stdio.h>
 
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
@@ -55,6 +56,13 @@ uint8_t FlowActiveReadCmdEnable;  // TRUE:模组主动发送数据
 uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
 static uint16_t s_modbus_addr = 2;   /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
+
+/* 模拟参数 — static 内部变量 */
+static uint16_t s_sim_switch = 0;
+static Uart_SendfloatTypeDef s_sim_flow_rate;
+static Uart_SendfloatTypeDef s_sim_temperature;
+static Uart_SendfloatTypeDef s_sim_cumulative;
+static unsigned char s_sim_flow_sum_buf[20];
 #define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
 #define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
 #define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
@@ -85,6 +93,7 @@ float           raw2ieee(uint8_t *raw);
 static uint8_t  BCD2DEC(uint8_t bcd);
 static float    BCDTOInt(uint32_t bcd);
 static uint64_t BCD_TO_LongInt(uint64_t bcd);
+static void     sim_format_cumulative(float value);
 
 uint8_t  BCDtoStr(unsigned char *str, unsigned char *BCD, int BCD_length);
 uint16_t getCRC16(uint8_t *ptr, uint8_t len);
@@ -473,7 +482,8 @@ void Uart2_Communication(void)
                     }
                     break;
                     case 0x06:
-                    { // Modbus_Function_6();
+                    {
+                        Modbus_Function_6();
                         Uart2HaveData = 0;
                     }
                     break;
@@ -654,39 +664,66 @@ void Modbus_Function_5(void)
     Uart2RxCounter            = 0;
 }
 /*对应MODBUS 06命令函数*/
+/*对应MODBUS 06命令函数 — 写单个保持寄存器 (模拟参数)*/
 void Modbus_Function_6(void)
 {
-    uint16_t tempdress = 0;
-    uint8_t  tx_flat   = 0;
-    uint16_t crcresult_6;
-    tempdress = (Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
-    switch (tempdress)
+    uint16_t reg_addr = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
+    uint16_t crc_result;
+
+    /* 写入模拟参数 */
+    switch (reg_addr)
     {
-        case 20:
-        {
-            tx_flat = 1;
-        }
-        break;
+        case SimSwitchAddress:  /* 48: 模拟总开关 */
+            s_sim_switch = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
+            if (sim_is_active()) sim_format_cumulative(s_sim_cumulative.num);
+            break;
+        case SimFlowRateAddress:     /* 50: 模拟瞬时流量 低位字 */
+            s_sim_flow_rate.str[0] = Uart2RxBuffer[5];
+            s_sim_flow_rate.str[1] = Uart2RxBuffer[4];
+            break;
+        case SimFlowRateAddress + 1: /* 51: 模拟瞬时流量 高位字 */
+            s_sim_flow_rate.str[2] = Uart2RxBuffer[5];
+            s_sim_flow_rate.str[3] = Uart2RxBuffer[4];
+            break;
+        case SimTemperatureAddress:     /* 52: 模拟温度 低位字 */
+            s_sim_temperature.str[0] = Uart2RxBuffer[5];
+            s_sim_temperature.str[1] = Uart2RxBuffer[4];
+            break;
+        case SimTemperatureAddress + 1: /* 53: 模拟温度 高位字 */
+            s_sim_temperature.str[2] = Uart2RxBuffer[5];
+            s_sim_temperature.str[3] = Uart2RxBuffer[4];
+            break;
+        case SimCumulativeAddress:     /* 54: 模拟累积流量 低位字 */
+            s_sim_cumulative.str[0] = Uart2RxBuffer[5];
+            s_sim_cumulative.str[1] = Uart2RxBuffer[4];
+            break;
+        case SimCumulativeAddress + 1: /* 55: 模拟累积流量 高位字 */
+            s_sim_cumulative.str[2] = Uart2RxBuffer[5];
+            s_sim_cumulative.str[3] = Uart2RxBuffer[4];
+            if (sim_is_active()) sim_format_cumulative(s_sim_cumulative.num);
+            break;
+        default:
+            break;
     }
-    if (tx_flat == 1)
-    {
-        Uart2SendDataType.TxBuffer[0]                             = s_modbus_addr;
-        Uart2SendDataType.TxBuffer[1]                             = 0x06;
-        Uart2SendDataType.TxBuffer[2]                             = Uart2RxBuffer[2];
-        Uart2SendDataType.TxBuffer[3]                             = Uart2RxBuffer[3];
-        Uart2SendDataType.TxBuffer[4]                             = Uart2RxBuffer[4];
-        Uart2SendDataType.TxBuffer[5]                             = Uart2RxBuffer[5];
-        Uart2SendDataType.TX_Size                                 = 6;
-        crcresult_6                                               = getCRC16(Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
-        Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size]     = crcresult_6 & 0xff;
-        Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size + 1] = (crcresult_6 >> 8) & 0xff;
-        Uart2SendDataType.TX_Size                                 = Uart2SendDataType.TX_Size + 2;
-        HAL_GPIO_WritePin(GPIOA, USART2_DE_Pin, GPIO_PIN_SET);
-        Time_Delay(20);
-        HAL_UART_Transmit_DMA(&huart2, Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
-        Uart2SendDataType.TX_Size = 0;
-        Uart2RxCounter            = 0;
-    }
+
+    /* FC06 标准响应: 回显请求帧 */
+    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
+    Uart2SendDataType.TxBuffer[1] = 0x06;
+    Uart2SendDataType.TxBuffer[2] = Uart2RxBuffer[2];
+    Uart2SendDataType.TxBuffer[3] = Uart2RxBuffer[3];
+    Uart2SendDataType.TxBuffer[4] = Uart2RxBuffer[4];
+    Uart2SendDataType.TxBuffer[5] = Uart2RxBuffer[5];
+    Uart2SendDataType.TX_Size     = 6;
+    crc_result = getCRC16(Uart2SendDataType.TxBuffer, 6);
+    Uart2SendDataType.TxBuffer[6] = crc_result & 0xff;
+    Uart2SendDataType.TxBuffer[7] = (crc_result >> 8) & 0xff;
+    Uart2SendDataType.TX_Size     = 8;
+
+    HAL_GPIO_WritePin(GPIOA, USART2_DE_Pin, GPIO_PIN_SET);
+    Time_Delay(20);
+    HAL_UART_Transmit_DMA(&huart2, Uart2SendDataType.TxBuffer, 8);
+    Uart2SendDataType.TX_Size = 0;
+    Uart2RxCounter            = 0;
 }
 /*对应MODBUS 03命令函数*/
 void Modbus_Function_3(void)
@@ -771,6 +808,28 @@ void Modbus_Function_3(void)
                 Uart2SendDataType.TxBuffer[i] = (uint8_t)(SpanValueBuf[j + (startaddress - SpanValueStartMinAddress) / 2].str[2]);
                 i++;
             }
+        }
+    }
+    /* 模拟参数区域 (寄存器 48~55) */
+    if ((startaddress >= SimSwitchAddress) && (startaddress <= SimCumulativeAddress + 1))
+    {
+        uint16_t j;
+        for (j = 0; j < MbBufferLen; j++)
+        {
+            uint16_t reg_val = 0;
+            switch (startaddress + j)
+            {
+                case SimSwitchAddress:          reg_val = s_sim_switch; break;
+                case SimFlowRateAddress:        reg_val = ((uint16_t)s_sim_flow_rate.str[1] << 8) | s_sim_flow_rate.str[0]; break;
+                case SimFlowRateAddress + 1:    reg_val = ((uint16_t)s_sim_flow_rate.str[3] << 8) | s_sim_flow_rate.str[2]; break;
+                case SimTemperatureAddress:     reg_val = ((uint16_t)s_sim_temperature.str[1] << 8) | s_sim_temperature.str[0]; break;
+                case SimTemperatureAddress + 1: reg_val = ((uint16_t)s_sim_temperature.str[3] << 8) | s_sim_temperature.str[2]; break;
+                case SimCumulativeAddress:      reg_val = ((uint16_t)s_sim_cumulative.str[1] << 8) | s_sim_cumulative.str[0]; break;
+                case SimCumulativeAddress + 1:  reg_val = ((uint16_t)s_sim_cumulative.str[3] << 8) | s_sim_cumulative.str[2]; break;
+                default: reg_val = 0; break;
+            }
+            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val >> 8);
+            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
         }
     }
     crcresult_3                                               = getCRC16(Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
@@ -901,6 +960,42 @@ void bsp_usart_set_modbus_addr(uint16_t addr)
     if (addr >= 1 && addr <= 247) {
         s_modbus_addr = addr;
     }
+}
+
+/* ========== 模拟参数 getter 实现 ========== */
+
+/**
+ * @brief   格式化模拟累积流量为显示字符串
+ * @note    与 BCDtoStr + insert_char('.','9') 格式匹配: "XXXXXXXXX.XXX"
+ */
+static void sim_format_cumulative(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    uint32_t scaled    = (uint32_t)(value * 1000.0f + 0.5f);
+    uint32_t int_part  = scaled / 1000;
+    uint32_t frac_part = scaled % 1000;
+    snprintf((char *)s_sim_flow_sum_buf, sizeof(s_sim_flow_sum_buf),
+             "%09lu.%03lu", (unsigned long)int_part, (unsigned long)frac_part);
+}
+
+uint8_t sim_is_active(void)
+{
+    return (s_sim_switch != 0) ? 1 : 0;
+}
+
+float effective_flow_rate(void)
+{
+    return sim_is_active() ? s_sim_flow_rate.num : FlowRateValue.num;
+}
+
+float effective_temperature(void)
+{
+    return sim_is_active() ? s_sim_temperature.num : FlowTemperature.num;
+}
+
+const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf)
+{
+    return sim_is_active() ? s_sim_flow_sum_buf : real_buf;
 }
 
 /**

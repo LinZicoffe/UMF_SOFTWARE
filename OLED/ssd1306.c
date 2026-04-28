@@ -27,18 +27,29 @@ void ssd1306_WriteData(uint8_t* buffer, size_t buff_size) {
 /* 引脚映射: CLK=PB0, SDA=PA4, RES=PA5, DC=PA6, CS=PA7 (来自 main.h) */
 #include "main.h"  /* OLED_CLK_GPIO_Port, OLED_SDA_GPIO_Port 等引脚宏 */
 
+/* 72MHz 下 10 个 NOP ≈ 139ns。目标 SPI 500KHz = 2µs/bit = 144 cycles/bit */
+#define _NOP10() do { \
+    __NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP(); \
+} while(0)
+
 /**
- * @brief  bit-bang SPI 写单字节 (MSB first)
+ * @brief  bit-bang SPI 写单字节 (MSB first), ~500KHz
  * @param  byte 待发送字节
+ *
+ * 每比特时序 (72MHz, 144 cycles = 2µs):
+ *   SCL LOW → SDA 设置 → ~60 NOP 建立时间 → SCL HIGH → ~70 NOP 保持
  */
 static void bitbang_spi_write(uint8_t byte)
 {
     for (int8_t i = 7; i >= 0; i--) {
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_RESET);  /* SCL LOW */
-        __NOP();
         HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin,
             (byte & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET);               /* SDA */
+        /* SDA → SCL↑ 建立时间 (~0.83µs) */
+        _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10();
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_SET);    /* SCL HIGH */
+        /* SCL HIGH 保持时间 (~0.97µs) */
+        _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10();
     }
 }
 

@@ -29,6 +29,7 @@
 #include "key.h"
 #include "bsp_menu.h"
 #include "param_storage.h"
+#include "bsp_usart.h"
 #include "run_display.h"
 #include "ssd1306.h"
 /* USER CODE END Includes */
@@ -123,7 +124,8 @@ int main(void)
     MX_TIM4_Init();
     /* USER CODE BEGIN 2 */
     Data_Init();
-    DacValue = DacZeroValue;  /* 初始化为零点值 (4mA)，避免初始输出异常 */
+    DacValue = DacZeroValue;/* 初始化为零点值 (4mA)，避免初始输出异常 */
+    //DacValue = 800;
     param_storage_init();
     bsp_usart_set_modbus_addr(param_get_modbus_addr());
     /* 将 Flash Page 63 真实值同步到 param_storage (方向: SpanValueBuf → param) */
@@ -167,12 +169,17 @@ int main(void)
         {
             DisplayTimeBase = 0;
             {
+                Uart_SendfloatTypeDef eff_rate;
+                Uart_SendfloatTypeDef eff_temp;
+                eff_rate.num = effective_flow_rate();
+                eff_temp.num = effective_temperature();
+
                 const run_display_input_t input = {
-                    .p_flow_rate    = &FlowRateValue,
-                    .p_temperature  = &FlowTemperature,
+                    .p_flow_rate    = &eff_rate,
+                    .p_temperature  = &eff_temp,
                     .p_pressure     = &FlowPressure,
                     .p_cumulative   = &Cumulativeflow,
-                    .p_flow_sum_buf = strFlowSumBuf,
+                    .p_flow_sum_buf = effective_flow_sum_buf(strFlowSumBuf),
                     .p_sum_unit     = &Sumunit,
                     .p_module_state = &ModuleState,
                     .p_dac_value    = &DacValue,
@@ -194,7 +201,7 @@ int main(void)
         if ((!ForceDacOutFlag) && (!CalEnabledFlag))
         {
             /* Step 3: 仪表系数 + 介质系数 */
-            float corrected_flow = FlowRateValue.num
+            float corrected_flow = effective_flow_rate()
                 * param_get_meter_coeff()
                 * param_get_medium_coeff();
 
