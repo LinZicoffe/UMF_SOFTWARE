@@ -1,0 +1,97 @@
+<UserControl x:Class="UMF流量计.Views.CalibrationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900">
+    <hc:ScrollViewer>
+        <StackPanel Margin="24" Width="600" HorizontalAlignment="Center">
+            <TextBlock Text="DAC 校准" FontSize="24" FontWeight="Bold" Margin="0,0,0,8"/>
+            <TextBlock Text="请在校准模式下操作，使用万用表测量实际输出电流" Foreground="{DynamicResource WarningBrush}"
+                       Margin="0,0,0,24"/>
+
+            <!-- 校准状态 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="校准状态: "/>
+                            <TextBlock FontWeight="Bold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="未使能"/>
+                                        <Setter Property="Foreground" Value="Red"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CalibrationVm.CalibrationEnabled}" Value="True">
+                                                <Setter Property="Text" Value="已使能"/>
+                                                <Setter Property="Foreground" Value="LimeGreen"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                        <hc:ButtonGroup Grid.Column="1">
+                            <Button Content="进入校准模式" Command="{Binding CalibrationVm.EnterCalibrationModeCommand}"
+                                    Style="{StaticResource ButtonPrimary}"/>
+                            <Button Content="退出校准模式" Command="{Binding CalibrationVm.ExitCalibrationModeCommand}"
+                                    Style="{StaticResource ButtonDanger}"/>
+                        </hc:ButtonGroup>
+                    </Grid>
+                    <Button Content="读取当前值" Command="{Binding CalibrationVm.ReadCurrentValuesCommand}"
+                            HorizontalAlignment="Left" Style="{StaticResource ButtonDefault}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 零点校准 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="零点校准 (4mA)" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="当前 PWM 值:" VerticalAlignment="Center"/>
+                        <hc:NumericUpDown Grid.Column="1" Value="{Binding CalibrationVm.ZeroValue}" Minimum="0" Maximum="65535"/>
+                    </Grid>
+                    <hc:ButtonGroup HorizontalAlignment="Left">
+                        <Button Content="强制输出 4mA" Command="{Binding CalibrationVm.ForceOutput4mACommand}"
+                                Style="{StaticResource ButtonWarning}"/>
+                        <Button Content="写入零点值" Command="{Binding CalibrationVm.WriteZeroValueCommand}"
+                                Style="{StaticResource ButtonPrimary}"/>
+                    </hc:ButtonGroup>
+                </StackPanel>
+            </Border>
+
+            <!-- 满度校准 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="满度校准 (20mA)" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="当前 PWM 值:" VerticalAlignment="Center"/>
+                        <hc:NumericUpDown Grid.Column="1" Value="{Binding CalibrationVm.FullValue}" Minimum="0" Maximum="65535"/>
+                    </Grid>
+                    <hc:ButtonGroup HorizontalAlignment="Left">
+                        <Button Content="强制输出 20mA" Command="{Binding CalibrationVm.ForceOutput20mACommand}"
+                                Style="{StaticResource ButtonWarning}"/>
+                        <Button Content="写入满度值" Command="{Binding CalibrationVm.WriteFullValueCommand}"
+                                Style="{StaticResource ButtonPrimary}"/>
+                    </hc:ButtonGroup>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </hc:ScrollViewer>
+</UserControl>

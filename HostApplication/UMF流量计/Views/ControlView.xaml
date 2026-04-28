@@ -1,0 +1,124 @@
+<UserControl x:Class="UMF流量计.Views.ControlView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900">
+    <hc:ScrollViewer>
+        <StackPanel Margin="24" Width="500" HorizontalAlignment="Center">
+            <TextBlock Text="运行控制" FontSize="24" FontWeight="Bold" Margin="0,0,0,24"/>
+
+            <!-- 线圈状态 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="24" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <TextBlock Text="线圈状态" FontSize="16" FontWeight="Bold"/>
+                        <Button Content="刷新" HorizontalAlignment="Right" Command="{Binding ControlVm.RefreshCoilsCommand}"
+                                Style="{StaticResource ButtonDefault}"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="DAC 校准使能" VerticalAlignment="Center"/>
+                        <Ellipse Grid.Column="1" Width="16" Height="16" HorizontalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ControlVm.CoilState.CalEnabled}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="强制 4mA 输出" VerticalAlignment="Center"/>
+                        <Ellipse Grid.Column="1" Width="16" Height="16" HorizontalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ControlVm.CoilState.ForceOutput4mA}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="强制 20mA 输出" VerticalAlignment="Center"/>
+                        <Ellipse Grid.Column="1" Width="16" Height="16" HorizontalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ControlVm.CoilState.ForceOutput20mA}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="被动读取模式" VerticalAlignment="Center"/>
+                        <Ellipse Grid.Column="1" Width="16" Height="16" HorizontalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ControlVm.CoilState.PassiveReadMode}" Value="True">
+                                            <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 操作按钮 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="24" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="操作" FontSize="16" FontWeight="Bold" Margin="0,0,0,16"/>
+                    <TextBlock Text="危险操作需要确认" Foreground="{DynamicResource DangerBrush}" Margin="0,0,0,12"
+                               FontSize="12"/>
+
+                    <hc:UniformSpacingPanel Spacing="12" Orientation="Vertical">
+                        <Button Content="累积量清零" Command="{Binding ControlVm.ClearCumulativeCommand}"
+                                Style="{StaticResource ButtonWarning}" Width="200" HorizontalAlignment="Left"/>
+                        <Button Content="模组复位" Command="{Binding ControlVm.ResetModuleCommand}"
+                                Style="{StaticResource ButtonDanger}" Width="200" HorizontalAlignment="Left"/>
+                        <Button Content="切换被动/主动模式" Command="{Binding ControlVm.TogglePassiveModeCommand}"
+                                Style="{StaticResource ButtonPrimary}" Width="200" HorizontalAlignment="Left"/>
+                    </hc:UniformSpacingPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </hc:ScrollViewer>
+</UserControl>

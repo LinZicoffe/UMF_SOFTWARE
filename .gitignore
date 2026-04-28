@@ -52,3 +52,11 @@ EWARM/Backup*
 
 # PDF 技术文档
 *.pdf
+
+# ===== C# / WPF Host Application =====
+HostApplication/**/bin/
+HostApplication/**/obj/
+HostApplication/**/.vs/
+HostApplication/**/*.user
+HostApplication/**/*.suo
+HostApplication/**/packages/

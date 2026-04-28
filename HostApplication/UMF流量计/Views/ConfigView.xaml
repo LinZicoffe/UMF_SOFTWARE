@@ -1,0 +1,61 @@
+<UserControl x:Class="UMF流量计.Views.ConfigView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900">
+    <hc:ScrollViewer>
+        <StackPanel Margin="24" Width="500" HorizontalAlignment="Center">
+            <TextBlock Text="参数配置" FontSize="24" FontWeight="Bold" Margin="0,0,0,24"/>
+
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="24" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="量程配置" FontSize="16" FontWeight="Bold" Margin="0,0,0,16"/>
+                    <TextBlock Foreground="{DynamicResource WarningBrush}" Margin="0,0,0,12">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="写入需要校准模式已使能"/>
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ConfigVm.IsCalibrationMode}" Value="True">
+                                        <Setter Property="Text" Value="校准模式已开启，可以写入"/>
+                                        <Setter Property="Foreground" Value="LimeGreen"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="4mA 量程下限:" VerticalAlignment="Center"/>
+                        <hc:NumericUpDown Grid.Column="1" Value="{Binding ConfigVm.SpanLo}"
+                                          Minimum="-99999" Maximum="99999" Increment="0.1" DecimalPlaces="2"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="20mA 量程上限:" VerticalAlignment="Center"/>
+                        <hc:NumericUpDown Grid.Column="1" Value="{Binding ConfigVm.SpanHi}"
+                                          Minimum="-99999" Maximum="99999" Increment="0.1" DecimalPlaces="2"/>
+                    </Grid>
+
+                    <hc:ButtonGroup HorizontalAlignment="Left">
+                        <Button Content="读取当前值" Command="{Binding ConfigVm.ReadSpanConfigCommand}"
+                                Style="{StaticResource ButtonDefault}"/>
+                        <Button Content="写入" Command="{Binding ConfigVm.WriteSpanConfigCommand}"
+                                Style="{StaticResource ButtonPrimary}"/>
+                    </hc:ButtonGroup>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </hc:ScrollViewer>
+</UserControl>

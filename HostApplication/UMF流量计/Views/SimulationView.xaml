@@ -1,0 +1,90 @@
+<UserControl x:Class="UMF流量计.Views.SimulationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="900">
+    <hc:ScrollViewer>
+        <StackPanel Margin="24" Width="500" HorizontalAlignment="Center">
+            <TextBlock Text="模拟控制" FontSize="24" FontWeight="Bold" Margin="0,0,0,8"/>
+            <TextBlock Text="用于调试和测试，不影响传感器真实数据" Foreground="{DynamicResource WarningBrush}"
+                       Margin="0,0,0,24"/>
+
+            <!-- 总开关 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="模拟模式总开关" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <ToggleButton Grid.Column="1" IsChecked="{Binding SimulationVm.SimulationEnabled}"
+                                  Command="{Binding SimulationVm.ToggleSimulationCommand}"
+                                  Content="ON/OFF"/>
+                </Grid>
+            </Border>
+
+            <!-- 模拟瞬时流量 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="模拟瞬时流量" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <hc:NumericUpDown Value="{Binding SimulationVm.SimFlowRate}"
+                                          Minimum="-99999" Maximum="99999" Increment="0.01" DecimalPlaces="2"/>
+                        <TextBlock Grid.Column="1" Text="m³/h" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </Grid>
+                    <Button Content="写入" Command="{Binding SimulationVm.WriteSimFlowRateCommand}"
+                            Style="{StaticResource ButtonPrimary}" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 模拟温度 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="模拟温度" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <hc:NumericUpDown Value="{Binding SimulationVm.SimTemperature}"
+                                          Minimum="-40" Maximum="200" Increment="0.1" DecimalPlaces="2"/>
+                        <TextBlock Grid.Column="1" Text="°C" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </Grid>
+                    <Button Content="写入" Command="{Binding SimulationVm.WriteSimTemperatureCommand}"
+                            Style="{StaticResource ButtonPrimary}" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 模拟累积流量 -->
+            <Border Background="{DynamicResource RegionBrush}" CornerRadius="8" Padding="20" Margin="0,0,0,16"
+                    Effect="{DynamicResource EffectShadow2}">
+                <StackPanel>
+                    <TextBlock Text="模拟累积流量" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <hc:NumericUpDown Value="{Binding SimulationVm.SimCumulativeFlow}"
+                                          Minimum="0" Maximum="999999999" Increment="0.001" DecimalPlaces="3"/>
+                        <TextBlock Grid.Column="1" Text="m³" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </Grid>
+                    <Button Content="写入" Command="{Binding SimulationVm.WriteSimCumulativeCommand}"
+                            Style="{StaticResource ButtonPrimary}" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="提示: 开启总开关后，OLED 和 DAC 输出将跟随模拟值"
+                       Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+    </hc:ScrollViewer>
+</UserControl>
