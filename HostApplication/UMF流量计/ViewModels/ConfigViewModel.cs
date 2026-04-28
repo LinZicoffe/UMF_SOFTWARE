@@ -46,13 +46,16 @@ public partial class ConfigViewModel : ObservableObject
     [RelayCommand]
     private async Task WriteSpanConfig()
     {
-        if (!IsCalibrationMode)
-        {
-            HandyControl.Controls.Growl.Warning("请先在校准页面进入校准模式");
-            return;
-        }
         try
         {
+            var coils = await _modbusService.ReadCoilsAsync();
+            if (!coils.CalEnabled)
+            {
+                HandyControl.Controls.Growl.Warning("请先在校准页面进入校准模式");
+                return;
+            }
+            IsCalibrationMode = true;
+
             await _modbusService.WriteSpanConfigAsync(SpanLo, SpanHi);
             HandyControl.Controls.Growl.Success($"量程已写入: {SpanLo} ~ {SpanHi}");
         }

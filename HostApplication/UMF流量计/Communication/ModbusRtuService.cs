@@ -225,8 +225,11 @@ public class ModbusRtuService : IModbusService
         {
             if (!IsReady()) return;
             await Task.Run(() =>
-                _client!.WriteMultipleRegisters(_config!.SlaveAddress, 20, new short[] { (short)zeroValue, (short)fullValue }), ct);
-            Log.Information("写入DAC校准: 零点={Zero}, 满度={Full}", zeroValue, fullValue);
+            {
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 20, (short)zeroValue);
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 21, (short)fullValue);
+            }, ct);
+            Log.Information("写入DAC校准(FC06): 零点={Zero}, 满度={Full}", zeroValue, fullValue);
         }
         catch (Exception ex)
         {
@@ -242,9 +245,13 @@ public class ModbusRtuService : IModbusService
             var (loHi, loLo) = ModbusRegisterConverter.FloatToRegisters(spanLo);
             var (hiHi, hiLo) = ModbusRegisterConverter.FloatToRegisters(spanHi);
             await Task.Run(() =>
-                _client!.WriteMultipleRegisters(_config!.SlaveAddress, 30,
-                    new short[] { (short)loHi, (short)loLo, (short)hiHi, (short)hiLo }), ct);
-            Log.Information("写入量程配置: 下限={Lo}, 上限={Hi}", spanLo, spanHi);
+            {
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 30, (short)loHi);
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 31, (short)loLo);
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 32, (short)hiHi);
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 33, (short)hiLo);
+            }, ct);
+            Log.Information("写入量程配置(FC06): 下限={Lo}, 上限={Hi}", spanLo, spanHi);
         }
         catch (Exception ex)
         {

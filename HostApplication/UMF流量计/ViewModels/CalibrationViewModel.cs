@@ -117,13 +117,16 @@ public partial class CalibrationViewModel : ObservableObject
     [RelayCommand]
     private async Task WriteZeroValue()
     {
-        if (!CalibrationEnabled)
-        {
-            HandyControl.Controls.Growl.Warning("请先进入校准模式");
-            return;
-        }
         try
         {
+            var coils = await _modbusService.ReadCoilsAsync();
+            if (!coils.CalEnabled)
+            {
+                HandyControl.Controls.Growl.Warning("请先进入校准模式");
+                return;
+            }
+            CalibrationEnabled = true;
+
             await _modbusService.WriteDacCalibrationAsync(ZeroValue, FullValue);
             HandyControl.Controls.Growl.Success($"零点值已写入: {ZeroValue}");
         }
@@ -136,13 +139,16 @@ public partial class CalibrationViewModel : ObservableObject
     [RelayCommand]
     private async Task WriteFullValue()
     {
-        if (!CalibrationEnabled)
-        {
-            HandyControl.Controls.Growl.Warning("请先进入校准模式");
-            return;
-        }
         try
         {
+            var coils = await _modbusService.ReadCoilsAsync();
+            if (!coils.CalEnabled)
+            {
+                HandyControl.Controls.Growl.Warning("请先进入校准模式");
+                return;
+            }
+            CalibrationEnabled = true;
+
             await _modbusService.WriteDacCalibrationAsync(ZeroValue, FullValue);
             HandyControl.Controls.Growl.Success($"满度值已写入: {FullValue}");
         }
