@@ -163,6 +163,72 @@ public class ModbusRtuService : IModbusService
         }
     }
 
+    public async Task<DeviceParams> ReadDeviceParamsAsync(CancellationToken ct = default)
+    {
+        await _lock.WaitAsync(ct);
+        try
+        {
+            if (!IsReady()) return new DeviceParams();
+
+            var data = await Task.Run(() =>
+                _client!.ReadHoldingRegisters<short>(_config!.SlaveAddress, 22, 8).ToArray(), ct);
+            return new DeviceParams
+            {
+                FlowUnit = (ushort)data[0],
+                CumulativeUnit = (ushort)data[1],
+                MeterCoefficient = ModbusRegisterConverter.RegistersToFloat((ushort)data[2], (ushort)data[3]),
+                MediumCoefficient = ModbusRegisterConverter.RegistersToFloat((ushort)data[4], (ushort)data[5]),
+                SmallSignalCutoff = ModbusRegisterConverter.RegistersToFloat((ushort)data[6], (ushort)data[7])
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "读取设备参数异常");
+            return new DeviceParams();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task WriteDeviceParamsAsync(DeviceParams param, CancellationToken ct = default)
+    {
+        await _lock.WaitAsync(ct);
+        try
+        {
+            if (!IsReady()) return;
+            var (mc0, mc1) = ModbusRegisterConverter.FloatToRegisters(param.MeterCoefficient);
+            var (md0, md1) = ModbusRegisterConverter.FloatToRegisters(param.MediumCoefficient);
+            var (ss0, ss1) = ModbusRegisterConverter.FloatToRegisters(param.SmallSignalCutoff);
+
+            // 流量单位: FC06 单寄存器写入
+            // 仪表系数、介质系数、小信号切除: FC16 多寄存器写入
+            await Task.Run(() =>
+            {
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 22, (short)param.FlowUnit);
+                _client!.WriteSingleRegister(_config!.SlaveAddress, 23, (short)param.CumulativeUnit);
+                _client!.WriteMultipleRegisters(_config!.SlaveAddress, 24,
+                    new short[]
+                    {
+                        (short)mc0, (short)mc1,
+                        (short)md0, (short)md1,
+                        (short)ss0, (short)ss1
+                    });
+            }, ct);
+            Log.Information("写入设备参数: 流量单位={FU}, 累积单位={CU}, 仪表系数={MC}, 介质系数={MD}, 小信号切除={SS}",
+                param.FlowUnit, param.CumulativeUnit, param.MeterCoefficient, param.MediumCoefficient, param.SmallSignalCutoff);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "写入设备参数异常");
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task<CoilState> ReadCoilsAsync(CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct);
