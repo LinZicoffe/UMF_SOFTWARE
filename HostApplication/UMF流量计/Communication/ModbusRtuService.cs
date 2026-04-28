@@ -11,6 +11,7 @@ public class ModbusRtuService : IModbusService
     private ModbusRtuClient? _client;
     private ConnectionConfig? _config;
     private bool _isConnected;
+    private readonly SemaphoreSlim _lock = new(1, 1);
 
     public bool IsConnected => _isConnected;
     public event EventHandler<bool>? ConnectionStateChanged;
@@ -61,6 +62,7 @@ public class ModbusRtuService : IModbusService
 
     public async Task<SensorData> ReadSensorDataAsync(CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return new SensorData { Timestamp = DateTime.Now };
@@ -80,10 +82,15 @@ public class ModbusRtuService : IModbusService
             Log.Debug(ex, "读取传感器数据异常");
             return new SensorData { Timestamp = DateTime.Now };
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task<DacCalibration> ReadDacCalibrationAsync(CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return new DacCalibration();
@@ -101,10 +108,15 @@ public class ModbusRtuService : IModbusService
             Log.Debug(ex, "读取DAC校准数据异常");
             return new DacCalibration();
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task<SpanConfig> ReadSpanConfigAsync(CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return new SpanConfig();
@@ -122,10 +134,15 @@ public class ModbusRtuService : IModbusService
             Log.Debug(ex, "读取量程配置异常");
             return new SpanConfig();
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task<ulong> ReadCumulativeFlowAsync(CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return 0;
@@ -140,10 +157,15 @@ public class ModbusRtuService : IModbusService
             Log.Debug(ex, "读取累积流量异常");
             return 0;
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task<CoilState> ReadCoilsAsync(CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return new CoilState();
@@ -165,10 +187,15 @@ public class ModbusRtuService : IModbusService
             Log.Debug(ex, "读取线圈状态异常");
             return new CoilState();
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task<SimulationData> ReadSimulationDataAsync(CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return new SimulationData();
@@ -202,10 +229,15 @@ public class ModbusRtuService : IModbusService
             Log.Debug(ex, "读取模拟数据异常");
             return new SimulationData();
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteCoilAsync(ushort address, bool value, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
@@ -217,28 +249,36 @@ public class ModbusRtuService : IModbusService
         {
             Log.Debug(ex, "写入线圈 {Address} 异常", address);
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteDacCalibrationAsync(ushort zeroValue, ushort fullValue, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
             await Task.Run(() =>
-            {
-                _client!.WriteSingleRegister(_config!.SlaveAddress, 20, (short)zeroValue);
-                _client!.WriteSingleRegister(_config!.SlaveAddress, 21, (short)fullValue);
-            }, ct);
-            Log.Information("写入DAC校准(FC06): 零点={Zero}, 满度={Full}", zeroValue, fullValue);
+                _client!.WriteMultipleRegisters(_config!.SlaveAddress, 20,
+                    new short[] { (short)zeroValue, (short)fullValue }), ct);
+            Log.Information("写入DAC校准(FC16): 零点={Zero}, 满度={Full}", zeroValue, fullValue);
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "写入DAC校准异常");
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteSpanConfigAsync(float spanLo, float spanHi, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
@@ -257,10 +297,15 @@ public class ModbusRtuService : IModbusService
         {
             Log.Debug(ex, "写入量程配置异常");
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteSimulationSwitchAsync(bool enabled, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
@@ -273,10 +318,15 @@ public class ModbusRtuService : IModbusService
         {
             Log.Debug(ex, "写入模拟总开关异常");
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteSimulationFlowAsync(float flowRate, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
@@ -292,10 +342,15 @@ public class ModbusRtuService : IModbusService
         {
             Log.Debug(ex, "写入模拟流量异常");
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteSimulationTemperatureAsync(float temperature, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
@@ -311,10 +366,15 @@ public class ModbusRtuService : IModbusService
         {
             Log.Debug(ex, "写入模拟温度异常");
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public async Task WriteSimulationCumulativeAsync(float cumulative, CancellationToken ct = default)
     {
+        await _lock.WaitAsync(ct);
         try
         {
             if (!IsReady()) return;
@@ -330,6 +390,10 @@ public class ModbusRtuService : IModbusService
         {
             Log.Debug(ex, "写入模拟累积流量异常");
         }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     public ValueTask DisposeAsync()
@@ -341,6 +405,7 @@ public class ModbusRtuService : IModbusService
         }
         catch { }
         SetConnected(false);
+        _lock.Dispose();
         return ValueTask.CompletedTask;
     }
 
