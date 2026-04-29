@@ -64,11 +64,49 @@ extern Uart_SendfloatTypeDef InputBuffer[10];
 extern uint64_t Cumulativeflow;
 #define CumulativeflowAddress 40 // MODBUS ADDRESS 4X:40041
 
+/* 运行参数寄存器地址 (寄存器 22~29) */
+#define FlowUnitAddress     22  /* 流量单位 (uint16, enum 0~3) */
+#define TotalUnitAddress    23  /* 累积单位 (uint16, enum 0~3) */
+#define MeterCoeffAddress   24  /* 仪表系数 (float, 2 regs) */
+#define MediumCoeffAddress  26  /* 介质系数 (float, 2 regs) */
+#define SmallSignalAddress  28  /* 小信号切除 (float, 2 regs) */
+
 /* 模拟参数寄存器地址 */
 #define SimSwitchAddress       48  /* 模拟总开关 (uint16, 1 reg) */
 #define SimFlowRateAddress     50  /* 模拟瞬时流量 (float, 2 regs) */
 #define SimTemperatureAddress  52  /* 模拟温度 (float, 2 regs) */
 #define SimCumulativeAddress   54  /* 模拟累积流量 (float, 2 regs) */
+
+/* 扩展参数寄存器地址 — 第一批 (只读运行数据, 寄存器 60~68) */
+#define RunStateAddr           60  /* 通信状态 ModuleState (uint16, R) */
+#define FwdTotalAddr           61  /* 正向累积 forward_total (float, 2 regs, R) */
+#define RevTotalAddr           63  /* 反向累积 reverse_total (float, 2 regs, R) */
+#define NetTotalAddr           65  /* 净累积 (float, 2 regs, R) */
+#define DacCurrentAddr         67  /* 实时 4-20mA 电流 (float, 2 regs, R) */
+
+/* 扩展参数寄存器地址 — 第二批 (读写配置参数, 寄存器 69~86) */
+#define StdCondAddr            69  /* 标准工况 std_cond (uint16, R/W) */
+#define FilterTimeAddr         70  /* 滤波参数 filter_time (float, 2 regs, R/W) */
+#define DampingTimeAddr        72  /* 阻尼时间 damping_time (float, 2 regs, R/W) */
+#define FreqOutputAddr         74  /* 频率输出 freq_output (float, 2 regs, R/W) */
+#define PulseEquivAddr         76  /* 脉冲当量 pulse_equiv (uint16, R/W) */
+#define DensityAddr            77  /* 介质密度 medium_density (float, 2 regs, R/W) */
+#define PipeDiaAddr            79  /* 管径 pipe_diameter (float, 2 regs, R/W) */
+#define GasPressAddr           81  /* 气参压力 gas_ref_press (float, 2 regs, R/W) */
+#define GasTempAddr            83  /* 气参温度 gas_ref_temp (float, 2 regs, R/W) */
+#define ReynoldsAddr           85  /* 雷诺系数 reynolds_k (float, 2 regs, R/W) */
+
+/* 扩展参数寄存器地址 — 第三批 (系统参数, 寄存器 87~93) */
+#define TotalFactorAddr        87  /* 累积系数 total_factor (float, 2 regs, R/W) */
+#define PresetTotalAddr        89  /* 预设总量 preset_total (float, 2 regs, R/W) */
+#define CommAddrReg            91  /* 通信地址 modbus_addr (uint16, R) */
+#define BaudRateReg            92  /* 波特率 baud_rate (uint16, R) */
+#define LanguageReg            93  /* 语言 language (uint16, R/W) */
+
+/* 扩展参数区范围 */
+#define ExtParamStartAddr      60
+#define ExtParamEndAddr        93
+
 extern unsigned char strFlowSumBuf[20];
 extern unsigned char strFlowRateBuf[20];
 extern unsigned char         strFlowRate_2Buf[10];

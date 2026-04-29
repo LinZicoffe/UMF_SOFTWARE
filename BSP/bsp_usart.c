@@ -63,6 +63,21 @@ static Uart_SendfloatTypeDef s_sim_flow_rate;
 static Uart_SendfloatTypeDef s_sim_temperature;
 static Uart_SendfloatTypeDef s_sim_cumulative;
 static unsigned char s_sim_flow_sum_buf[20];
+/* 运行参数 — FC06 分次写入缓冲 */
+static Uart_SendfloatTypeDef s_meter_coeff_buf;
+static Uart_SendfloatTypeDef s_medium_coeff_buf;
+static Uart_SendfloatTypeDef s_small_signal_buf;
+/* 扩展参数 — FC06 分次写入缓冲 (float 参数) */
+static Uart_SendfloatTypeDef s_filter_time_buf;
+static Uart_SendfloatTypeDef s_damping_time_buf;
+static Uart_SendfloatTypeDef s_freq_output_buf;
+static Uart_SendfloatTypeDef s_density_buf;
+static Uart_SendfloatTypeDef s_pipe_dia_buf;
+static Uart_SendfloatTypeDef s_gas_press_buf;
+static Uart_SendfloatTypeDef s_gas_temp_buf;
+static Uart_SendfloatTypeDef s_reynolds_buf;
+static Uart_SendfloatTypeDef s_total_factor_buf;
+static Uart_SendfloatTypeDef s_preset_total_buf;
 #define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
 #define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
 #define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
@@ -94,6 +109,7 @@ static uint8_t  BCD2DEC(uint8_t bcd);
 static float    BCDTOInt(uint32_t bcd);
 static uint64_t BCD_TO_LongInt(uint64_t bcd);
 static void     sim_format_cumulative(float value);
+static float    compute_dac_current_mA(void);
 
 uint8_t  BCDtoStr(unsigned char *str, unsigned char *BCD, int BCD_length);
 uint16_t getCRC16(uint8_t *ptr, uint8_t len);
@@ -704,6 +720,144 @@ void Modbus_Function_6(void)
             break;
         default:
             break;
+        /* 运行参数 (uint16 枚举) */
+        case FlowUnitAddress:
+            param_set_flow_unit((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
+            break;
+        case TotalUnitAddress:
+            param_set_total_unit((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
+            break;
+        /* 运行参数 (float — 分次写入，第二半提交) */
+        case MeterCoeffAddress:
+            s_meter_coeff_buf.str[0] = Uart2RxBuffer[5];
+            s_meter_coeff_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case MeterCoeffAddress + 1:
+            s_meter_coeff_buf.str[2] = Uart2RxBuffer[5];
+            s_meter_coeff_buf.str[3] = Uart2RxBuffer[4];
+            param_set_meter_coeff(s_meter_coeff_buf.num);
+            break;
+        case MediumCoeffAddress:
+            s_medium_coeff_buf.str[0] = Uart2RxBuffer[5];
+            s_medium_coeff_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case MediumCoeffAddress + 1:
+            s_medium_coeff_buf.str[2] = Uart2RxBuffer[5];
+            s_medium_coeff_buf.str[3] = Uart2RxBuffer[4];
+            param_set_medium_coeff(s_medium_coeff_buf.num);
+            break;
+        case SmallSignalAddress:
+            s_small_signal_buf.str[0] = Uart2RxBuffer[5];
+            s_small_signal_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case SmallSignalAddress + 1:
+            s_small_signal_buf.str[2] = Uart2RxBuffer[5];
+            s_small_signal_buf.str[3] = Uart2RxBuffer[4];
+            param_set_small_signal(s_small_signal_buf.num);
+            break;
+
+        /* ---- 扩展参数: uint16 枚举 (单次提交) ---- */
+        case StdCondAddr:
+            param_set_std_cond((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
+            break;
+        case PulseEquivAddr:
+            param_set_pulse_equiv((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
+            break;
+        case LanguageReg:
+            param_set_language((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
+            break;
+
+        /* ---- 扩展参数: float (分次写入，第二半提交) ---- */
+        case FilterTimeAddr:
+            s_filter_time_buf.str[0] = Uart2RxBuffer[5];
+            s_filter_time_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case FilterTimeAddr + 1:
+            s_filter_time_buf.str[2] = Uart2RxBuffer[5];
+            s_filter_time_buf.str[3] = Uart2RxBuffer[4];
+            param_set_filter_time(s_filter_time_buf.num);
+            break;
+        case DampingTimeAddr:
+            s_damping_time_buf.str[0] = Uart2RxBuffer[5];
+            s_damping_time_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case DampingTimeAddr + 1:
+            s_damping_time_buf.str[2] = Uart2RxBuffer[5];
+            s_damping_time_buf.str[3] = Uart2RxBuffer[4];
+            param_set_damping_time(s_damping_time_buf.num);
+            break;
+        case FreqOutputAddr:
+            s_freq_output_buf.str[0] = Uart2RxBuffer[5];
+            s_freq_output_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case FreqOutputAddr + 1:
+            s_freq_output_buf.str[2] = Uart2RxBuffer[5];
+            s_freq_output_buf.str[3] = Uart2RxBuffer[4];
+            param_set_freq_output(s_freq_output_buf.num);
+            break;
+        case DensityAddr:
+            s_density_buf.str[0] = Uart2RxBuffer[5];
+            s_density_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case DensityAddr + 1:
+            s_density_buf.str[2] = Uart2RxBuffer[5];
+            s_density_buf.str[3] = Uart2RxBuffer[4];
+            param_set_medium_density(s_density_buf.num);
+            break;
+        case PipeDiaAddr:
+            s_pipe_dia_buf.str[0] = Uart2RxBuffer[5];
+            s_pipe_dia_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case PipeDiaAddr + 1:
+            s_pipe_dia_buf.str[2] = Uart2RxBuffer[5];
+            s_pipe_dia_buf.str[3] = Uart2RxBuffer[4];
+            param_set_pipe_diameter(s_pipe_dia_buf.num);
+            break;
+        case GasPressAddr:
+            s_gas_press_buf.str[0] = Uart2RxBuffer[5];
+            s_gas_press_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case GasPressAddr + 1:
+            s_gas_press_buf.str[2] = Uart2RxBuffer[5];
+            s_gas_press_buf.str[3] = Uart2RxBuffer[4];
+            param_set_gas_ref_press(s_gas_press_buf.num);
+            break;
+        case GasTempAddr:
+            s_gas_temp_buf.str[0] = Uart2RxBuffer[5];
+            s_gas_temp_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case GasTempAddr + 1:
+            s_gas_temp_buf.str[2] = Uart2RxBuffer[5];
+            s_gas_temp_buf.str[3] = Uart2RxBuffer[4];
+            param_set_gas_ref_temp(s_gas_temp_buf.num);
+            break;
+        case ReynoldsAddr:
+            s_reynolds_buf.str[0] = Uart2RxBuffer[5];
+            s_reynolds_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case ReynoldsAddr + 1:
+            s_reynolds_buf.str[2] = Uart2RxBuffer[5];
+            s_reynolds_buf.str[3] = Uart2RxBuffer[4];
+            param_set_reynolds_k(s_reynolds_buf.num);
+            break;
+        case TotalFactorAddr:
+            s_total_factor_buf.str[0] = Uart2RxBuffer[5];
+            s_total_factor_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case TotalFactorAddr + 1:
+            s_total_factor_buf.str[2] = Uart2RxBuffer[5];
+            s_total_factor_buf.str[3] = Uart2RxBuffer[4];
+            param_set_total_factor(s_total_factor_buf.num);
+            break;
+        case PresetTotalAddr:
+            s_preset_total_buf.str[0] = Uart2RxBuffer[5];
+            s_preset_total_buf.str[1] = Uart2RxBuffer[4];
+            break;
+        case PresetTotalAddr + 1:
+            s_preset_total_buf.str[2] = Uart2RxBuffer[5];
+            s_preset_total_buf.str[3] = Uart2RxBuffer[4];
+            param_set_preset_total(s_preset_total_buf.num);
+            break;
     }
 
     /* FC06 标准响应: 回显请求帧 */
@@ -832,6 +986,184 @@ void Modbus_Function_3(void)
             Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
         }
     }
+    /* 运行参数区域 (寄存器 22~29) */
+    if ((startaddress >= FlowUnitAddress) && (startaddress <= SmallSignalAddress + 1))
+    {
+        uint16_t j;
+        for (j = 0; j < MbBufferLen; j++)
+        {
+            uint16_t reg_val = 0;
+            Uart_SendfloatTypeDef u;
+            u.num = 0.0f;
+            switch (startaddress + j)
+            {
+                case FlowUnitAddress:        reg_val = (uint16_t)param_get_flow_unit(); break;
+                case TotalUnitAddress:       reg_val = (uint16_t)param_get_total_unit(); break;
+                case MeterCoeffAddress:      u.num = param_get_meter_coeff(); reg_val = ((uint16_t)u.str[1] << 8) | u.str[0]; break;
+                case MeterCoeffAddress + 1:  u.num = param_get_meter_coeff(); reg_val = ((uint16_t)u.str[3] << 8) | u.str[2]; break;
+                case MediumCoeffAddress:     u.num = param_get_medium_coeff(); reg_val = ((uint16_t)u.str[1] << 8) | u.str[0]; break;
+                case MediumCoeffAddress + 1: u.num = param_get_medium_coeff(); reg_val = ((uint16_t)u.str[3] << 8) | u.str[2]; break;
+                case SmallSignalAddress:     u.num = param_get_small_signal(); reg_val = ((uint16_t)u.str[1] << 8) | u.str[0]; break;
+                case SmallSignalAddress + 1: u.num = param_get_small_signal(); reg_val = ((uint16_t)u.str[3] << 8) | u.str[2]; break;
+                default: break;
+            }
+            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val >> 8);
+            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
+        }
+    }
+    /* 扩展参数区域 (寄存器 60~93) */
+    if ((startaddress >= ExtParamStartAddr) && (startaddress + MbBufferLen - 1 <= ExtParamEndAddr))
+    {
+        uint16_t j;
+        for (j = 0; j < MbBufferLen; j++)
+        {
+            uint16_t reg_val = 0;
+            Uart_SendfloatTypeDef u;
+            u.num = 0.0f;
+            switch (startaddress + j)
+            {
+                /* ---- 第一批: 只读运行数据 ---- */
+                case RunStateAddr:
+                    reg_val = (uint16_t)ModuleState;
+                    break;
+                case FwdTotalAddr:
+                    u.num = param_get_forward_total();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case FwdTotalAddr + 1:
+                    u.num = param_get_forward_total();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case RevTotalAddr:
+                    u.num = param_get_reverse_total();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case RevTotalAddr + 1:
+                    u.num = param_get_reverse_total();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case NetTotalAddr:
+                    u.num = param_get_forward_total() - param_get_reverse_total();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case NetTotalAddr + 1:
+                    u.num = param_get_forward_total() - param_get_reverse_total();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case DacCurrentAddr:
+                    u.num = compute_dac_current_mA();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case DacCurrentAddr + 1:
+                    u.num = compute_dac_current_mA();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+
+                /* ---- 第二批: 读写配置参数 ---- */
+                case StdCondAddr:
+                    reg_val = (uint16_t)param_get_std_cond();
+                    break;
+                case FilterTimeAddr:
+                    u.num = param_get_filter_time();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case FilterTimeAddr + 1:
+                    u.num = param_get_filter_time();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case DampingTimeAddr:
+                    u.num = param_get_damping_time();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case DampingTimeAddr + 1:
+                    u.num = param_get_damping_time();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case FreqOutputAddr:
+                    u.num = param_get_freq_output();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case FreqOutputAddr + 1:
+                    u.num = param_get_freq_output();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case PulseEquivAddr:
+                    reg_val = (uint16_t)param_get_pulse_equiv();
+                    break;
+                case DensityAddr:
+                    u.num = param_get_medium_density();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case DensityAddr + 1:
+                    u.num = param_get_medium_density();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case PipeDiaAddr:
+                    u.num = param_get_pipe_diameter();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case PipeDiaAddr + 1:
+                    u.num = param_get_pipe_diameter();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case GasPressAddr:
+                    u.num = param_get_gas_ref_press();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case GasPressAddr + 1:
+                    u.num = param_get_gas_ref_press();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case GasTempAddr:
+                    u.num = param_get_gas_ref_temp();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case GasTempAddr + 1:
+                    u.num = param_get_gas_ref_temp();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case ReynoldsAddr:
+                    u.num = param_get_reynolds_k();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case ReynoldsAddr + 1:
+                    u.num = param_get_reynolds_k();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+
+                /* ---- 第三批: 系统参数 ---- */
+                case TotalFactorAddr:
+                    u.num = param_get_total_factor();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case TotalFactorAddr + 1:
+                    u.num = param_get_total_factor();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case PresetTotalAddr:
+                    u.num = param_get_preset_total();
+                    reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    break;
+                case PresetTotalAddr + 1:
+                    u.num = param_get_preset_total();
+                    reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                case CommAddrReg:
+                    reg_val = s_modbus_addr;
+                    break;
+                case BaudRateReg:
+                    reg_val = (uint16_t)param_get_baud_rate();
+                    break;
+                case LanguageReg:
+                    reg_val = (uint16_t)param_get_language();
+                    break;
+
+                default: break;
+            }
+            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val >> 8);
+            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
+        }
+    }
     crcresult_3                                               = getCRC16(Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
     Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size]     = crcresult_3 & 0xff;
     Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size + 1] = (crcresult_3 >> 8) & 0xff;
@@ -933,6 +1265,213 @@ void Modbus_Function_10(void)
             param_set_value_4ma(SpanLoValue);
             param_set_value_20ma(SpanHiValue);
         }
+        /* 运行参数区域 (寄存器 22~29) */
+        if ((startaddress >= FlowUnitAddress) && (startaddress <= SmallSignalAddress + 1))
+        {
+            for (i = 0; i < MbBufferLen; i++)
+            {
+                uint16_t fc10_addr = startaddress + i;
+                uint16_t fc10_val  = ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1];
+                switch (fc10_addr)
+                {
+                    case FlowUnitAddress:
+                        param_set_flow_unit((uint8_t)fc10_val);
+                        break;
+                    case TotalUnitAddress:
+                        param_set_total_unit((uint8_t)fc10_val);
+                        break;
+                    case MeterCoeffAddress:
+                        s_meter_coeff_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_meter_coeff_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case MeterCoeffAddress + 1:
+                        s_meter_coeff_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_meter_coeff_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_meter_coeff(s_meter_coeff_buf.num);
+                        break;
+                    case MediumCoeffAddress:
+                        s_medium_coeff_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_medium_coeff_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case MediumCoeffAddress + 1:
+                        s_medium_coeff_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_medium_coeff_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_medium_coeff(s_medium_coeff_buf.num);
+                        break;
+                    case SmallSignalAddress:
+                        s_small_signal_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_small_signal_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case SmallSignalAddress + 1:
+                        s_small_signal_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_small_signal_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_small_signal(s_small_signal_buf.num);
+                        break;
+                    default: break;
+                }
+            }
+        }
+        /* 模拟参数区域 (寄存器 48~55) — FC16 Bug 修复 */
+        if ((startaddress >= SimSwitchAddress) && (startaddress <= SimCumulativeAddress + 1))
+        {
+            for (i = 0; i < MbBufferLen; i++)
+            {
+                uint16_t fc10_addr = startaddress + i;
+                switch (fc10_addr)
+                {
+                    case SimSwitchAddress:
+                        s_sim_switch = ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1];
+                        if (sim_is_active()) sim_format_cumulative(s_sim_cumulative.num);
+                        break;
+                    case SimFlowRateAddress:
+                        s_sim_flow_rate.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_sim_flow_rate.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case SimFlowRateAddress + 1:
+                        s_sim_flow_rate.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_sim_flow_rate.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case SimTemperatureAddress:
+                        s_sim_temperature.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_sim_temperature.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case SimTemperatureAddress + 1:
+                        s_sim_temperature.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_sim_temperature.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case SimCumulativeAddress:
+                        s_sim_cumulative.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_sim_cumulative.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case SimCumulativeAddress + 1:
+                        s_sim_cumulative.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_sim_cumulative.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        if (sim_is_active()) sim_format_cumulative(s_sim_cumulative.num);
+                        break;
+                    default: break;
+                }
+            }
+        }
+        /* 扩展配置参数区域 (寄存器 69~93) */
+        if ((startaddress >= StdCondAddr) && (startaddress <= LanguageReg))
+        {
+            for (i = 0; i < MbBufferLen; i++)
+            {
+                uint16_t fc10_addr = startaddress + i;
+                switch (fc10_addr)
+                {
+                    /* uint16 枚举 (单次提交) */
+                    case StdCondAddr:
+                        param_set_std_cond((uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]));
+                        break;
+                    case PulseEquivAddr:
+                        param_set_pulse_equiv((uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]));
+                        break;
+                    case LanguageReg:
+                        param_set_language((uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]));
+                        break;
+
+                    /* float 参数 (低位字缓存, 高位字提交) */
+                    case FilterTimeAddr:
+                        s_filter_time_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_filter_time_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case FilterTimeAddr + 1:
+                        s_filter_time_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_filter_time_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_filter_time(s_filter_time_buf.num);
+                        break;
+                    case DampingTimeAddr:
+                        s_damping_time_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_damping_time_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case DampingTimeAddr + 1:
+                        s_damping_time_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_damping_time_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_damping_time(s_damping_time_buf.num);
+                        break;
+                    case FreqOutputAddr:
+                        s_freq_output_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_freq_output_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case FreqOutputAddr + 1:
+                        s_freq_output_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_freq_output_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_freq_output(s_freq_output_buf.num);
+                        break;
+                    case DensityAddr:
+                        s_density_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_density_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case DensityAddr + 1:
+                        s_density_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_density_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_medium_density(s_density_buf.num);
+                        break;
+                    case PipeDiaAddr:
+                        s_pipe_dia_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_pipe_dia_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case PipeDiaAddr + 1:
+                        s_pipe_dia_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_pipe_dia_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_pipe_diameter(s_pipe_dia_buf.num);
+                        break;
+                    case GasPressAddr:
+                        s_gas_press_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_gas_press_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case GasPressAddr + 1:
+                        s_gas_press_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_gas_press_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_gas_ref_press(s_gas_press_buf.num);
+                        break;
+                    case GasTempAddr:
+                        s_gas_temp_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_gas_temp_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case GasTempAddr + 1:
+                        s_gas_temp_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_gas_temp_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_gas_ref_temp(s_gas_temp_buf.num);
+                        break;
+                    case ReynoldsAddr:
+                        s_reynolds_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_reynolds_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case ReynoldsAddr + 1:
+                        s_reynolds_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_reynolds_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_reynolds_k(s_reynolds_buf.num);
+                        break;
+                    case TotalFactorAddr:
+                        s_total_factor_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_total_factor_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case TotalFactorAddr + 1:
+                        s_total_factor_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_total_factor_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_total_factor(s_total_factor_buf.num);
+                        break;
+                    case PresetTotalAddr:
+                        s_preset_total_buf.str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_preset_total_buf.str[1] = Uart2RxBuffer[7 + 2 * i];
+                        break;
+                    case PresetTotalAddr + 1:
+                        s_preset_total_buf.str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_preset_total_buf.str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_preset_total(s_preset_total_buf.num);
+                        break;
+
+                    /* 只读寄存器: 忽略写入 */
+                    case CommAddrReg:
+                    case BaudRateReg:
+                        break;
+
+                    default: break;
+                }
+            }
+        }
         Uart2SendDataType.TxBuffer[0]                             = s_modbus_addr;
         Uart2SendDataType.TxBuffer[1]                             = 0x10;
         Uart2SendDataType.TxBuffer[2]                             = Uart2RxBuffer[2];
@@ -976,6 +1515,22 @@ static void sim_format_cumulative(float value)
     uint32_t frac_part = scaled % 1000;
     snprintf((char *)s_sim_flow_sum_buf, sizeof(s_sim_flow_sum_buf),
              "%09lu.%03lu", (unsigned long)int_part, (unsigned long)frac_part);
+}
+
+/**
+ * @brief   计算当前 4-20mA 电流输出值
+ * @note    公式: 4 + (DacValue - ZeroValue) / (FullValue - ZeroValue) * 16
+ */
+static float compute_dac_current_mA(void)
+{
+    uint16_t zero = DacZeroValue;
+    uint16_t full = DacFullValue;
+    float ratio;
+    if (full == zero) return 4.0f;
+    ratio = (float)((int32_t)DacValue - (int32_t)zero) / (float)((int32_t)full - (int32_t)zero);
+    if (ratio < 0.0f) ratio = 0.0f;
+    if (ratio > 1.0f) ratio = 1.0f;
+    return 4.0f + ratio * 16.0f;
 }
 
 uint8_t sim_is_active(void)

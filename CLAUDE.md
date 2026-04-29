@@ -43,7 +43,7 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 
 1. **按键/菜单处理** — `key_get_event()` → `menu_process()` 分发到菜单或运行显示翻页
 2. **运行显示刷新** — 200ms 周期 (`DisplayTimeBase >= 20`)，组装 `run_display_input_t` → `run_display_render()` → `ssd1306_UpdateScreen()`
-3. **IWDG 看门狗刷新**
+3. **IWDG 看门狗刷新** — 重载值 999，约 1 秒超时
 4. **UART1/UART2 通信处理**
 5. **DAC PWM 输出** — `PWMConfig()` 配置 TIM1/TIM4
 6. **DAC 线性换算** — 仪表系数×介质系数×流量 → `ConvertFunc()` → 小信号切除判定
@@ -55,6 +55,25 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 - `menu_tick_10ms()` — 菜单空闲超时
 - `DisplayTimeBase++` — 显示刷新计数
 - `Timer3Uart1TimeBase10ms++` / `Timer3Uart2TimeBase10ms++` — UART 通信时序
+
+### DMA 通道映射
+
+| DMA 通道 | 外设 | 方向 |
+|----------|------|------|
+| DMA1_Channel4 | USART1_TX | 发送 |
+| DMA1_Channel5 | USART1_RX | 接收 |
+| DMA1_Channel6 | USART2_RX | 接收 |
+| DMA1_Channel7 | USART2_TX | 发送 |
+
+### NVIC 中断优先级
+
+优先级分组: `NVIC_PRIORITYGROUP_2`（2 位抢占 + 2 位子优先级）
+
+| 中断源 | 抢占优先级 | 子优先级 | 说明 |
+|--------|-----------|---------|------|
+| USART1 | 0 | 1 | 流量模组通信（最高优先级） |
+| TIM3 | 1 | 0 | 10ms 系统定时 |
+| USART2 | 1 | 2 | Modbus RTU 通信 |
 
 ## 硬件引脚分配
 
@@ -97,11 +116,19 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | PA8 | TIM1_CH1 | DAC 高字节输出 |
 | PB6 | TIM4_CH1 | DAC 低字节输出 |
 
+### 调试接口
+
+| 引脚 | 功能 |
+|------|------|
+| PA13 | SWDIO (SWD 调试数据) |
+| PA14 | SWCLK (SWD 调试时钟) |
+
 ### 其他
 
 | 引脚 | 功能 |
 |------|------|
 | PB5 | 电源指示 LED |
+| PD0/PD1 | 外部晶振 (HSE) |
 
 ## 模块结构
 
@@ -320,6 +347,8 @@ HAL_StatusTypeDef module_process(const float *p_in, uint32_t len,
 - 状态码: `HAL_StatusTypeDef` (HAL_OK / HAL_ERROR / HAL_BUSY / HAL_TIMEOUT)
 - STM32CubeMX 生成的 `Core/` 目录代码使用 `/* USER CODE BEGIN/END */` 保护块 — 仅在保护块内修改
 - static 变量命名使用 `s_` 前缀
+- 头文件包含顺序: (1) 标准 C 库 → (2) STM32 HAL → (3) 项目 BSP → (4) 应用层
+- 禁止动态内存分配（无 malloc/free），大数组定义为全局变量
 
 ## IAR EWARM 编译常见问题与修复指南
 
