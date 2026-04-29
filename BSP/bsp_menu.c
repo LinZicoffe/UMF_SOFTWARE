@@ -380,7 +380,7 @@ static void save_enum_idx(screen_t scr, uint8_t idx)
     case SCR_FLOW_UNIT:   param_set_flow_unit(idx);   break;
     case SCR_TOTAL_UNIT:  param_set_total_unit(idx);  break;
     case SCR_PULSE_EQUIV: param_set_pulse_equiv(idx); break;
-    case SCR_BAUD_RATE:   param_set_baud_rate(idx);   break;
+    case SCR_BAUD_RATE:   param_set_baud_rate(idx); bsp_usart2_apply_baud_rate(idx); break;
     case SCR_LANGUAGE:    param_set_language(idx);    break;
     default: break;
     }

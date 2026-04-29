@@ -29,7 +29,7 @@
 #define DEF_FORWARD_TOTAL  0.0f
 #define DEF_REVERSE_TOTAL  0.0f
 #define DEF_MODBUS_ADDR    2
-#define DEF_BAUD_RATE      3
+#define DEF_BAUD_RATE      4   /* BAUD_115200, 与 MX_USART2_UART_INIT 硬编码一致 */
 #define DEF_PWD_OPERATOR   0
 #define DEF_PWD_ENGINEER   123
 #define DEF_LANGUAGE       0

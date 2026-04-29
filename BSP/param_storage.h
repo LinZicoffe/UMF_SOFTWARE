@@ -97,7 +97,7 @@ typedef struct {
 
     /* --- Phase 4: 系统 --- */
     uint16_t modbus_addr;    /* 1~247, 默认 2 */
-    uint8_t  baud_rate;      /* baud_rate_t, 默认 3 (38400) */
+    uint8_t  baud_rate;      /* baud_rate_t, 默认 4 (115200) */
     uint8_t  language;       /* language_t, 默认 0 (English) */
 
     /* --- 密码 --- */

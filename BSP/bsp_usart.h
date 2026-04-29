@@ -119,6 +119,8 @@ extern void          UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeD
 extern void          Uart1_Communication(void);
 extern void          Uart2_Communication(void);
 extern void          bsp_usart_set_modbus_addr(uint16_t addr);
+extern void          bsp_usart2_apply_baud_rate(uint8_t idx);
+extern void          bsp_usart2_check_baud_rate_pending(void);
 
 /* 模拟参数 API — 自动选择真实值或模拟值 */
 uint8_t              sim_is_active(void);

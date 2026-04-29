@@ -57,6 +57,15 @@ uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
 static uint16_t s_modbus_addr = 2;   /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
 
+/* 波特率切换 — 延迟应用机制 (确保 Modbus 响应在旧波特率下发送完成) */
+static volatile uint8_t  s_baud_rate_pending;     /* 非0表示有待应用的波特率变更 */
+static          uint8_t  s_baud_rate_pending_idx; /* 待应用的波特率索引 */
+
+/* 波特率索引 → 实际频率查找表 */
+static const uint32_t s_baud_table[BAUD_RATE_COUNT] = {
+    4800, 9600, 19200, 38400, 115200
+};
+
 /* 模拟参数 — static 内部变量 */
 static uint16_t s_sim_switch = 0;
 static Uart_SendfloatTypeDef s_sim_flow_rate;
@@ -458,6 +467,10 @@ void Uart2_Communication(void)
 {
     uint16_t crcresult;
     uint8_t  temp[2];
+
+    /* 检查并应用延迟的波特率变更 (确保上次响应已在旧波特率下发送完成) */
+    bsp_usart2_check_baud_rate_pending();
+
     if (Uart2HaveData == 1)                     // 接收完成标志=1处理，否则号?号
     {
         /* Modbus RTU 最小帧: 地址(1)+功能码(1)+数据(4)+CRC(2) = 8 */
@@ -863,6 +876,18 @@ void Modbus_Function_6(void)
         case CommAddrReg:
             bsp_usart_set_modbus_addr(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
             break;
+
+        /* ---- 扩展参数: 波特率 (延迟生效, 响应发送后再切换) ---- */
+        case BaudRateReg:
+        {
+            uint8_t new_idx = (uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
+            if (new_idx < BAUD_RATE_COUNT) {
+                param_set_baud_rate(new_idx);
+                s_baud_rate_pending_idx = new_idx;
+                s_baud_rate_pending = 1;
+            }
+            break;
+        }
     }
 
     /* FC06 标准响应: 回显请求帧 */
@@ -1472,9 +1497,17 @@ void Modbus_Function_10(void)
                     case CommAddrReg:
                         bsp_usart_set_modbus_addr(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
                         break;
-                    /* 波特率: 只读, 忽略写入 */
+                    /* 波特率: 延迟生效, 响应发送后再切换 */
                     case BaudRateReg:
+                    {
+                        uint8_t new_idx = (uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
+                        if (new_idx < BAUD_RATE_COUNT) {
+                            param_set_baud_rate(new_idx);
+                            s_baud_rate_pending_idx = new_idx;
+                            s_baud_rate_pending = 1;
+                        }
                         break;
+                    }
 
                     default: break;
                 }
@@ -1508,6 +1541,51 @@ void bsp_usart_set_modbus_addr(uint16_t addr)
         s_modbus_addr = addr;
         param_set_modbus_addr(addr);
     }
+}
+
+/**
+ * @brief   应用波特率变更到 USART2 硬件
+ * @param   idx  baud_rate_t 枚举索引 (0~4)
+ * @note    DeInit → 重设 BaudRate → Init → 重启 DMA + IDLE 中断
+ *          仅限主循环上下文调用，禁止在 ISR 中使用
+ */
+void bsp_usart2_apply_baud_rate(uint8_t idx)
+{
+    if (idx >= BAUD_RATE_COUNT) return;
+
+    /* 停止 USART2 所有 DMA 传输 */
+    HAL_UART_Abort(&huart2);
+
+    /* 重新配置 USART2 */
+    HAL_UART_DeInit(&huart2);
+    huart2.Init.BaudRate = s_baud_table[idx];
+    HAL_UART_Init(&huart2);
+
+    /* 重新启用 IDLE 中断 + DMA 接收 */
+    Uart2ReceiveType.RX_Flag = 0;
+    Uart2ReceiveType.RX_Size = 0;
+    __HAL_UART_CLEAR_IDLEFLAG(&huart2);
+    EnableUart_IT_IDLE(&huart2, &Uart2ReceiveType);
+
+    Uart2RxCounter = 0;
+    Uart2HaveData  = 0;
+}
+
+/**
+ * @brief   检查并应用延迟的波特率变更
+ * @note    在 Uart2_Communication() 入口调用，确保 Modbus 响应已在旧波特率下发送完成
+ */
+void bsp_usart2_check_baud_rate_pending(void)
+{
+    if (!s_baud_rate_pending) return;
+
+    /* 等待 DMA 发送完成 (gState == READY 表示空闲) */
+    if (huart2.gState != HAL_UART_STATE_READY) return;
+
+    uint8_t idx = s_baud_rate_pending_idx;
+    s_baud_rate_pending = 0;
+
+    bsp_usart2_apply_baud_rate(idx);
 }
 
 /* ========== 模拟参数 getter 实现 ========== */
