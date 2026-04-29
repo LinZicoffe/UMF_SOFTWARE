@@ -858,6 +858,11 @@ void Modbus_Function_6(void)
             s_preset_total_buf.str[3] = Uart2RxBuffer[4];
             param_set_preset_total(s_preset_total_buf.num);
             break;
+
+        /* ---- 扩展参数: 通信地址 (立即生效) ---- */
+        case CommAddrReg:
+            bsp_usart_set_modbus_addr(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
+            break;
     }
 
     /* FC06 标准响应: 回显请求帧 */
@@ -1463,8 +1468,11 @@ void Modbus_Function_10(void)
                         param_set_preset_total(s_preset_total_buf.num);
                         break;
 
-                    /* 只读寄存器: 忽略写入 */
+                    /* 通信地址: 立即生效 */
                     case CommAddrReg:
+                        bsp_usart_set_modbus_addr(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
+                        break;
+                    /* 波特率: 只读, 忽略写入 */
                     case BaudRateReg:
                         break;
 
@@ -1498,6 +1506,7 @@ void bsp_usart_set_modbus_addr(uint16_t addr)
 {
     if (addr >= 1 && addr <= 247) {
         s_modbus_addr = addr;
+        param_set_modbus_addr(addr);
     }
 }
 
