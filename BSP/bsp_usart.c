@@ -540,7 +540,7 @@ void Modbus_Function_1(void)
     uint16_t sendbytelength;
     uint16_t crcresult_1;
     uint8_t  i;
-    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
+    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
     Uart2SendDataType.TxBuffer[1] = 0x01;
     startaddress                  = (((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3]);
     MbBufferLen                   = (((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
@@ -586,7 +586,7 @@ void Modbus_Function_5(void)
     uint16_t tempdress            = 0;
     // uint16_t crcresult;
     tempdress                     = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
-    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
+    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
     Uart2SendDataType.TxBuffer[1] = 0x05;
     Uart2SendDataType.TxBuffer[2] = Uart2RxBuffer[2];
     Uart2SendDataType.TxBuffer[3] = Uart2RxBuffer[3];
@@ -890,8 +890,8 @@ void Modbus_Function_6(void)
         }
     }
 
-    /* FC06 标准响应: 回显请求帧 */
-    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
+    /* FC06 标准响应: 回显请求帧 (地址字节使用接收帧原地址，避免通信地址变更后响应地址不匹配) */
+    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
     Uart2SendDataType.TxBuffer[1] = 0x06;
     Uart2SendDataType.TxBuffer[2] = Uart2RxBuffer[2];
     Uart2SendDataType.TxBuffer[3] = Uart2RxBuffer[3];
@@ -921,7 +921,7 @@ void Modbus_Function_3(void)
     MbBufferLen                   = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
     /* Modbus 缓冲区溢出防护: TX_Size = 2*Len + 3 + 2(CRC) <= UART_TX_LEN(150) */
     if (MbBufferLen > 62) MbBufferLen = 62;
-    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
+    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
     Uart2SendDataType.TxBuffer[1] = 0x03;
     Uart2SendDataType.TxBuffer[2] = 2 * MbBufferLen;
     Uart2SendDataType.TX_Size     = 2 * MbBufferLen + 3;
@@ -1212,7 +1212,7 @@ void Modbus_Function_4(void)
     // uint8_t  i         = 3;
     uint16_t crcresult_4;
     tempdress                     = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
-    Uart2SendDataType.TxBuffer[0] = s_modbus_addr;
+    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
     Uart2SendDataType.TxBuffer[1] = 0x04;
     temp                          = Uart2RxBuffer[5];
     if (temp > 62) temp = 62;   /* 缓冲区溢出防护 */
@@ -1513,7 +1513,7 @@ void Modbus_Function_10(void)
                 }
             }
         }
-        Uart2SendDataType.TxBuffer[0]                             = s_modbus_addr;
+        Uart2SendDataType.TxBuffer[0]                             = Uart2RxBuffer[0];
         Uart2SendDataType.TxBuffer[1]                             = 0x10;
         Uart2SendDataType.TxBuffer[2]                             = Uart2RxBuffer[2];
         Uart2SendDataType.TxBuffer[3]                             = Uart2RxBuffer[3];
