@@ -8,9 +8,9 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - **Modbus RTU 从站**: USART2 作为 Modbus RTU 从站（地址 2），支持功能码 01/03/04/05/06/10
 - **4~20mA DAC 输出**: TIM1/TIM4 PWM 模拟输出，支持零点和满度校准
 - **OLED 显示**: SSD1306 128×64，SPI bit-bang 驱动，支持 S01 主界面和 S02 辅助变量页切换
-- **参数存储**: Flash 模拟 EEPROM，Page 55~63 分组存储仪表参数、量程范围和 DAC 校准值
+- **参数存储**: Flash 模拟 EEPROM，Page 54~63 分组存储仪表参数、量程范围和 DAC 校准值
 - **菜单系统**: 5 层导航栈 + 6 种界面模式 (列表/数值/枚举/密码/只读/确认) + 两级密码门控 (操作员/工程师)
-- **中英文双语菜单**: 16x16 中文字模渲染，菜单系统全面支持中英文切换（S44 Language 设置）
+- **英文菜单界面**: 纯英文菜单（v1.5.0 V7 起，中文双语支持已移除以释放 Flash；S44 Language 屏幕保留兼容）
 - **全参数配置**: 基本设置、输出设置、介质/工况、累积器、累计总量管理、校准、系统设置共 42 个屏幕
 
 ## 硬件平台
@@ -64,16 +64,14 @@ UMF_SOFTWARE/
 │   ├── key.c/h                   # 事件驱动按键驱动 (消抖 + 组合键检测)
 │   ├── bsp_menu.c/h              # 菜单系统 (5层导航栈 + 6种模式 + 密码门控)
 │   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Flash 持久化)
-│   ├── eeprom.c/h                # Flash 模拟 EEPROM (磨损均衡日志结构, Page 55~63)
+│   ├── eeprom.c/h                # Flash 模拟 EEPROM (磨损均衡日志结构, Page 54~63)
 │   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char)
 │   └── run_display.c/h           # 运行显示模块 (S01 主界面 + S02 辅助页)
 ├── OLED/                          # OLED 显示驱动
 │   ├── ssd1306_conf.h            # afiskon 库硬件配置 (引脚/字体/SPI 模式)
 │   ├── ssd1306.c/h               # afiskon SSD1306 驱动 (bit-bang SPI 适配)
-│   ├── ssd1306_fonts.c/h         # 字体数据 (6x8, 7x10, 11x18, 16x26)
-│   ├── chinese_font.c/h         # 16x16 中文字模数据 + 混合字符串渲染 (WriteMixedStr)
-│   ├── chinese_font_data.h      # 中文字模索引定义 (CHI_xxx 宏)
-│   ├── generate_chinese_font.py # 中文字模生成脚本 (Hzk16 格式)
+│   ├── ssd1306_fonts.c/h         # 字体数据 (6x8, 7x10, 11x18; 16x26 已禁用节省 Flash)
+│   ├── generate_chinese_font.py # 中文字模生成脚本 (Hzk16 格式, v1.5.0 V7 后中文已移除)
 │   ├── oled.c/h                  # 旧版 OLED 驱动 (保留)
 │   ├── oledfont.h                # 旧版字体数据
 │   └── bmp.h                     # 位图资源 (度符号)
@@ -127,7 +125,7 @@ S03 主菜单 (5 项)
   ├── 3.Totalizer    → S04 密码 → S28 累计总量管理 (5 项)
   ├── 4.Calibration  → S04 密码 → S34 校准 (4 项)
   └── 5.System       → S04 密码 → S39 系统设置 (5 项)
-      └── S44 Language (中文/英文切换)
+      └── S44 Language (仅英文; v1.5.0 V7 后中文已移除)
 ```
 
 ### 密码
@@ -347,6 +345,47 @@ S03 主菜单 (5 项)
 
 ### v1.5.0 (2026-04-30)
 
+*V7*（**Flash 紧急瘦身 — 移除中文双语界面**）：
+- **背景**: V6 修复 HardFault 时把 ROM 区域限制到 Page 0~53 (54KB)，但当前固件代码 + const 数据已膨胀到 ~58.6KB（链接器报 `Lp011 unable to allocate 0xea3e bytes in 0xd714 region`），缺口 4.8KB
+- **解决方案**: 移除中英文双语支持，菜单退化为纯英文（保留 `language` 参数枚举但只剩 `LANG_ENGLISH` 单选项）
+- **释放空间**: ~8~10KB Flash
+  - `chinese_font.c` 字模数据 (110×32B) + 渲染函数 ≈ 5KB
+  - `bsp_menu.c` 中文支持代码 (`is_cn_mode` / `get_cn_title` / `get_cn_list_label` / `draw_cn_title` / 6 个 `render_*_cn` 函数 + 中文字符串字面量) ≈ 3~5KB
+- **修改文件**:
+  - **删除**: `OLED/chinese_font.c` (29KB 源)、`OLED/chinese_font.h` (6KB)、`OLED/chinese_font_data.h` (25KB) 三个文件
+  - `EWARM/UMF.ewp`: 移除 `<file>$PROJ_DIR$\..\OLED\chinese_font.c</file>` 编译条目
+  - `BSP/bsp_menu.c`: 移除 `#include "chinese_font.h"`、`is_cn_mode()`、`get_cn_title()`、`get_cn_list_label()`、`draw_cn_title()`、6 个 `render_*_cn()` 函数 (~390 行)，移除 6 个 `if (is_cn_mode()) { render_*_cn(f); return; }` 派发分支
+  - `BSP/bsp_menu.c`: `s_language_str[LANG_COUNT]` 简化为 `{ "English" }` 单选项
+  - `BSP/param_storage.h`: `language_t` 枚举删除 `LANG_CHINESE = 1`，仅保留 `LANG_ENGLISH = 0`
+- **影响**:
+  - 菜单界面变为**纯英文**，S44 Language 屏幕仍存在但只能选择 "English"
+  - 不影响任何核心功能（流量采集 / Modbus / 显示数值 / DAC 输出 / 按键 / 校准 / 参数持久化）
+  - Modbus 寄存器 40094 (LanguageReg) 仍可读写但只接受 `0` (LANG_ENGLISH)，写入其他值被 clamp
+- **后续恢复中文方案**（如需）:
+  - (a) 升级 MCU 到 STM32F103CBT6 (128KB Flash) — 推荐
+  - (b) 大幅精简 `bsp_menu.c` 的菜单常量数据
+  - (c) 改用更轻量的 16×16 中文字模 (压缩到 4×4 编码方案)
+
+*V6*（**HardFault 紧急修复 — ICF 链接器配置缺陷 + Flash 存储兼容性回滚**）：
+- **修复问题**: 设备运行后出现 `HardFault exception` (`PC = 0x0800E064, LR = 0xFFFFFFF9, CFSR.UNDEFINSTR`)
+- **根因 A — ICF 链接器配置缺陷（关键）**:
+  - `EWARM/stm32f103xb_flash.icf` 中 `__ICFEDIT_region_ROM_end__ = 0x0800FFFF` 把整个 64KB Flash 都纳入 ROM 区
+  - 链接器自由地把代码和 const 数据放到 **Page 55~63（EEPROM 模拟区）**
+  - 用户做 Modbus 写参数 → `WriteBufferFlash()` 整页擦除 Page 56/58 等 → **代码被擦除成 0xFFFFFFFF**
+  - 主循环或 ISR 走到那块代码 → CPU 读 0xFFFFFFFF 当指令执行 → `UNDEFINSTR HardFault`
+  - PC = 0x0800E064 落在 Page 56（PARAM_PAGE_OUTPUT, 0x0800E000~0x0800E3FF），证实代码被擦掉
+- **根因 B — Flash 存储槽位长度不兼容（次要）**:
+  - V5 中把 `flush_system_group` 从 4 字段扩展到 5 字段
+  - `WriteBufferFlash` 是链表式追加存储，槽位大小 `(Len+1)*4`：旧固件 Len=4 → 槽位 20 字节；新固件 Len=5 → 槽位 24 字节
+  - 旧设备升级新固件后槽位偏移完全错位，旧数据被错误解读（虽不直接 HardFault，但严重削弱可靠性）
+- **修复方案（双管齐下）**:
+  1. **ICF 修复**: 限制 ROM 代码区到 Page 0~53（54KB，0x08000000~0x0800D7FF），**严格隔离代码与 EEPROM 模拟区**；Page 54~63（10KB）留给 Flash 模拟 EEPROM；链接器再也不会把代码放到 EEPROM 区
+  2. **Flash 兼容回滚**: `flush_system_group` 回退到 4 字段（与旧固件兼容），`oled_recovery_interval` 改用**独立的 Page 54** 存储（`PARAM_PAGE_DISPLAY`），避免链表式存储的"槽位长度不可变更"约束
+- **修改文件**:
+  - `EWARM/stm32f103xb_flash.icf`: `ROM_end` 从 `0x0800FFFF` 改为 `0x0800D7FF`，增加详细注释说明历史教训
+  - `BSP/param_storage.c`: 新增 `PARAM_PAGE_DISPLAY = ADDR_FLASH_PAGE_54`；`flush_system_group` 回 4 字段；新增 `flush_display_group`；`param_storage_init` 拆分为 system + display 两段读取；`param_set_oled_recovery_interval` 改调 `flush_display_group`
+- **设计原则强化（添加到模块设计原则）**: **Flash 模拟 EEPROM 存储页必须在 ICF 文件中显式排除在代码区外**；扩展 `WriteBufferFlash` 字段长度时**必须使用新页**而不是修改原页 `Len` 参数
+
 *V5*（**OLED 抗干扰加固 — 三层自愈防护**）：
 - **新增功能**: OLED bit-bang SPI 抗干扰自愈机制，针对硬件 SPI 接触不良 / EMI / 瞬态干扰导致的显示错乱
   - **第 1 层 — 周期性软重初始化**: 主循环每 N×100ms (默认 5 秒) 调用 `ssd1306_RecoveryInit()` 重发 SSD1306 全套 27 条配置命令；不做硬件复位、不动帧缓冲、不调 UpdateScreen，下次刷屏自动覆盖整屏；菜单激活时跳过避免打断交互
@@ -358,10 +397,10 @@ S03 主菜单 (5 项)
   - 读写: FC03 / FC06 / FC10
   - 持久化: 是 (Flash Page 58, system_group 第 5 字段)
   - 修改后立即生效, 上位机可通过 Modbus 远程调整
-- **Flash 持久化兼容性**: `flush_system_group` 从 4 字段扩展到 5 字段；旧 Flash 中第 5 字段为擦除态 0xFFFFFFFFu，初始化时自动 fallback 到默认值 50，保持向前兼容
+- **Flash 持久化**: `oled_recovery_interval` 持久化到 Flash **Page 54** (`PARAM_PAGE_DISPLAY`，独立成页) — 注: V6 修复了原方案
 - **修改文件**:
   - `OLED/ssd1306.c`/`OLED/ssd1306.h`: 新增 `ssd1306_RecoveryInit`，重构提取 `ssd1306_send_init_commands` 静态函数；`ssd1306_UpdateScreen` 加固关键命令；`bitbang_spi_write` 加 NOP
-  - `BSP/param_storage.c`/`BSP/param_storage.h`: `param_basic_t` 新增 `oled_recovery_interval` 字段；新增 `param_get/set_oled_recovery_interval`；`flush_system_group` 5 字段；`reset_defaults` 重置默认值
+  - `BSP/param_storage.c`/`BSP/param_storage.h`: `param_basic_t` 新增 `oled_recovery_interval` 字段；新增 `param_get/set_oled_recovery_interval`；新增 `PARAM_PAGE_DISPLAY` + `flush_display_group`；`reset_defaults` 重置默认值
   - `BSP/bsp_usart.c`/`BSP/bsp_usart.h`: 新增宏 `OledRecoveryAddr=94`，更新 `ExtParamEndAddr=94`；FC03/FC06/FC10 添加新寄存器处理
   - `Core/Src/tim.c`/`Core/Inc/tim.h`: 新增 `volatile uint16_t OledRecoveryTimeBase` 计数器，TIM3 ISR 每 10ms 递增
   - `Core/Src/main.c`: 主循环检测 `OledRecoveryTimeBase` 达到阈值后调用 `ssd1306_RecoveryInit` 并清零

@@ -54,10 +54,9 @@ typedef enum {
     BAUD_RATE_COUNT
 } baud_rate_t;
 
-/* 语言 */
+/* 语言 (仅英文, 中文已移除以释放 Flash; 保留枚举以兼容菜单 SCR_LANGUAGE 屏幕) */
 typedef enum {
     LANG_ENGLISH = 0,
-    LANG_CHINESE = 1,
     LANG_COUNT
 } language_t;
 

@@ -4,8 +4,18 @@
 /*-Specials-*/
 define symbol __ICFEDIT_intvec_start__ = 0x08000000;
 /*-Memory Regions-*/
+/* STM32F103C8 Flash: 64KB (Page 0..63, 1KB/page, 0x08000000..0x0800FFFF).
+ * Top 10KB (Page 54..63, 0x0800D800..0x0800FFFF) reserved for Flash-EEPROM
+ * emulation (param_storage groups + DAC calibration + Span).
+ * Therefore ROM_region for code/const limited to Page 0..53 (first 54KB).
+ *
+ * HardFault root cause (2026-04-30):
+ *   ROM_end was 0x0800FFFF, linker placed const/code into Page 55..63,
+ *   those pages were full-page-erased by WriteBufferFlash() on param save,
+ *   wiping code to 0xFFFFFFFF and causing UNDEFINSTR HardFault.
+ *   Fixed: ROM_end = 0x0800D7FF, strict isolation code vs EEPROM area. */
 define symbol __ICFEDIT_region_ROM_start__   = 0x08000000 ;
-define symbol __ICFEDIT_region_ROM_end__     = 0x0800FFFF;
+define symbol __ICFEDIT_region_ROM_end__     = 0x0800D7FF;
 define symbol __ICFEDIT_region_RAM_start__   = 0x20000000;
 define symbol __ICFEDIT_region_RAM_end__     = 0x20004FFF;
 /*-Sizes-*/

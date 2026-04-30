@@ -87,6 +87,10 @@
  * Page 56: 输出配置组 [freq_output, pulse_equiv, language]
  * Page 57: 介质工况组 [medium_density, pipe_diameter, gas_ref_press, gas_ref_temp, reynolds_k]
  * Page 58: 系统/累积组 [modbus_addr, baud_rate, total_factor, preset_total]
+ *
+ * Phase 5 新增分组 (Page 54):
+ * Page 54: 显示与 OLED 抗干扰组 [oled_recovery_interval]
+ *          (独立成页, 避免与 system_group 槽位长度耦合, 兼容旧固件 Flash 数据)
  */
 #define PARAM_PAGE_BASIC         ADDR_FLASH_PAGE_60
 #define PARAM_PAGE_METER         ADDR_FLASH_PAGE_61
@@ -95,6 +99,7 @@
 #define PARAM_PAGE_OUTPUT        ADDR_FLASH_PAGE_56
 #define PARAM_PAGE_MEDIUM_PARAM  ADDR_FLASH_PAGE_57
 #define PARAM_PAGE_SYSTEM        ADDR_FLASH_PAGE_58
+#define PARAM_PAGE_DISPLAY       ADDR_FLASH_PAGE_54
 
 /* ===== 枚举字符串 ===== */
 static const char * const s_std_cond_str[STD_COND_COUNT] = {
@@ -188,18 +193,26 @@ static HAL_StatusTypeDef flush_medium_param_group(void)
     return (HAL_StatusTypeDef)WriteBufferFlash(5, PARAM_PAGE_MEDIUM_PARAM, buf);
 }
 
-/* 系统/累积组: [modbus_addr, baud_rate, total_factor, preset_total, oled_recovery_interval]
- * 注意: 第 5 字段 oled_recovery_interval 为新增, 旧 Flash 中此位置为擦除态 0xFFFFFFFF,
- *       读取时若为 0xFFFFFFFFu 则使用默认值, 保持向前兼容. */
+/* 系统/累积组: [modbus_addr, baud_rate, total_factor, preset_total]
+ * 注意: 字段长度固定为 4, 切勿扩展 (WriteBufferFlash 是链表式追加存储,
+ *       槽位大小 = (Len+1)*4 字节, 改 Len 会让旧设备的 Flash 数据无法解码). */
 static HAL_StatusTypeDef flush_system_group(void)
 {
-    uint32_t buf[5];
+    uint32_t buf[4];
     buf[0] = (uint32_t)s_params.modbus_addr;
     buf[1] = (uint32_t)s_params.baud_rate;
     buf[2] = float_to_u32(s_params.total_factor);
     buf[3] = float_to_u32(s_params.preset_total);
-    buf[4] = (uint32_t)s_params.oled_recovery_interval;
-    return (HAL_StatusTypeDef)WriteBufferFlash(5, PARAM_PAGE_SYSTEM, buf);
+    return (HAL_StatusTypeDef)WriteBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
+}
+
+/* 显示/OLED 抗干扰组: [oled_recovery_interval]
+ * 独立成页避免与 system_group 槽位长度耦合 (Phase 5 新增). */
+static HAL_StatusTypeDef flush_display_group(void)
+{
+    uint32_t buf[1];
+    buf[0] = (uint32_t)s_params.oled_recovery_interval;
+    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_DISPLAY, buf);
 }
 
 /* ===== Public API ===== */
@@ -273,11 +286,10 @@ HAL_StatusTypeDef param_storage_init(void)
                                   clamp_f(u32_to_float(buf[4]), REYNOLDS_K_MIN, REYNOLDS_K_MAX);
     }
 
-    /* 读取系统/累积组 (Page 58)
-     * 扩展为 5 字段, 旧 Flash 中第 5 字段为 0xFFFFFFFFu, 自动 fallback 默认值 */
+    /* 读取系统/累积组 (Page 58) - 4 字段, 与旧固件兼容 */
     {
-        uint32_t buf[5];
-        ReadBufferFlash(5, PARAM_PAGE_SYSTEM, buf);
+        uint32_t buf[4];
+        ReadBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
         s_params.modbus_addr  = (buf[0] == 0xFFFFFFFFu) ? DEF_MODBUS_ADDR :
                                 clamp_u16((uint16_t)buf[0], MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
         s_params.baud_rate    = (buf[1] == 0xFFFFFFFFu) ? DEF_BAUD_RATE :
@@ -286,8 +298,14 @@ HAL_StatusTypeDef param_storage_init(void)
                                 clamp_f(u32_to_float(buf[2]), TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
         s_params.preset_total = (buf[3] == 0xFFFFFFFFu) ? DEF_PRESET_TOTAL :
                                 clamp_f(u32_to_float(buf[3]), PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
-        s_params.oled_recovery_interval = (buf[4] == 0xFFFFFFFFu) ? DEF_OLED_RECOVERY_INTERVAL :
-                                clamp_u16((uint16_t)buf[4], OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
+    }
+
+    /* 读取显示/OLED 抗干扰组 (Page 54, Phase 5 新增独立页) */
+    {
+        uint32_t disp_buf;
+        ReadBufferFlash(1, PARAM_PAGE_DISPLAY, &disp_buf);
+        s_params.oled_recovery_interval = (disp_buf == 0xFFFFFFFFu) ? DEF_OLED_RECOVERY_INTERVAL :
+                                clamp_u16((uint16_t)disp_buf, OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
     }
 
     /* value_4ma / value_20ma: 由 main.c 在 Data_Init() 后从 Span 页同步 */
@@ -520,7 +538,7 @@ HAL_StatusTypeDef param_set_language(uint8_t idx)
 HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val)
 {
     s_params.oled_recovery_interval = clamp_u16(val, OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
-    return flush_system_group();
+    return flush_display_group();
 }
 
 /* ===== 枚举字符串 ===== */
