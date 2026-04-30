@@ -24,11 +24,14 @@
 #define SSD1306_Reset_Port GPIOA
 #define SSD1306_Reset_Pin  GPIO_PIN_5
 
-/* 字体选择 (Flash 预算 ~6.4KB) */
+/* 字体选择 (Flash 预算)
+ * 重要诊断 [测试 E]: 启用 Font_16x26 + bsp_menu 完整代码后, 字体表被
+ *   推过 64KB Flash 边界, 读取返回 0xFF -> 字符渲染为实心白方块.
+ * 解决方案: 临时禁用 Font_16x26, run_display.c 已有 #elif Font_11x18 fallback. */
 #define SSD1306_INCLUDE_FONT_6x8       /* 状态栏 + 辅助页 ≈1.1KB */
 #define SSD1306_INCLUDE_FONT_7x10      /* 备用 ≈1.9KB */
 #define SSD1306_INCLUDE_FONT_11x18     /* 瞬时流量大字 ≈3.4KB */
-#define SSD1306_INCLUDE_FONT_16x26    /* 瞬时流量大字 ≈5KB, 剩余Flash~14KB */
+/* #define SSD1306_INCLUDE_FONT_16x26 */  /* 暂时禁用 ≈5KB - Flash 越界根因 */
 
 /* bit-bang SPI 自定义标志 — ssd1306.c 中用条件编译选择 bit-bang 路径 */
 #define SSD1306_BITBANG_SPI

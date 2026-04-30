@@ -29,18 +29,25 @@ static float dac_to_mA(uint16_t dac_val, const uint16_t *p_dac_buf)
 /* ---- S01 主界面 ---- */
 static void render_page_main(const run_display_input_t *p_in)
 {
-    char buf[16];
+    char buf[24];
     float rate;
     uint8_t len, x_start;
+    float press, temp;
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
-    /* Zone A: 状态栏 (y=0) — 压力 */
-    snprintf(buf, sizeof(buf), "%.1fKPa", p_in->p_pressure->num);
+    /* Zone A: 状态栏 (y=0) — 压力 (钳位防止异常浮点撑爆 buf) */
+    press = p_in->p_pressure->num;
+    if (press > 9999.9f)  press = 9999.9f;
+    if (press < -999.9f)  press = -999.9f;
+    snprintf(buf, sizeof(buf), "%.1fKPa", press);
     ssd1306_SetCursor(0, 0);
     ssd1306_WriteString(buf, Font_6x8, White);
 
-    /* 温度 + 度符号 */
-    snprintf(buf, sizeof(buf), "%.1f", p_in->p_temperature->num);
+    /* 温度 + 度符号 (钳位防止 strlen 导致 "C" 位置超出屏幕) */
+    temp = p_in->p_temperature->num;
+    if (temp > 999.9f)  temp = 999.9f;
+    if (temp < -99.9f)  temp = -99.9f;
+    snprintf(buf, sizeof(buf), "%.1f", temp);
     ssd1306_SetCursor(48, 0);
     ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_DrawBitmap(48 + (uint8_t)strlen(buf) * 6, 0, BMP, 6, 8, White);
@@ -89,12 +96,15 @@ static void render_page_main(const run_display_input_t *p_in)
 #endif
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
-    /* Zone C: 累积流量 (y=56) */
+    /* Zone C: 累积流量 (y=56)
+     * 布局: "TOT "(0..23) + 13位流量串(24..101) + 单位(102..119)
+     * 原 x=30/96 时，13char×6px=78px 从30到107，而单位在96，导致覆盖最后2位小数
+     * 修正: 流量串从x=24起，结束于x=101；单位从x=102起不再重叠 */
     ssd1306_SetCursor(0, 56);
     ssd1306_WriteString("TOT ", Font_6x8, White);
-    ssd1306_SetCursor(30, 56);
+    ssd1306_SetCursor(24, 56);
     ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_6x8, White);
-    ssd1306_SetCursor(96, 56);
+    ssd1306_SetCursor(102, 56);
     ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_6x8, White);
 #endif
 }
@@ -102,7 +112,7 @@ static void render_page_main(const run_display_input_t *p_in)
 /* ---- S02 辅助页 ---- */
 static void render_page_aux(const run_display_input_t *p_in)
 {
-    char buf[16];
+    char buf[24];
     float fval;
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
@@ -147,10 +157,11 @@ static void render_page_aux(const run_display_input_t *p_in)
     ssd1306_SetCursor(42, 48);
     ssd1306_WriteString((char *)(*(p_in->p_module_state) ? "Tx Err" : "Tx ok"), Font_6x8, White);
 
-    /* y=56: TOT */
+    /* y=56: TOT — 同样修正布局覆盖问题
+     * 流量串13char×6px=78px，从x=30到x=107；单位从x=108起，不再覆盖小数位 */
     ssd1306_SetCursor(0, 56); ssd1306_WriteString("TOT:", Font_6x8, White);
-    ssd1306_SetCursor(42, 56); ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_6x8, White);
-    ssd1306_SetCursor(96, 56);
+    ssd1306_SetCursor(30, 56); ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_6x8, White);
+    ssd1306_SetCursor(108, 56);
     ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_6x8, White);
 #endif
 }

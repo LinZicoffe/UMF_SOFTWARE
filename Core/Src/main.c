@@ -32,6 +32,8 @@
 #include "bsp_usart.h"
 #include "run_display.h"
 #include "ssd1306.h"
+#include "ssd1306_fonts.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -115,11 +117,12 @@ int main(void)
 
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
+
     MX_DMA_Init();
     MX_TIM1_Init();
     MX_USART1_UART_Init();
     MX_USART2_UART_Init();
-   
+
     MX_TIM3_Init();
     MX_TIM4_Init();
     /* USER CODE BEGIN 2 */
@@ -150,6 +153,7 @@ int main(void)
         /* USER CODE END WHILE */
 
         /* USER CODE BEGIN 3 */
+
         /* 按键事件 + 菜单处理 */
         {
             key_event_t evt = key_get_event();

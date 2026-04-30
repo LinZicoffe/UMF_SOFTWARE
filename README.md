@@ -342,6 +342,55 @@ S03 主菜单 (5 项)
   - >=1000: 无小数 (如 1234)，100~999: 1 位小数 (如 123.4)
   - 10~99: 2 位小数 (如 12.34)，0~9: 3 位小数 (如 1.234)
 
+### v1.5.0 (2026-04-30)
+
+*V4*（**100% 确认根因 — 决定性修复**）：
+- **修复问题**: OLED 显示 ░░░ 实心白方块（压力/温度值、`Tx Err` 中 ER、累积流量数字、°C 符号、菜单文字均出现实心方块替代字符）— 真正根因
+  - **诊断方法**: 通过测试 A/B/C/D/E/F 六阶段隔离测试逐步缩小问题范围
+    - A: 隔离 OLED 单次显示 → ✅ 正常 (排除 OLED/SPI/字体)
+    - B: 全外设+ISR / 主循环空 → ✅ 正常 (排除 ISR 干扰)
+    - C: 全业务逻辑 + 固定字符串 → ✅ 正常 (排除业务逻辑破坏显存)
+    - D: 全业务逻辑 + `run_display_render` → ✅ 正常 (排除动态渲染逻辑)
+    - **E: D + `menu_process` 调用 → ❌ 立即出现乱码 (锁定 bsp_menu.c 链接进来后产生影响)**
+    - **F: E + 禁用 Font_16x26 → ✅ 正常 (确认根因)**
+  - **根因**: `Font_16x26` 字体表 (~5KB) 在 `bsp_menu.c` 的全部代码 + 大量 const 数据 (菜单字符串、`c_num_desc[45]` 描述符表 ~15KB) 链接进 Flash 后，被 IAR 链接器推到了 64KB Flash 边界外的不存在地址。CPU 读取该地址返回 `0xFF`，字符被渲染成全白实心方块（与现象 100% 吻合）。
+  - **解释为什么测试 D 正常**: 测试 D 不引用 `menu_process`，链接器优化掉了 `bsp_menu.c` 的大部分代码和数据，`Font_16x26` 仍在 64KB 安全区内
+  - **解释为什么菜单也乱码**: 菜单本身使用的 `Font_6x8`、`Font_7x10`、`Font_11x18` 中至少一个也被推到 Flash 边界附近，部分字形落到不存在区域
+  - **修复**: `OLED/ssd1306_conf.h` 注释掉 `#define SSD1306_INCLUDE_FONT_16x26`，释放 ~5KB Flash；`BSP/run_display.c` 已有 `#elif Font_11x18` fallback，瞬时流量大字自动降级到 11×18 像素显示，无需修改其他代码
+  - **修改文件**:
+    - `OLED/ssd1306_conf.h` — 注释掉 `SSD1306_INCLUDE_FONT_16x26` 宏
+    - `Core/Src/main.c` — 移除所有 `OLED_TEST_MODE_X` 测试代码（保留诊断结论注释）
+  - **副作用**: S01 主页瞬时流量数字从 16×26 变小为 11×18 像素，但功能完全正常
+  - **后续待办**: 若需恢复 16×26 大字，可考虑：(a) 升级 MCU 到 STM32F103C8B 的 128KB 变体；(b) 精简 `bsp_menu.c` 中的 const 数据；(c) 禁用其他不必要字体 (如 `Font_7x10`，仅在备用场景使用)
+
+*V3*（之前的修复，已证实非根因，但作为防御性措施保留）：
+- **修复问题**: OLED 显示大量像素错乱（整屏 White 网格背景 + 字符反相）— 假设的 SPI 时序问题
+  - 用户实拍照片确认: 上电立即出现, 重启后仍存在, 位置完全固定, 菜单也乱码
+  - 通过 git bisect 定位: `eb6378e` (2026-04-28) 和 `1ca1819` (2026-04-27) 两次 commit 在 bit-bang SPI 中加入了大量 NOP 延时 (60+70 NOP/比特)，把 SPI 频率从 ~3MHz 降到 ~500kHz，单帧刷新时长从 ~3.5ms 增到 ~15ms
+  - 假设副作用: 慢速 SPI 期间 USART/TIM3 ISR 触发概率大幅增加，ISR 中 USART2_DE/DMA 等 GPIO 操作通过电源/地线寄生耦合到 SPI 信号线 (PB0=CLK 与 PA1=USART2_DE 在相邻引脚)，导致 SDA/SCL 出现毛刺，OLED 控制器收到错乱数据后 GDDRAM 被填入异常 pattern
+  - 修复: 回滚 bit-bang SPI 到原始无 NOP 快速版 (~3MHz)，同时在 `ssd1306_WriteCommand`/`ssd1306_WriteData` 中用 PRIMASK 屏蔽中断保护单次 SPI 传输完整性
+  - 修改文件: `OLED/ssd1306.c` — `bitbang_spi_write` 删除 130 NOP，`WriteCommand`/`WriteData` 添加 `__disable_irq()`/`__enable_irq()` 保护
+  - 影响: 单次 WriteCommand 屏蔽中断 ~3µs，单次 WriteData (128 字节) 屏蔽中断 ~440µs；UART_RX_LEN=150 缓冲足够覆盖 4800bps 下中断屏蔽期间的数据，无丢帧风险
+  - 验证: 烧录后用户反馈 "问题依旧存在"，证实非根因。但 PRIMASK 保护和快速 SPI 仍作为防御性改进保留
+
+*V2*：
+- **修复问题**: OLED 累积流量末位数字被单位字符覆盖（确定性布局 Bug，每帧必现）
+  - 根因: S01 主页 `flow_sum_buf` (13字符×6px=78px) 从 x=30 到 x=107，而单位串 (`total_unit_str`) 从 x=96 写入，导致最后 2 位小数 (x=96~107) 被 "m3"/"L"/"kg"/"t" 覆盖，用户看到单位字符替代数字
+  - S02 辅助页同等问题：原 x=42 起，单位在 x=96，覆盖字符 9-12
+  - 修复: S01 流量串改为从 x=24（结束于 x=101），单位从 x=102；S02 流量串保持 x=30，单位改为 x=108
+  - 修改文件: `BSP/run_display.c`，两处 Zone C 布局坐标调整
+
+*V1*：
+- **修复问题**: OLED 显示 ░░░ 乱码根因修复 — CSTACK 从 1024 字节扩大到 2048 字节
+  - 根因: ISR 在 snprintf 软浮点格式化最深调用栈时触发，MSP 越过 CSTACK 下边界踩踏 SSD1306_Buffer，导致特定屏幕区域帧缓冲损坏（状态栏 y=0 区域压力值/温度值/℃符号/"Tx Err"等处随机出现方块乱码）
+  - 修改文件: `EWARM/stm32f103xb_flash.icf`，`__ICFEDIT_size_cstack__` 0x400 → 0x800
+- **修复问题**: ICF 链接脚本 ROM 区域错误配置为 128KB，修正为实际 64KB
+  - 原错误: `__ICFEDIT_region_ROM_end__ = 0x0801FFFF`；修正为 `0x0800FFFF`
+  - 修改文件: `EWARM/stm32f103xb_flash.icf`
+- **修复问题**: `Uart1RxCounter`/`Uart2RxCounter` 未声明 `volatile`，ISR 写/主循环读存在编译器优化缓存风险
+  - 修改文件: `BSP/bsp_usart.c`，两个变量添加 `volatile` 修饰
+- **优化改进**: `run_display.c` 压力/温度渲染字符缓冲区从 16 扩大到 24 字节，并对压力/温度值进行钳位（press: -999.9~9999.9，temp: -99.9~999.9），防止异常浮点值导致 "C" 字符定位超出屏幕
+
 ### v1.4.0 (2026-04-23)
 
 - **param_storage → 运行时桥接**: 菜单参数真正接入系统运行

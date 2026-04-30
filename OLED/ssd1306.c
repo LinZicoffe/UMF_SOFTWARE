@@ -27,17 +27,15 @@ void ssd1306_WriteData(uint8_t* buffer, size_t buff_size) {
 /* 引脚映射: CLK=PB0, SDA=PA4, RES=PA5, DC=PA6, CS=PA7 (来自 main.h) */
 #include "main.h"  /* OLED_CLK_GPIO_Port, OLED_SDA_GPIO_Port 等引脚宏 */
 
-/* 72MHz 下 10 个 NOP ≈ 139ns。目标 SPI 500KHz = 2µs/bit = 144 cycles/bit */
-#define _NOP10() do { \
-    __NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP();__NOP(); \
-} while(0)
-
 /**
- * @brief  bit-bang SPI 写单字节 (MSB first), ~500KHz
+ * @brief  bit-bang SPI 写单字节 (MSB first), ~3MHz
  * @param  byte 待发送字节
- *
- * 每比特时序 (72MHz, 144 cycles = 2µs):
- *   SCL LOW → SDA 设置 → ~60 NOP 建立时间 → SCL HIGH → ~70 NOP 保持
+ * @note   v1.5.0 修正: 回滚 1ca1819/eb6378e 引入的 60+70 NOP 延时。
+ *         实测加 NOP 后慢速 SPI (15ms/帧) 增加了 ISR 触发概率 — ISR 中
+ *         USART2_DE/DMA 等 GPIO 操作通过电源地线寄生耦合到 SPI 线，
+ *         导致 OLED GDDRAM 接收异常 pattern (整屏白色网格、字符反相)。
+ *         恢复无 NOP 快速版 (~3.5ms/帧) 显著降低 ISR 干扰概率。
+ *         SSD1306 SPI 上限 10MHz，72MHz STM32 三次 GPIO 翻转约 ~3MHz，安全。
  */
 static void bitbang_spi_write(uint8_t byte)
 {
@@ -45,11 +43,7 @@ static void bitbang_spi_write(uint8_t byte)
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_RESET);  /* SCL LOW */
         HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin,
             (byte & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET);               /* SDA */
-        /* SDA → SCL↑ 建立时间 (~0.83µs) */
-        _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10();
-        HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_SET);    /* SCL HIGH */
-        /* SCL HIGH 保持时间 (~0.97µs) */
-        _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10(); _NOP10();
+        HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_SET);    /* SCL HIGH (上升沿采样) */
     }
 }
 
@@ -65,26 +59,32 @@ void ssd1306_Reset(void) {
     HAL_Delay(10);
 }
 
-/* 写命令: CS LOW → DC LOW → bit-bang 发送 → CS HIGH */
+/* 写命令: CS LOW → DC LOW → bit-bang 发送 → CS HIGH
+ * 用 PRIMASK 屏蔽中断，确保命令字节在传输期间 SDA/SCL 信号不受 ISR GPIO 操作干扰
+ * (耗时约 3µs，对 ISR 时延影响可忽略) */
 void ssd1306_WriteCommand(uint8_t byte) {
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(SSD1306_DC_Port, SSD1306_DC_Pin, GPIO_PIN_RESET);
     bitbang_spi_write(byte);
-    __NOP();
-    __NOP();
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_SET);
+    if (!primask) __enable_irq();
 }
 
-/* 写数据: CS LOW → DC HIGH → bit-bang 发送 N 字节 → CS HIGH */
+/* 写数据: CS LOW → DC HIGH → bit-bang 发送 N 字节 → CS HIGH
+ * 屏蔽中断保护整个数据块传输 (一次最多 128 字节，约 ~440µs)
+ * 4800bps 单字节 1.67ms，UART_RX_LEN=150 缓冲足够覆盖 ~250 字节，安全 */
 void ssd1306_WriteData(uint8_t* buffer, size_t buff_size) {
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_RESET);
-    __NOP();
-    __NOP();
     HAL_GPIO_WritePin(SSD1306_DC_Port, SSD1306_DC_Pin, GPIO_PIN_SET);
     for (size_t i = 0; i < buff_size; i++) {
         bitbang_spi_write(buffer[i]);
     }
     HAL_GPIO_WritePin(SSD1306_CS_Port, SSD1306_CS_Pin, GPIO_PIN_SET);
+    if (!primask) __enable_irq();
 }
 
 #elif defined(SSD1306_USE_SPI)

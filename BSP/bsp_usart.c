@@ -34,10 +34,10 @@ Uart_SendTypeDef Uart1SendDataType;
 Uart_SendTypeDef Uart2SendDataType;
 uint8_t          Uart1RxBuffer[UART_RX_LEN]; // 数据处理区域
 volatile uint8_t Uart1HaveData;
-uint8_t          Uart1RxCounter;
+volatile uint8_t Uart1RxCounter;
 uint8_t          Uart2RxBuffer[UART_RX_LEN]; // 数据处理区域
 volatile uint8_t Uart2HaveData;
-uint8_t          Uart2RxCounter;
+volatile uint8_t Uart2RxCounter;
 
 	Uart_SendfloatTypeDef InputBuffer[10]; /*input区域共40个字节*/
 uint64_t              Cumulativeflow;  // MODBUS ADDRESS 4X:40041
