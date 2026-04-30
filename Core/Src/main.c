@@ -169,6 +169,21 @@ int main(void)
             }
         }
 
+        /* OLED 抗干扰自愈: 周期性重发 SSD1306 配置命令
+         * 间隔由 param_get_oled_recovery_interval() 控制 (单位 100ms, 即 10×10ms)
+         * 0 = 禁用; 默认 50 = 5 秒
+         * 仅在菜单未激活时执行, 避免重初始化打断菜单交互 */
+        {
+            uint16_t recovery_interval = param_get_oled_recovery_interval();
+            if (recovery_interval > 0 &&
+                OledRecoveryTimeBase >= (uint16_t)(recovery_interval * 10) &&
+                !menu_is_active())
+            {
+                OledRecoveryTimeBase = 0;
+                ssd1306_RecoveryInit();
+            }
+        }
+
         /* 运行显示刷新 (200ms) */
         if ((DisplayTimeBase >= 20) && DisplayEnabled && !menu_is_active())
         {

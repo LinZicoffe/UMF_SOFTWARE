@@ -43,6 +43,9 @@ static void bitbang_spi_write(uint8_t byte)
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_RESET);  /* SCL LOW */
         HAL_GPIO_WritePin(OLED_SDA_GPIO_Port, OLED_SDA_Pin,
             (byte & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET);               /* SDA */
+        __NOP();  /* 数据建立时间 — 增强 SDA 稳定窗口, 改善信号完整性
+                   * 仅在 SCL HIGH 之前加一个 NOP, 不在 SCL HIGH 之后加,
+                   * 避免引入过长 SPI 周期导致 ISR 干扰 (~3MHz → ~2.5MHz, 安全) */
         HAL_GPIO_WritePin(OLED_CLK_GPIO_Port, OLED_CLK_Pin, GPIO_PIN_SET);    /* SCL HIGH (上升沿采样) */
     }
 }
@@ -139,15 +142,11 @@ SSD1306_Error_t ssd1306_FillBuffer(uint8_t* buf, uint32_t len) {
     return ret;
 }
 
-/* Initialize the oled screen */
-void ssd1306_Init(void) {
-    // Reset OLED
-    ssd1306_Reset();
-
-    // Wait for the screen to boot
-    HAL_Delay(100);
-
-    // Init OLED
+/* 静态函数: 发送完整 SSD1306 初始化命令序列 (不做硬件复位/延时/清屏)
+ * 抽离自 ssd1306_Init, 供 ssd1306_Init 和 ssd1306_RecoveryInit 共用,
+ * 确保两条恢复路径配置完全一致, 避免参数漂移. */
+static void ssd1306_send_init_commands(void)
+{
     ssd1306_SetDisplayOn(0); //display off
 
     ssd1306_WriteCommand(0x20); //Set Memory Addressing Mode
@@ -226,18 +225,44 @@ void ssd1306_Init(void) {
     ssd1306_WriteCommand(0x8D); //--set DC-DC enable
     ssd1306_WriteCommand(0x14); //
     ssd1306_SetDisplayOn(1); //--turn on SSD1306 panel
+}
+
+/* Initialize the oled screen */
+void ssd1306_Init(void) {
+    // Reset OLED
+    ssd1306_Reset();
+
+    // Wait for the screen to boot
+    HAL_Delay(100);
+
+    // Init OLED — 发送全套配置命令
+    ssd1306_send_init_commands();
 
     // Clear screen
     ssd1306_Fill(Black);
-    
+
     // Flush buffer to screen
     ssd1306_UpdateScreen();
-    
+
     // Set default values for screen object
     SSD1306.CurrentX = 0;
     SSD1306.CurrentY = 0;
-    
+
     SSD1306.Initialized = 1;
+}
+
+/* 抗干扰自愈: 周期性重新发送 SSD1306 完整配置命令
+ * 用于抵抗 SPI 线路上的瞬态干扰 / 接触不良 / EMI 导致的 OLED 控制器
+ * 全局状态错乱 (segment re-map 翻转、addressing mode 错乱、charge pump 失效等).
+ *
+ * 使用约定:
+ *   - 不做硬件复位 (无屏幕黑屏过程, 用户几乎无感)
+ *   - 不动 SSD1306_Buffer (帧缓冲)
+ *   - 不调用 UpdateScreen (下次主循环刷屏周期会自动覆盖整屏)
+ *   - 调用耗时约 1.5ms (28 条命令), 由 PRIMASK 保护原子性
+ * 推荐调用频率: 5 秒一次. 即使 OLED 状态被污染, 也能在 5 秒内自动恢复. */
+void ssd1306_RecoveryInit(void) {
+    ssd1306_send_init_commands();
 }
 
 /* Fill the whole screen with the given color */
@@ -247,6 +272,15 @@ void ssd1306_Fill(SSD1306_COLOR color) {
 
 /* Write the screenbuffer with changed to the screen */
 void ssd1306_UpdateScreen(void) {
+    /* 抗干扰加固: 每帧重发关键全局配置命令, 抵抗瞬态干扰污染 OLED 状态机.
+     * 单帧增加 ~5 条命令 (~150µs) 开销, 可忽略.
+     * 即使中间某次刷屏丢失这些命令, 下一帧 200ms 内即可自我修正. */
+    ssd1306_WriteCommand(0xAF);  /* Display ON */
+    ssd1306_WriteCommand(0x20);  /* Set Memory Addressing Mode */
+    ssd1306_WriteCommand(0x02);  /* Page Addressing Mode (与下方页地址命令一致) */
+    ssd1306_WriteCommand(0x8D);  /* Charge pump command */
+    ssd1306_WriteCommand(0x14);  /* Charge pump enable */
+
     // Write data to each page of RAM. Number of pages
     // depends on the screen height:
     //

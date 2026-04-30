@@ -43,7 +43,8 @@ extern TIM_HandleTypeDef htim4;
     extern volatile uint8_t  Timer3Uart2TimeBase10ms;
     extern volatile uint8_t  Timer3InitEnabled;
     extern volatile uint32_t Time3InitTimeBase;
-    extern volatile uint8_t DisplayTimeBase;
+    extern volatile uint8_t  DisplayTimeBase;
+    extern volatile uint16_t OledRecoveryTimeBase;
 /* USER CODE END Private defines */
 
 void MX_TIM1_Init(void);

@@ -33,6 +33,7 @@
 #define DEF_PWD_OPERATOR   0
 #define DEF_PWD_ENGINEER   123
 #define DEF_LANGUAGE       0
+#define DEF_OLED_RECOVERY_INTERVAL  50  /* 50 × 100ms = 5s, 0=禁用 */
 
 /* ===== 范围限制 ===== */
 #define METER_COEFF_MIN    0.001f
@@ -71,6 +72,8 @@
 #define REVERSE_TOTAL_MAX  9999999.0f
 #define MODBUS_ADDR_MIN    ((uint16_t)1)
 #define MODBUS_ADDR_MAX    ((uint16_t)247)
+#define OLED_RECOVERY_MIN  ((uint16_t)0)    /* 0 = 禁用自愈 */
+#define OLED_RECOVERY_MAX  ((uint16_t)600)  /* 600 × 100ms = 60s */
 
 /* Flash 页分配
  * Page 59: DAC 零点/满度 (由 main.h DAC_FLASH_PAGE_ADDR 定义)
@@ -185,15 +188,18 @@ static HAL_StatusTypeDef flush_medium_param_group(void)
     return (HAL_StatusTypeDef)WriteBufferFlash(5, PARAM_PAGE_MEDIUM_PARAM, buf);
 }
 
-/* 系统/累积组: [modbus_addr, baud_rate, total_factor, preset_total] */
+/* 系统/累积组: [modbus_addr, baud_rate, total_factor, preset_total, oled_recovery_interval]
+ * 注意: 第 5 字段 oled_recovery_interval 为新增, 旧 Flash 中此位置为擦除态 0xFFFFFFFF,
+ *       读取时若为 0xFFFFFFFFu 则使用默认值, 保持向前兼容. */
 static HAL_StatusTypeDef flush_system_group(void)
 {
-    uint32_t buf[4];
+    uint32_t buf[5];
     buf[0] = (uint32_t)s_params.modbus_addr;
     buf[1] = (uint32_t)s_params.baud_rate;
     buf[2] = float_to_u32(s_params.total_factor);
     buf[3] = float_to_u32(s_params.preset_total);
-    return (HAL_StatusTypeDef)WriteBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
+    buf[4] = (uint32_t)s_params.oled_recovery_interval;
+    return (HAL_StatusTypeDef)WriteBufferFlash(5, PARAM_PAGE_SYSTEM, buf);
 }
 
 /* ===== Public API ===== */
@@ -267,10 +273,11 @@ HAL_StatusTypeDef param_storage_init(void)
                                   clamp_f(u32_to_float(buf[4]), REYNOLDS_K_MIN, REYNOLDS_K_MAX);
     }
 
-    /* 读取系统/累积组 (Page 58) */
+    /* 读取系统/累积组 (Page 58)
+     * 扩展为 5 字段, 旧 Flash 中第 5 字段为 0xFFFFFFFFu, 自动 fallback 默认值 */
     {
-        uint32_t buf[4];
-        ReadBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
+        uint32_t buf[5];
+        ReadBufferFlash(5, PARAM_PAGE_SYSTEM, buf);
         s_params.modbus_addr  = (buf[0] == 0xFFFFFFFFu) ? DEF_MODBUS_ADDR :
                                 clamp_u16((uint16_t)buf[0], MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
         s_params.baud_rate    = (buf[1] == 0xFFFFFFFFu) ? DEF_BAUD_RATE :
@@ -279,6 +286,8 @@ HAL_StatusTypeDef param_storage_init(void)
                                 clamp_f(u32_to_float(buf[2]), TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
         s_params.preset_total = (buf[3] == 0xFFFFFFFFu) ? DEF_PRESET_TOTAL :
                                 clamp_f(u32_to_float(buf[3]), PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
+        s_params.oled_recovery_interval = (buf[4] == 0xFFFFFFFFu) ? DEF_OLED_RECOVERY_INTERVAL :
+                                clamp_u16((uint16_t)buf[4], OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
     }
 
     /* value_4ma / value_20ma: 由 main.c 在 Data_Init() 后从 Span 页同步 */
@@ -337,6 +346,9 @@ uint16_t param_get_modbus_addr(void) { return s_params.modbus_addr; }
 uint8_t  param_get_baud_rate(void)   { return s_params.baud_rate; }
 uint16_t param_get_pwd_engineer(void) { return s_params.pwd_engineer; }
 uint8_t  param_get_language(void)    { return s_params.language; }
+
+/* ===== Phase 5 OLED 自愈 getter ===== */
+uint16_t param_get_oled_recovery_interval(void) { return s_params.oled_recovery_interval; }
 
 /* ===== Phase 1 setter ===== */
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx)
@@ -504,6 +516,13 @@ HAL_StatusTypeDef param_set_language(uint8_t idx)
     return flush_output_group();
 }
 
+/* ===== Phase 5 OLED 自愈 setter ===== */
+HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val)
+{
+    s_params.oled_recovery_interval = clamp_u16(val, OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
+    return flush_system_group();
+}
+
 /* ===== 枚举字符串 ===== */
 const char *param_get_std_cond_str(uint8_t idx)
 {
@@ -562,6 +581,8 @@ HAL_StatusTypeDef param_storage_reset_defaults(void)
     param_set_modbus_addr(DEF_MODBUS_ADDR);
     param_set_baud_rate(DEF_BAUD_RATE);
     param_set_language(DEF_LANGUAGE);
+    /* Phase 5 OLED 自愈 */
+    param_set_oled_recovery_interval(DEF_OLED_RECOVERY_INTERVAL);
     /* 密码 (仅 RAM，不持久化) */
     s_params.pwd_operator = DEF_PWD_OPERATOR;
     s_params.pwd_engineer = DEF_PWD_ENGINEER;

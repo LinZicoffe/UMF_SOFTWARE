@@ -888,6 +888,12 @@ void Modbus_Function_6(void)
             }
             break;
         }
+
+        /* ---- 扩展参数: OLED 自愈重初始化间隔 (uint16, 单位 100ms, 立即生效) ---- */
+        case OledRecoveryAddr:
+            param_set_oled_recovery_interval(
+                ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
+            break;
     }
 
     /* FC06 标准响应: 回显请求帧 (地址字节使用接收帧原地址，避免通信地址变更后响应地址不匹配) */
@@ -1187,6 +1193,9 @@ void Modbus_Function_3(void)
                 case LanguageReg:
                     reg_val = (uint16_t)param_get_language();
                     break;
+                case OledRecoveryAddr:
+                    reg_val = param_get_oled_recovery_interval();
+                    break;
 
                 default: break;
             }
@@ -1383,7 +1392,7 @@ void Modbus_Function_10(void)
             }
         }
         /* 扩展配置参数区域 (寄存器 69~93) */
-        if ((startaddress >= StdCondAddr) && (startaddress <= LanguageReg))
+        if ((startaddress >= StdCondAddr) && (startaddress <= OledRecoveryAddr))
         {
             for (i = 0; i < MbBufferLen; i++)
             {
@@ -1508,6 +1517,12 @@ void Modbus_Function_10(void)
                         }
                         break;
                     }
+
+                    /* OLED 自愈重初始化间隔: 立即生效 */
+                    case OledRecoveryAddr:
+                        param_set_oled_recovery_interval(
+                            ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
+                        break;
 
                     default: break;
                 }

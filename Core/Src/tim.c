@@ -27,6 +27,7 @@ volatile uint8_t  DisplayTimeBase;
 volatile uint8_t  Timer3Uart2TimeBase10ms;
 volatile uint8_t  Timer3InitEnabled;
 volatile uint32_t Time3InitTimeBase;
+volatile uint16_t OledRecoveryTimeBase;  /* OLED 自愈计数器 (10ms 步长, 主循环到达 oled_recovery_interval 后清零) */
 /* USER CODE END 0 */
 
 TIM_HandleTypeDef htim1;
@@ -336,6 +337,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         DisplayTimeBase++;
         Timer3Uart1TimeBase10ms++;
         Timer3Uart2TimeBase10ms++;
+        OledRecoveryTimeBase++;
         if (Timer3InitEnabled)
             Time3InitTimeBase++;
     }

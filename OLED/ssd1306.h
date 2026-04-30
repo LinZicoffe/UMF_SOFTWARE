@@ -159,6 +159,10 @@ typedef struct {
 
 // Procedure definitions
 void ssd1306_Init(void);
+/* 抗干扰自愈: 周期性重发完整配置命令, 不做硬件复位/不动帧缓冲.
+ * 用于抵抗 SPI 瞬态干扰 / 接触不良 / EMI 导致的 OLED 控制器状态错乱.
+ * 由主循环根据 param_get_oled_recovery_interval() 周期性调用. */
+void ssd1306_RecoveryInit(void);
 void ssd1306_Fill(SSD1306_COLOR color);
 void ssd1306_UpdateScreen(void);
 void ssd1306_DrawPixel(uint8_t x, uint8_t y, SSD1306_COLOR color);

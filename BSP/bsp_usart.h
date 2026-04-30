@@ -96,16 +96,18 @@ extern uint64_t Cumulativeflow;
 #define GasTempAddr            83  /* 气参温度 gas_ref_temp (float, 2 regs, R/W) */
 #define ReynoldsAddr           85  /* 雷诺系数 reynolds_k (float, 2 regs, R/W) */
 
-/* 扩展参数寄存器地址 — 第三批 (系统参数, 寄存器 87~93) */
+/* 扩展参数寄存器地址 — 第三批 (系统参数, 寄存器 87~94) */
 #define TotalFactorAddr        87  /* 累积系数 total_factor (float, 2 regs, R/W) */
 #define PresetTotalAddr        89  /* 预设总量 preset_total (float, 2 regs, R/W) */
-#define CommAddrReg            91  /* 通信地址 modbus_addr (uint16, R) */
-#define BaudRateReg            92  /* 波特率 baud_rate (uint16, R) */
+#define CommAddrReg            91  /* 通信地址 modbus_addr (uint16, R/W) */
+#define BaudRateReg            92  /* 波特率 baud_rate (uint16, R/W) */
 #define LanguageReg            93  /* 语言 language (uint16, R/W) */
+#define OledRecoveryAddr       94  /* OLED 抗干扰自愈重初始化间隔 (uint16, R/W)
+                                    *   单位: 100ms; 0=禁用; 默认 50=5s; 最大 600=60s */
 
 /* 扩展参数区范围 */
 #define ExtParamStartAddr      60
-#define ExtParamEndAddr        93
+#define ExtParamEndAddr        94
 
 extern unsigned char strFlowSumBuf[20];
 extern unsigned char strFlowRateBuf[20];

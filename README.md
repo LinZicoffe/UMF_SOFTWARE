@@ -198,10 +198,13 @@ S03 主菜单 (5 项)
 | 40092 | 通信地址 modbus_addr | uint16 | FC03/FC06 |
 | 40093 | 波特率 baud_rate | uint16 | FC03/FC06 |
 | 40094 | 语言 language | uint16 | FC03/FC06 |
+| 40095 | OLED 自愈重初始化间隔 oled_recovery_interval | uint16 | FC03/FC06 |
 
 > **模拟参数**: 通过 FC06 写入模拟值并开启总开关 (40049=1) 后，OLED 显示和 DAC 输出将跟随模拟值。关闭总开关 (40049=0) 恢复真实传感器数据。模拟参数掉电不保存。
 
-> **扩展参数**: 寄存器 40061~40094 为扩展参数区。第一批 (40061~40069) 为只读运行数据；第二批 (40070~40091) 为读写配置参数，通过 param_storage 模块持久化；通信地址 (40092) 可通过 FC06/FC10 修改，写入后立即生效并持久化到 Flash（注意：修改后上位机需切换到新地址才能继续通信）；波特率 (40093) 可通过 FC06/FC10 修改，写入后延迟生效（确保响应在旧波特率下发送完成后再切换）并持久化到 Flash（注意：修改后上位机需切换到新波特率才能继续通信）。float 参数占用 2 个连续寄存器，FC06 分次写入时低位字先缓存、高位字到达后触发 setter 提交。
+> **扩展参数**: 寄存器 40061~40095 为扩展参数区。第一批 (40061~40069) 为只读运行数据；第二批 (40070~40091) 为读写配置参数，通过 param_storage 模块持久化；通信地址 (40092) 可通过 FC06/FC10 修改，写入后立即生效并持久化到 Flash（注意：修改后上位机需切换到新地址才能继续通信）；波特率 (40093) 可通过 FC06/FC10 修改，写入后延迟生效（确保响应在旧波特率下发送完成后再切换）并持久化到 Flash（注意：修改后上位机需切换到新波特率才能继续通信）。float 参数占用 2 个连续寄存器，FC06 分次写入时低位字先缓存、高位字到达后触发 setter 提交。
+
+> **OLED 自愈寄存器** (40095): 单位 100ms，范围 0~600，默认 50 (= 5 秒)。设为 0 时禁用周期性自愈；设为 N 时每 N×100ms 重发一次 SSD1306 完整配置命令，用于从 SPI 瞬态干扰 / 接触不良 / EMI 导致的 OLED 控制器全局状态错乱中恢复（如 segment re-map 翻转、charge pump 失效等）。重初始化不动帧缓冲，下次刷屏周期自动覆盖整屏，用户几乎无感（最多半帧闪烁）。修改后立即生效并持久化到 Flash。
 
 ## 资源预算
 
@@ -343,6 +346,25 @@ S03 主菜单 (5 项)
   - 10~99: 2 位小数 (如 12.34)，0~9: 3 位小数 (如 1.234)
 
 ### v1.5.0 (2026-04-30)
+
+*V5*（**OLED 抗干扰加固 — 三层自愈防护**）：
+- **新增功能**: OLED bit-bang SPI 抗干扰自愈机制，针对硬件 SPI 接触不良 / EMI / 瞬态干扰导致的显示错乱
+  - **第 1 层 — 周期性软重初始化**: 主循环每 N×100ms (默认 5 秒) 调用 `ssd1306_RecoveryInit()` 重发 SSD1306 全套 27 条配置命令；不做硬件复位、不动帧缓冲、不调 UpdateScreen，下次刷屏自动覆盖整屏；菜单激活时跳过避免打断交互
+  - **第 2 层 — 每帧关键命令重发**: `ssd1306_UpdateScreen` 入口加固 5 条关键全局命令 (Display ON / Memory Addressing Mode / Charge Pump Enable)，单帧增加 ~150µs 开销，每 200ms 自动修正 OLED 状态机
+  - **第 3 层 — SPI 信号完整性改善**: `bitbang_spi_write` 在 SDA 设置后 + SCL 上升沿前增加 1 个 `__NOP()` 延时，提升 OLED 数据建立时间窗口；SPI 频率从 ~3MHz 降到 ~2.5MHz (依然安全)
+- **新增 Modbus 寄存器**: 40095 (OledRecoveryAddr=94) — `oled_recovery_interval`
+  - 类型: uint16, 单位: 100ms, 范围: 0~600 (0=禁用, 1~600=0.1~60 秒)
+  - 默认值: 50 (= 5 秒)
+  - 读写: FC03 / FC06 / FC10
+  - 持久化: 是 (Flash Page 58, system_group 第 5 字段)
+  - 修改后立即生效, 上位机可通过 Modbus 远程调整
+- **Flash 持久化兼容性**: `flush_system_group` 从 4 字段扩展到 5 字段；旧 Flash 中第 5 字段为擦除态 0xFFFFFFFFu，初始化时自动 fallback 到默认值 50，保持向前兼容
+- **修改文件**:
+  - `OLED/ssd1306.c`/`OLED/ssd1306.h`: 新增 `ssd1306_RecoveryInit`，重构提取 `ssd1306_send_init_commands` 静态函数；`ssd1306_UpdateScreen` 加固关键命令；`bitbang_spi_write` 加 NOP
+  - `BSP/param_storage.c`/`BSP/param_storage.h`: `param_basic_t` 新增 `oled_recovery_interval` 字段；新增 `param_get/set_oled_recovery_interval`；`flush_system_group` 5 字段；`reset_defaults` 重置默认值
+  - `BSP/bsp_usart.c`/`BSP/bsp_usart.h`: 新增宏 `OledRecoveryAddr=94`，更新 `ExtParamEndAddr=94`；FC03/FC06/FC10 添加新寄存器处理
+  - `Core/Src/tim.c`/`Core/Inc/tim.h`: 新增 `volatile uint16_t OledRecoveryTimeBase` 计数器，TIM3 ISR 每 10ms 递增
+  - `Core/Src/main.c`: 主循环检测 `OledRecoveryTimeBase` 达到阈值后调用 `ssd1306_RecoveryInit` 并清零
 
 *V4*（**100% 确认根因 — 决定性修复**）：
 - **修复问题**: OLED 显示 ░░░ 实心白方块（压力/温度值、`Tx Err` 中 ER、累积流量数字、°C 符号、菜单文字均出现实心方块替代字符）— 真正根因

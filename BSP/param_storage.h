@@ -100,6 +100,13 @@ typedef struct {
     uint8_t  baud_rate;      /* baud_rate_t, 默认 4 (115200) */
     uint8_t  language;       /* language_t, 默认 0 (English) */
 
+    /* --- Phase 5: OLED 抗干扰自愈 --- */
+    uint16_t oled_recovery_interval; /* 重初始化间隔 (单位: 100ms)
+                                      *   0     = 禁用周期性自愈
+                                      *   50    = 5s (默认)
+                                      *   1~600 = 0.1~60 秒
+                                      * 上位机可通过 Modbus 寄存器 40095 读写 */
+
     /* --- 密码 --- */
     uint16_t pwd_operator;   /* 默认 0 */
     uint16_t pwd_engineer;   /* 默认 1234 */
@@ -151,6 +158,9 @@ uint8_t  param_get_baud_rate(void);
 uint16_t param_get_pwd_engineer(void);
 uint8_t  param_get_language(void);
 
+/* ===== Phase 5 OLED 自愈 getter ===== */
+uint16_t param_get_oled_recovery_interval(void);
+
 /* ===== Phase 1 setter ===== */
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx);
 HAL_StatusTypeDef param_set_meter_coeff(float val);
@@ -186,6 +196,9 @@ HAL_StatusTypeDef param_set_reverse_total(float val);
 HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr);
 HAL_StatusTypeDef param_set_baud_rate(uint8_t idx);
 HAL_StatusTypeDef param_set_language(uint8_t idx);
+
+/* ===== Phase 5 OLED 自愈 setter ===== */
+HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val);
 
 /* ===== 枚举字符串 (菜单渲染用) ===== */
 const char *param_get_std_cond_str(uint8_t idx);
