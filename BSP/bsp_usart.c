@@ -399,7 +399,7 @@ void Uart1_Receive_Function(void)
                     bcdBuf[0] = Uart1RxBuffer[16];
                     BCDtoStr(strFlowRate_2Buf, bcdBuf, 1);
                     insert_char(strFlowRate_2Buf, '.', 0);
-                    FlowRateValue.num = (FlowRateValue.num) / 100;
+                    FlowRateValue.num = BCDTOInt(flowrate) / 100.0f;
                 }
 
                 if (Uart1RxBuffer[24] == 0x0d)
