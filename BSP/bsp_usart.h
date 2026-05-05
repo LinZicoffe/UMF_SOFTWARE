@@ -105,9 +105,27 @@ extern uint64_t Cumulativeflow;
 #define OledRecoveryAddr       94  /* OLED 抗干扰自愈重初始化间隔 (uint16, R/W)
                                     *   单位: 100ms; 0=禁用; 默认 50=5s; 最大 600=60s */
 
+/* 扩展参数寄存器地址 — 第四批 (七点标定, 寄存器 95~123) */
+#define CalEnableAddr          95  /* 标定使能 (uint16, R/W) */
+#define CalK0Addr              96  /* k[0] (float, 2 regs, R/W) */
+#define CalK1Addr              98  /* k[1] (float, 2 regs, R/W) */
+#define CalK2Addr             100  /* k[2] (float, 2 regs, R/W) */
+#define CalK3Addr             102  /* k[3] (float, 2 regs, R/W) */
+#define CalK4Addr             104  /* k[4] (float, 2 regs, R/W) */
+#define CalK5Addr             106  /* k[5] (float, 2 regs, R/W) */
+#define CalK6Addr             108  /* k[6] (float, 2 regs, R/W) */
+#define CalPct0Addr           110  /* 标定点百分比 p[0], 默认 0.0 (float, 2 regs, R/W) */
+#define CalPct1Addr           112  /* p[1], 默认 3.0 */
+#define CalPct2Addr           114  /* p[2], 默认 10.0 */
+#define CalPct3Addr           116  /* p[3], 默认 25.0 */
+#define CalPct4Addr           118  /* p[4], 默认 50.0 */
+#define CalPct5Addr           120  /* p[5], 默认 75.0 */
+#define CalPct6Addr           122  /* p[6], 默认 100.0 */
+#define CalEndAddr            123  /* 标定区结束地址 */
+
 /* 扩展参数区范围 */
 #define ExtParamStartAddr      60
-#define ExtParamEndAddr        94
+#define ExtParamEndAddr       123
 
 extern unsigned char strFlowSumBuf[20];
 extern unsigned char strFlowRateBuf[20];

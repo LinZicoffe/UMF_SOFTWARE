@@ -106,6 +106,11 @@ typedef struct {
                                       *   1~600 = 0.1~60 秒
                                       * 上位机可通过 Modbus 寄存器 40095 读写 */
 
+    /* --- Phase 6: 七点流量标定 --- */
+    uint8_t  cal_enabled;     /* 标定使能, 默认 0 */
+    float    cal_k[7];        /* 标定修正系数, 默认 1.0 */
+    float    cal_pct[7];      /* 标定点百分比, 默认 [0,3,10,25,50,75,100] */
+
     /* --- 密码 --- */
     uint16_t pwd_operator;   /* 默认 0 */
     uint16_t pwd_engineer;   /* 默认 123 */
@@ -198,6 +203,16 @@ HAL_StatusTypeDef param_set_language(uint8_t idx);
 
 /* ===== Phase 5 OLED 自愈 setter ===== */
 HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val);
+
+/* ===== Phase 6 标定 getter ===== */
+uint8_t  param_get_cal_enabled(void);
+float    param_get_cal_k(uint8_t index);      /* index 0~6 */
+float    param_get_cal_pct(uint8_t index);    /* index 0~6 */
+
+/* ===== Phase 6 标定 setter ===== */
+HAL_StatusTypeDef param_set_cal_enabled(uint8_t val);
+HAL_StatusTypeDef param_set_cal_k(uint8_t index, float val);
+HAL_StatusTypeDef param_set_cal_pct(uint8_t index, float val);
 
 /* ===== 枚举字符串 (菜单渲染用) ===== */
 const char *param_get_std_cond_str(uint8_t idx);

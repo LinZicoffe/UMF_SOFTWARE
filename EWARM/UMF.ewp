@@ -1137,6 +1137,9 @@
             <file>
                 <name>$PROJ_DIR$\..\BSP\bsp_menu.c</name>
             </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\Src\cal_table.c</name>
+            </file>
         </group>
         <group>
             <name>EWARM</name>

@@ -87,6 +87,9 @@ static Uart_SendfloatTypeDef s_gas_temp_buf;
 static Uart_SendfloatTypeDef s_reynolds_buf;
 static Uart_SendfloatTypeDef s_total_factor_buf;
 static Uart_SendfloatTypeDef s_preset_total_buf;
+/* 标定参数 — FC06 分次写入缓冲 */
+static Uart_SendfloatTypeDef s_cal_k_buf[7];
+static Uart_SendfloatTypeDef s_cal_pct_buf[7];
 #define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
 #define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
 #define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
@@ -894,6 +897,34 @@ void Modbus_Function_6(void)
             param_set_oled_recovery_interval(
                 ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
             break;
+
+        /* ---- 七点标定: 标定使能 (uint16, 立即生效) ---- */
+        case CalEnableAddr:
+            param_set_cal_enabled((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
+            break;
+    }
+
+    /* 七点标定: k[0..6] 和 pct[0..6] (float, 分次写入, 范围判断) */
+    if (reg_addr >= CalK0Addr && reg_addr <= CalK6Addr + 1) {
+        uint8_t idx = (uint8_t)((reg_addr - CalK0Addr) / 2);
+        if ((reg_addr - CalK0Addr) % 2 == 0) {
+            s_cal_k_buf[idx].str[0] = Uart2RxBuffer[5];
+            s_cal_k_buf[idx].str[1] = Uart2RxBuffer[4];
+        } else {
+            s_cal_k_buf[idx].str[2] = Uart2RxBuffer[5];
+            s_cal_k_buf[idx].str[3] = Uart2RxBuffer[4];
+            param_set_cal_k(idx, s_cal_k_buf[idx].num);
+        }
+    } else if (reg_addr >= CalPct0Addr && reg_addr <= CalPct6Addr + 1) {
+        uint8_t idx = (uint8_t)((reg_addr - CalPct0Addr) / 2);
+        if ((reg_addr - CalPct0Addr) % 2 == 0) {
+            s_cal_pct_buf[idx].str[0] = Uart2RxBuffer[5];
+            s_cal_pct_buf[idx].str[1] = Uart2RxBuffer[4];
+        } else {
+            s_cal_pct_buf[idx].str[2] = Uart2RxBuffer[5];
+            s_cal_pct_buf[idx].str[3] = Uart2RxBuffer[4];
+            param_set_cal_pct(idx, s_cal_pct_buf[idx].num);
+        }
     }
 
     /* FC06 标准响应: 回显请求帧 (地址字节使用接收帧原地址，避免通信地址变更后响应地址不匹配) */
@@ -1196,6 +1227,43 @@ void Modbus_Function_3(void)
                 case OledRecoveryAddr:
                     reg_val = param_get_oled_recovery_interval();
                     break;
+
+                /* ---- 第四批: 七点标定参数 ---- */
+                case CalEnableAddr:
+                    reg_val = (uint16_t)param_get_cal_enabled();
+                    break;
+                case CalK0Addr:     case CalK0Addr + 1:
+                case CalK1Addr:     case CalK1Addr + 1:
+                case CalK2Addr:     case CalK2Addr + 1:
+                case CalK3Addr:     case CalK3Addr + 1:
+                case CalK4Addr:     case CalK4Addr + 1:
+                case CalK5Addr:     case CalK5Addr + 1:
+                case CalK6Addr:     case CalK6Addr + 1:
+                {
+                    uint8_t idx = (uint8_t)((startaddress + j - CalK0Addr) / 2);
+                    u.num = param_get_cal_k(idx);
+                    if ((startaddress + j - CalK0Addr) % 2 == 0)
+                        reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    else
+                        reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                }
+                case CalPct0Addr:    case CalPct0Addr + 1:
+                case CalPct1Addr:    case CalPct1Addr + 1:
+                case CalPct2Addr:    case CalPct2Addr + 1:
+                case CalPct3Addr:    case CalPct3Addr + 1:
+                case CalPct4Addr:    case CalPct4Addr + 1:
+                case CalPct5Addr:    case CalPct5Addr + 1:
+                case CalPct6Addr:    case CalPct6Addr + 1:
+                {
+                    uint8_t idx = (uint8_t)((startaddress + j - CalPct0Addr) / 2);
+                    u.num = param_get_cal_pct(idx);
+                    if ((startaddress + j - CalPct0Addr) % 2 == 0)
+                        reg_val = ((uint16_t)u.str[1] << 8) | u.str[0];
+                    else
+                        reg_val = ((uint16_t)u.str[3] << 8) | u.str[2];
+                    break;
+                }
 
                 default: break;
             }
@@ -1525,6 +1593,37 @@ void Modbus_Function_10(void)
                         break;
 
                     default: break;
+                }
+            }
+        }
+        /* 七点标定参数区域 (寄存器 95~123) — 紧凑范围判断 */
+        if ((startaddress >= CalEnableAddr) && (startaddress + MbBufferLen - 1 <= CalEndAddr))
+        {
+            for (i = 0; i < MbBufferLen; i++)
+            {
+                uint16_t fc10_addr = startaddress + i;
+                if (fc10_addr == CalEnableAddr) {
+                    param_set_cal_enabled((uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]));
+                } else if (fc10_addr >= CalK0Addr && fc10_addr <= CalK6Addr + 1) {
+                    uint8_t idx = (uint8_t)((fc10_addr - CalK0Addr) / 2);
+                    if ((fc10_addr - CalK0Addr) % 2 == 0) {
+                        s_cal_k_buf[idx].str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_cal_k_buf[idx].str[1] = Uart2RxBuffer[7 + 2 * i];
+                    } else {
+                        s_cal_k_buf[idx].str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_cal_k_buf[idx].str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_cal_k(idx, s_cal_k_buf[idx].num);
+                    }
+                } else if (fc10_addr >= CalPct0Addr && fc10_addr <= CalPct6Addr + 1) {
+                    uint8_t idx = (uint8_t)((fc10_addr - CalPct0Addr) / 2);
+                    if ((fc10_addr - CalPct0Addr) % 2 == 0) {
+                        s_cal_pct_buf[idx].str[0] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_cal_pct_buf[idx].str[1] = Uart2RxBuffer[7 + 2 * i];
+                    } else {
+                        s_cal_pct_buf[idx].str[2] = Uart2RxBuffer[7 + 2 * i + 1];
+                        s_cal_pct_buf[idx].str[3] = Uart2RxBuffer[7 + 2 * i];
+                        param_set_cal_pct(idx, s_cal_pct_buf[idx].num);
+                    }
                 }
             }
         }

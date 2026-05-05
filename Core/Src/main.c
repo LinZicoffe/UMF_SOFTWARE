@@ -33,6 +33,7 @@
 #include "run_display.h"
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
+#include "cal_table.h"
 
 /* USER CODE END Includes */
 
@@ -224,6 +225,9 @@ int main(void)
             float corrected_flow = effective_flow_rate()
                 * param_get_meter_coeff()
                 * param_get_medium_coeff();
+
+            /* 七点标定修正 */
+            corrected_flow = cal_correct_flow(corrected_flow);
 
             /* DAC 线性换算: corrected_flow → 4~20mA PWM */
             {

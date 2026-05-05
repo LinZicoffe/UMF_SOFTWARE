@@ -34,6 +34,15 @@
 #define DEF_PWD_ENGINEER   123
 #define DEF_LANGUAGE       0
 #define DEF_OLED_RECOVERY_INTERVAL  50  /* 50 × 100ms = 5s, 0=禁用 */
+#define DEF_CAL_ENABLED      0
+#define DEF_CAL_K            1.0f
+#define DEF_CAL_PCT_0        0.0f
+#define DEF_CAL_PCT_1        3.0f
+#define DEF_CAL_PCT_2        10.0f
+#define DEF_CAL_PCT_3        25.0f
+#define DEF_CAL_PCT_4        50.0f
+#define DEF_CAL_PCT_5        75.0f
+#define DEF_CAL_PCT_6        100.0f
 
 /* ===== 范围限制 ===== */
 #define METER_COEFF_MIN    0.001f
@@ -74,6 +83,11 @@
 #define MODBUS_ADDR_MAX    ((uint16_t)247)
 #define OLED_RECOVERY_MIN  ((uint16_t)0)    /* 0 = 禁用自愈 */
 #define OLED_RECOVERY_MAX  ((uint16_t)600)  /* 600 × 100ms = 60s */
+#define CAL_K_MIN          0.5f
+#define CAL_K_MAX          2.0f
+#define CAL_PCT_MIN        0.0f
+#define CAL_PCT_MAX        100.0f
+#define CAL_POINT_COUNT    7
 
 /* Flash 页分配
  * Page 59: DAC 零点/满度 (由 main.h DAC_FLASH_PAGE_ADDR 定义)
@@ -215,6 +229,22 @@ static HAL_StatusTypeDef flush_display_group(void)
     return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_DISPLAY, buf);
 }
 
+/* 仪表系数 + 标定合并组: [meter_coeff, cal_enabled, cal_k[0..6], cal_pct[0..6]]
+ * Page 61 Len=16, 每条记录 68 字节, fillcount=14.
+ * 所有 setter 共享此函数, 任一字段变更 → 重写整条记录. */
+static HAL_StatusTypeDef flush_meter_cal_group(void)
+{
+    uint32_t buf[16];
+    int i;
+    buf[0] = float_to_u32(s_params.meter_coeff);
+    buf[1] = (uint32_t)s_params.cal_enabled;
+    for (i = 0; i < CAL_POINT_COUNT; i++)
+        buf[2 + i] = float_to_u32(s_params.cal_k[i]);
+    for (i = 0; i < CAL_POINT_COUNT; i++)
+        buf[9 + i] = float_to_u32(s_params.cal_pct[i]);
+    return (HAL_StatusTypeDef)WriteBufferFlash(16, PARAM_PAGE_METER, buf);
+}
+
 /* ===== Public API ===== */
 
 HAL_StatusTypeDef param_storage_init(void)
@@ -236,10 +266,53 @@ HAL_StatusTypeDef param_storage_init(void)
         s_params.total_unit = clamp_u8(s_params.total_unit, 0, (uint8_t)(TOTAL_UNIT_COUNT - 1));
     }
 
-    /* 读取 Page 61: meter_coeff */
-    ReadBufferFlash(1, PARAM_PAGE_METER, &buf);
-    s_params.meter_coeff = (buf == 0xFFFFFFFF) ? DEF_METER_COEFF : u32_to_float(buf);
-    s_params.meter_coeff = clamp_f(s_params.meter_coeff, METER_COEFF_MIN, METER_COEFF_MAX);
+    /* 读取 Page 61: 仪表系数 + 标定合并组 (Len=16)
+     * 向后兼容: 先尝试新格式 (Len=16), 若全空则尝试旧格式 (Len=1) 并迁移 */
+    {
+        static const float s_def_pct[CAL_POINT_COUNT] =
+            { DEF_CAL_PCT_0, DEF_CAL_PCT_1, DEF_CAL_PCT_2, DEF_CAL_PCT_3,
+              DEF_CAL_PCT_4, DEF_CAL_PCT_5, DEF_CAL_PCT_6 };
+        uint32_t new_buf[16];
+        int i;
+        int all_empty = 1;
+
+        ReadBufferFlash(16, PARAM_PAGE_METER, new_buf);
+
+        /* 检查是否全空 (未写入过新格式) */
+        for (i = 0; i < 16; i++) {
+            if (new_buf[i] != 0xFFFFFFFFu) { all_empty = 0; break; }
+        }
+
+        if (!all_empty) {
+            /* 新格式有效, 直接解析 */
+            s_params.meter_coeff = clamp_f(u32_to_float(new_buf[0]), METER_COEFF_MIN, METER_COEFF_MAX);
+            s_params.cal_enabled = (new_buf[1] == 0xFFFFFFFFu) ? DEF_CAL_ENABLED :
+                                   (uint8_t)(new_buf[1] & 1);
+            for (i = 0; i < CAL_POINT_COUNT; i++) {
+                s_params.cal_k[i] = (new_buf[2 + i] == 0xFFFFFFFFu) ? DEF_CAL_K :
+                                    clamp_f(u32_to_float(new_buf[2 + i]), CAL_K_MIN, CAL_K_MAX);
+            }
+            for (i = 0; i < CAL_POINT_COUNT; i++) {
+                s_params.cal_pct[i] = (new_buf[9 + i] == 0xFFFFFFFFu) ? s_def_pct[i] :
+                                      clamp_f(u32_to_float(new_buf[9 + i]), CAL_PCT_MIN, CAL_PCT_MAX);
+            }
+        } else {
+            /* 尝试旧格式: Len=1, 仅 meter_coeff */
+            uint32_t old_buf;
+            ReadBufferFlash(1, PARAM_PAGE_METER, &old_buf);
+            if (old_buf != 0xFFFFFFFFu) {
+                /* 旧格式有效: 保留 meter_coeff, 标定使用默认值 */
+                s_params.meter_coeff = clamp_f(u32_to_float(old_buf), METER_COEFF_MIN, METER_COEFF_MAX);
+            } else {
+                s_params.meter_coeff = DEF_METER_COEFF;
+            }
+            s_params.cal_enabled = DEF_CAL_ENABLED;
+            for (i = 0; i < CAL_POINT_COUNT; i++) s_params.cal_k[i] = DEF_CAL_K;
+            for (i = 0; i < CAL_POINT_COUNT; i++) s_params.cal_pct[i] = s_def_pct[i];
+            /* 写入新格式完成迁移 */
+            flush_meter_cal_group();
+        }
+    }
 
     /* 读取 Page 62: medium_coeff */
     ReadBufferFlash(1, PARAM_PAGE_MEDIUM, &buf);
@@ -401,10 +474,8 @@ HAL_StatusTypeDef param_set_total_unit(uint8_t idx)
 
 HAL_StatusTypeDef param_set_meter_coeff(float val)
 {
-    uint32_t buf;
     s_params.meter_coeff = clamp_f(val, METER_COEFF_MIN, METER_COEFF_MAX);
-    buf = float_to_u32(s_params.meter_coeff);
-    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_METER, &buf);
+    return flush_meter_cal_group();
 }
 
 HAL_StatusTypeDef param_set_medium_coeff(float val)
@@ -541,6 +612,32 @@ HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val)
     return flush_display_group();
 }
 
+/* ===== Phase 6 标定 getter ===== */
+uint8_t  param_get_cal_enabled(void)          { return s_params.cal_enabled; }
+float    param_get_cal_k(uint8_t index)       { return (index < CAL_POINT_COUNT) ? s_params.cal_k[index] : 1.0f; }
+float    param_get_cal_pct(uint8_t index)     { return (index < CAL_POINT_COUNT) ? s_params.cal_pct[index] : 0.0f; }
+
+/* ===== Phase 6 标定 setter ===== */
+HAL_StatusTypeDef param_set_cal_enabled(uint8_t val)
+{
+    s_params.cal_enabled = (val) ? 1 : 0;
+    return flush_meter_cal_group();
+}
+
+HAL_StatusTypeDef param_set_cal_k(uint8_t index, float val)
+{
+    if (index >= CAL_POINT_COUNT) return HAL_ERROR;
+    s_params.cal_k[index] = clamp_f(val, CAL_K_MIN, CAL_K_MAX);
+    return flush_meter_cal_group();
+}
+
+HAL_StatusTypeDef param_set_cal_pct(uint8_t index, float val)
+{
+    if (index >= CAL_POINT_COUNT) return HAL_ERROR;
+    s_params.cal_pct[index] = clamp_f(val, CAL_PCT_MIN, CAL_PCT_MAX);
+    return flush_meter_cal_group();
+}
+
 /* ===== 枚举字符串 ===== */
 const char *param_get_std_cond_str(uint8_t idx)
 {
@@ -601,6 +698,19 @@ HAL_StatusTypeDef param_storage_reset_defaults(void)
     param_set_language(DEF_LANGUAGE);
     /* Phase 5 OLED 自愈 */
     param_set_oled_recovery_interval(DEF_OLED_RECOVERY_INTERVAL);
+    /* Phase 6 标定 */
+    {
+        int i;
+        s_params.cal_enabled = DEF_CAL_ENABLED;
+        for (i = 0; i < CAL_POINT_COUNT; i++) s_params.cal_k[i] = DEF_CAL_K;
+        s_params.cal_pct[0] = DEF_CAL_PCT_0;
+        s_params.cal_pct[1] = DEF_CAL_PCT_1;
+        s_params.cal_pct[2] = DEF_CAL_PCT_2;
+        s_params.cal_pct[3] = DEF_CAL_PCT_3;
+        s_params.cal_pct[4] = DEF_CAL_PCT_4;
+        s_params.cal_pct[5] = DEF_CAL_PCT_5;
+        s_params.cal_pct[6] = DEF_CAL_PCT_6;
+    }
     /* 密码 (仅 RAM，不持久化) */
     s_params.pwd_operator = DEF_PWD_OPERATOR;
     s_params.pwd_engineer = DEF_PWD_ENGINEER;
@@ -609,5 +719,6 @@ HAL_StatusTypeDef param_storage_reset_defaults(void)
     flush_output_group();
     flush_medium_param_group();
     flush_system_group();
+    flush_meter_cal_group();
     return HAL_OK;
 }

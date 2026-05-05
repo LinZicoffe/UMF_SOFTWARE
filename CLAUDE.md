@@ -139,7 +139,8 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | `bsp_usart.c/h` | USART1 流量模组通信（BCD 协议）+ USART2 Modbus RTU 从站（功能码 01/03/04/05/06/10） |
 | `bsp_menu.c/h` | 菜单系统 — 5 层导航栈 + 6 种界面模式 + 两级密码门控，覆盖 S03~S44 共 42 屏幕 |
 | `key.c/h` | 事件驱动按键驱动 — 10ms 扫描、消抖、组合键检测，返回 `key_event_t` |
-| `param_storage.c/h` | 参数存储 — RAM 缓存 + Flash 持久化，getter/setter API，27 个参数字段 |
+| `param_storage.c/h` | 参数存储 — RAM 缓存 + Flash 持久化，getter/setter API，含七点标定参数 |
+| `cal_table.c/h` | 七点流量标定 — 分段线性插值，Modbus 寄存器 95~123 读写标定系数和标定点百分比 |
 | `run_display.c/h` | 运行显示 — S01 主界面 + S02 辅助变量页，通过 `run_display_input_t` 接收 const 数据 |
 | `eeprom.c/h` | Flash 模拟 EEPROM（底层读写，Page 54~63 参数存储） |
 | `mystring.c/h` | 字符串工具函数（Int2String, insert_char） |
@@ -215,7 +216,7 @@ ssd1306_SetContrast(value);                        // 对比度
 | Page 58 | `0x0800E800` | 系统/累积组 (地址/波特率/总量系数/预设) |
 | Page 59 | `0x0800EC00` | DAC 校准值 (DacZero, DacFull: uint16_t × 2) |
 | Page 60 | `0x0800F000` | 基本参数 (标况/流量单位/累积单位) |
-| Page 61 | `0x0800F400` | 仪表系数 (meter_coeff) |
+| Page 61 | `0x0800F400` | 仪表系数 + 七点标定合并组 (Len=16: meter_coeff, cal_enabled, cal_k[7], cal_pct[7]) |
 | Page 62 | `0x0800F800` | 介质系数 (medium_coeff) |
 | Page 63 | `0x0800FC00` | Span 量程 (SpanLo, SpanHi: uint32_t × 2) |
 
