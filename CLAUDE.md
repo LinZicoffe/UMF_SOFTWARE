@@ -137,11 +137,11 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | 文件 | 职责 |
 |------|------|
 | `bsp_usart.c/h` | USART1 流量模组通信（BCD 协议）+ USART2 Modbus RTU 从站（功能码 01/03/04/05/06/10） |
-| `bsp_menu.c/h` | 菜单系统 — 5 层导航栈 + 6 种界面模式 + 两级密码门控，覆盖 S03~S43 共 41 屏幕 |
+| `bsp_menu.c/h` | 菜单系统 — 5 层导航栈 + 6 种界面模式 + 两级密码门控，覆盖 S03~S44 共 42 屏幕 |
 | `key.c/h` | 事件驱动按键驱动 — 10ms 扫描、消抖、组合键检测，返回 `key_event_t` |
-| `param_storage.c/h` | 参数存储 — RAM 缓存 + Flash 持久化，getter/setter API，25 个参数字段 |
+| `param_storage.c/h` | 参数存储 — RAM 缓存 + Flash 持久化，getter/setter API，27 个参数字段 |
 | `run_display.c/h` | 运行显示 — S01 主界面 + S02 辅助变量页，通过 `run_display_input_t` 接收 const 数据 |
-| `eeprom.c/h` | Flash 模拟 EEPROM（底层读写，Page 63 Span / Page 64 DAC） |
+| `eeprom.c/h` | Flash 模拟 EEPROM（底层读写，Page 54~63 参数存储） |
 | `mystring.c/h` | 字符串工具函数（Int2String, insert_char） |
 
 ### OLED 层 (`OLED/`)
@@ -208,11 +208,18 @@ ssd1306_SetContrast(value);                        // 对比度
 
 | Flash 页 | 地址 | 用途 |
 |----------|------|------|
-| Page 60 | `0x0800F000` | param_storage 参数存储 |
-| Page 63 | `0x0800FC00` | Span 值（SpanLo, SpanHi: uint32_t × 2） |
-| Page 64 | `0x08010000` | DAC 值（DacZero, DacFull: uint16_t × 2） |
+| Page 54 | `0x0800D800` | OLED 抗干扰自愈间隔 (oled_recovery_interval) |
+| Page 55 | `0x0800DC00` | 信号处理组 (小信号切除/滤波/阻尼) |
+| Page 56 | `0x0800E000` | 输出配置组 (频率/脉冲当量/语言) |
+| Page 57 | `0x0800E400` | 介质工况组 (密度/管径/气压/气温/雷诺) |
+| Page 58 | `0x0800E800` | 系统/累积组 (地址/波特率/总量系数/预设) |
+| Page 59 | `0x0800EC00` | DAC 校准值 (DacZero, DacFull: uint16_t × 2) |
+| Page 60 | `0x0800F000` | 基本参数 (标况/流量单位/累积单位) |
+| Page 61 | `0x0800F400` | 仪表系数 (meter_coeff) |
+| Page 62 | `0x0800F800` | 介质系数 (medium_coeff) |
+| Page 63 | `0x0800FC00` | Span 量程 (SpanLo, SpanHi: uint32_t × 2) |
 
-**注意**: STM32F103C8 只有 64KB Flash（Page 0~63）。`ADDR_FLASH_PAGE_64` = `0x08010000` 超出 64KB 范围，实际使用的是 Flash 尾部的 Page 63 作为有效数据存储。写入前确认地址范围。
+**注意**: ICF 链接器将代码区限制在 Page 0~53 (54KB)，Page 54~63 (10KB) 严格保留为 Flash-EEPROM 参数存储区，互不干扰。写入前确认地址范围。
 
 ## 菜单系统架构
 
@@ -246,7 +253,7 @@ S03 主菜单 (5 项)
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash | 64KB | ~45KB | ~19KB |
+| Flash | 64KB (代码区 54KB + EEPROM 10KB) | ~50KB | ~4KB 代码增长空间 |
 | RAM | 20KB | ~7KB | ~13KB |
 
 ## 模块设计原则（强制）

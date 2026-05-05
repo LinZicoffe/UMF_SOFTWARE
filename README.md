@@ -208,7 +208,8 @@ S03 主菜单 (5 项)
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash | 64KB | ~45KB | ~19KB |
+| Flash (代码区) | 54KB (Page 0~53) | ~50KB | ~4KB |
+| Flash (EEPROM) | 10KB (Page 54~63) | 参数存储 | — |
 | RAM | 20KB | ~7KB | ~13KB |
 
 ## 调试指南
@@ -343,7 +344,7 @@ S03 主菜单 (5 项)
   - >=1000: 无小数 (如 1234)，100~999: 1 位小数 (如 123.4)
   - 10~99: 2 位小数 (如 12.34)，0~9: 3 位小数 (如 1.234)
 
-### v1.5.0 (2026-04-30)
+### v1.5.1 (2026-04-30)
 
 *V7*（**Flash 紧急瘦身 — 移除中文双语界面**）：
 - **背景**: V6 修复 HardFault 时把 ROM 区域限制到 Page 0~53 (54KB)，但当前固件代码 + const 数据已膨胀到 ~58.6KB（链接器报 `Lp011 unable to allocate 0xea3e bytes in 0xd714 region`），缺口 4.8KB
@@ -395,9 +396,8 @@ S03 主菜单 (5 项)
   - 类型: uint16, 单位: 100ms, 范围: 0~600 (0=禁用, 1~600=0.1~60 秒)
   - 默认值: 50 (= 5 秒)
   - 读写: FC03 / FC06 / FC10
-  - 持久化: 是 (Flash Page 58, system_group 第 5 字段)
+  - 持久化: 是 (Flash **Page 54** `PARAM_PAGE_DISPLAY`，独立成页；注: V6 从原 Page 58 system_group 迁出)
   - 修改后立即生效, 上位机可通过 Modbus 远程调整
-- **Flash 持久化**: `oled_recovery_interval` 持久化到 Flash **Page 54** (`PARAM_PAGE_DISPLAY`，独立成页) — 注: V6 修复了原方案
 - **修改文件**:
   - `OLED/ssd1306.c`/`OLED/ssd1306.h`: 新增 `ssd1306_RecoveryInit`，重构提取 `ssd1306_send_init_commands` 静态函数；`ssd1306_UpdateScreen` 加固关键命令；`bitbang_spi_write` 加 NOP
   - `BSP/param_storage.c`/`BSP/param_storage.h`: `param_basic_t` 新增 `oled_recovery_interval` 字段；新增 `param_get/set_oled_recovery_interval`；新增 `PARAM_PAGE_DISPLAY` + `flush_display_group`；`reset_defaults` 重置默认值

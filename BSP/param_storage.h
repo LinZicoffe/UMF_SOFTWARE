@@ -108,7 +108,7 @@ typedef struct {
 
     /* --- 密码 --- */
     uint16_t pwd_operator;   /* 默认 0 */
-    uint16_t pwd_engineer;   /* 默认 1234 */
+    uint16_t pwd_engineer;   /* 默认 123 */
 } param_basic_t;
 
 /* ===== 初始化/批量读取 ===== */
