@@ -260,6 +260,7 @@ S03 主菜单 (5 项)
 - **Flash 存储扩展**: Page 61 从 Len=1 扩展为 Len=16 合并组 (meter_coeff + cal_enabled + cal_k[7] + cal_pct[7])
 - **向后兼容迁移**: 旧固件升级自动迁移 Page 61 数据，保留原有 meter_coeff 值
 - **新增 cal_table 模块**: 分段线性插值算法，集成到 DAC 信号链
+- **BCD 流量解析修复**: `0x0b` 帧类型瞬时流量错误使用上一帧残留值，修正为从当前帧 BCD 数据计算 (`BCDTOInt(flowrate) / 100.0f`)
 
 ### v1.9.2 (2026-04-29)
 
