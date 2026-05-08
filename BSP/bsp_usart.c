@@ -14,6 +14,28 @@
 
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
+
+/* ── 瞬时流量去极值滤波 (累加器法, 去最大值) ────────── */
+#define FLOW_FILTER_N   10  /* 累计样本数 */
+static float    s_flt_sum;
+static float    s_flt_max;
+static uint8_t  s_flt_count;
+static float    s_flt_result;
+static uint8_t  s_flt_valid;
+
+/* 流量值恒 >= 0, s_flt_max 零初始化后首个正样本自动更新, 无需 init */
+static void flow_filter_feed(float sample)
+{
+    s_flt_sum += sample;
+    if (sample > s_flt_max) s_flt_max = sample;
+    if (++s_flt_count >= FLOW_FILTER_N) {
+        s_flt_result = (s_flt_sum - s_flt_max) / (float)(FLOW_FILTER_N - 1);
+        s_flt_valid = 1;
+        s_flt_sum = 0.0f; s_flt_count = 0; s_flt_max = 0.0f;
+    }
+}
+
+/* ── 常量定义 ─────────────────────────────────────── */
 #define PREAMBLE             0XFE
 #define STARTCMD             0X11
 #define EOFbyte              0x16
@@ -392,6 +414,7 @@ void Uart1_Receive_Function(void)
                     BCDtoStr(strFlowRate_2Buf, bcdBuf, 1);
                     insert_char(strFlowRate_2Buf, '.', 0);
                     FlowRateValue.num = BCDTOInt(flowrate);
+                    flow_filter_feed(FlowRateValue.num);
                 }
                 if (Uart1RxBuffer[15] == 0x0b)
                 {
@@ -400,6 +423,7 @@ void Uart1_Receive_Function(void)
                     BCDtoStr(strFlowRate_2Buf, bcdBuf, 1);
                     insert_char(strFlowRate_2Buf, '.', 0);
                     FlowRateValue.num = BCDTOInt(flowrate) / 100.0f;
+                    flow_filter_feed(FlowRateValue.num);
                 }
 
                 if (Uart1RxBuffer[24] == 0x0d)
@@ -1741,7 +1765,9 @@ uint8_t sim_is_active(void)
 
 float effective_flow_rate(void)
 {
-    return sim_is_active() ? s_sim_flow_rate.num : FlowRateValue.num;
+    if (sim_is_active()) return s_sim_flow_rate.num;
+    if (s_flt_valid) return s_flt_result;
+    return FlowRateValue.num;
 }
 
 float effective_temperature(void)

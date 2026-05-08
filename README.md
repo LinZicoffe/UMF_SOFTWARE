@@ -99,11 +99,12 @@ UFL-1A 模组 ──USART1 (DMA+IDLE)──→ BCD 解码 ──→ 流量/温�
                               ┌─────────────────────┤
                               ↓                     ↓
                     信号链处理                   USART2 (Modbus)
-                    ×仪表系数×介质系数            RTU 从站 站号2
-                    ×七点标定修正                     │
-                              │                      ↓
-                              ↓              SSD1306 OLED 显示
-                    TIM1/TIM4 PWM           (200ms 刷新)
+                    去最大值滤波(N=10)            RTU 从站 站号2
+                    ×仪表系数×介质系数                 │
+                    ×七点标定修正                      ↓
+                              │              SSD1306 OLED 显示
+                              ↓              (200ms 刷新)
+                    TIM1/TIM4 PWM
                     → 4~20mA DAC
 ```
 
@@ -247,6 +248,16 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v2.1.0 (2026-05-08)
+
+- **瞬时流量异常值过滤**: 新增累加器去最大值滤波，去除 BCD 通信毛刺导致的异常 spike
+  - 算法: 收集 10 个连续样本，扣除最大值后取 9 个样本均值 (Accumulator Trimmed Mean, K=1)
+  - 实现方式: static 内联于 `bsp_usart.c`，无独立模块文件，RAM 14 字节，Flash ~120 字节
+  - 喂入点: `Uart1_Receive_Function()` 两处 BCD 解析后调用 `flow_filter_feed()`
+  - 输出点: `effective_flow_rate()` 优先返回滤波值，未就绪时回退原始值
+  - 模拟流量路径不受影响
+  - 设计文档: `DESIGN_flow_outlier_filter.md`
 
 ### v2.0.0 (2026-05-05)
 
