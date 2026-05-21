@@ -10,7 +10,7 @@
 /* Private includes ----------------------------------------------------------*/
 #include "bsp_usart.h"
 #include "param_storage.h"
-#include <stdio.h>
+#include "mystring.h"
 
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
@@ -1752,8 +1752,10 @@ static void sim_format_cumulative(float value)
     uint32_t scaled    = (uint32_t)(value * 1000.0f + 0.5f);
     uint32_t int_part  = scaled / 1000;
     uint32_t frac_part = scaled % 1000;
-    snprintf((char *)s_sim_flow_sum_buf, sizeof(s_sim_flow_sum_buf),
-             "%09lu.%03lu", (unsigned long)int_part, (unsigned long)frac_part);
+    u32_to_str_pad(int_part, (char *)s_sim_flow_sum_buf, 9);
+    s_sim_flow_sum_buf[9] = '.';
+    u32_to_str_pad(frac_part, (char *)s_sim_flow_sum_buf + 10, 3);
+    s_sim_flow_sum_buf[13] = '\0';
 }
 
 /**

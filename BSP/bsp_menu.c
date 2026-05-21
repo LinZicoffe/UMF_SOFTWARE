@@ -17,7 +17,7 @@
 #include "ssd1306_fonts.h"
 #include "main.h"
 #include "ftoa.h"
-#include <stdio.h>
+#include "mystring.h"
 #include <string.h>
 
 /* ===== 模式枚举 ===== */
@@ -506,7 +506,16 @@ static void render_list(nav_frame_t *f)
         if (is_sel) {
             ssd1306_FillRectangle(0, y, 127, (uint8_t)(y + 8), White);
         }
-        snprintf(buf, sizeof(buf), " %-18s", items[idx].label);
+        {
+            const char *label = items[idx].label;
+            buf[0] = ' ';
+            uint8_t llen = (uint8_t)strlen(label);
+            if (llen > 18) llen = 18;
+            (void)memcpy(buf + 1, label, llen);
+            uint8_t total = 1 + llen;
+            while (total < 19) buf[total++] = ' ';
+            buf[total] = '\0';
+        }
         ssd1306_SetCursor(2, y);
         ssd1306_WriteString(buf, Font_6x8, is_sel ? Black : White);
     }
@@ -611,7 +620,12 @@ static void render_enum(nav_frame_t *f)
         if (is_sel) {
             ssd1306_FillRectangle(0, y, 127, (uint8_t)(y + 17), White);
         }
-        snprintf(buf, sizeof(buf), " %s", opts[start + i]);
+        {
+            const char *opt = opts[start + i];
+            buf[0] = ' ';
+            buf[1] = '\0';
+            (void)strncat(buf, opt, sizeof(buf) - 2);
+        }
         ssd1306_SetCursor(2, y);
         ssd1306_WriteString(buf, Font_11x18, is_sel ? Black : White);
     }
@@ -703,13 +717,15 @@ static void render_readonly(nav_frame_t *f)
 
     /* 设备信息特殊处理 */
     if (f->screen_id == SCR_DEVICE_INFO) {
-        snprintf(buf, sizeof(buf), "Addr:%d", param_get_modbus_addr());
+        strcpy(buf, "Addr:");
+        Int2String((int)param_get_modbus_addr(), buf + 5);
         ssd1306_SetCursor(0, 20);
         ssd1306_WriteString(buf, Font_6x8, White);
 
         {
             const char * const *baud_strs = param_get_baud_rate_strings();
-            snprintf(buf, sizeof(buf), "Baud:%s", baud_strs[param_get_baud_rate()]);
+            strcpy(buf, "Baud:");
+            (void)strncat(buf, baud_strs[param_get_baud_rate()], sizeof(buf) - 6);
             ssd1306_SetCursor(0, 30);
             ssd1306_WriteString(buf, Font_6x8, White);
         }

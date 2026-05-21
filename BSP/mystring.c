@@ -64,4 +64,28 @@ void insert_char(unsigned char *str, unsigned char ch, int pos)
     str[pos] = ch;
 }
 
+void u32_to_str_pad(uint32_t val, char *buf, uint8_t width)
+{
+    char tmp[11];
+    uint8_t i = 0;
+
+    if (val == 0) {
+        tmp[i++] = '0';
+    } else {
+        while (val > 0) {
+            tmp[i++] = (char)('0' + (val % 10));
+            val /= 10;
+        }
+    }
+    /* 补前导零 */
+    while (i < width) tmp[i++] = '0';
+
+    /* 反转到 buf */
+    uint8_t j;
+    for (j = 0; j < i; j++) {
+        buf[j] = tmp[i - 1 - j];
+    }
+    buf[j] = '\0';
+}
+
 
