@@ -66,7 +66,7 @@ UMF_SOFTWARE/
 │   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Flash 持久化, 含七点标定参数)
 │   ├── cal_table.c/h             # 七点流量标定 (分段线性插值, Modbus 95~123)
 │   ├── eeprom.c/h                # Flash 模拟 EEPROM (磨损均衡日志结构, Page 54~63)
-│   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char)
+│   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char, u32_to_str_pad)
 │   └── run_display.c/h           # 运行显示模块 (S01 主界面 + S02 辅助页)
 ├── OLED/                          # OLED 显示驱动
 │   ├── ssd1306_conf.h            # afiskon 库硬件配置 (引脚/字体/SPI 模式)
@@ -230,7 +230,7 @@ S03 主菜单 (5 项)
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash (代码区) | 54KB (Page 0~53) | ~50KB | ~4KB |
+| Flash (代码区) | 54KB (Page 0~53) | ~42KB | ~12KB |
 | Flash (EEPROM) | 10KB (Page 54~63) | 参数存储 | — |
 | RAM | 20KB | ~7KB | ~13KB |
 
@@ -248,6 +248,21 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v2.2.0 (2026-05-21)
+
+- **Flash 优化: 移除 snprintf/stdio 运行时依赖**
+  - `bsp_menu.c` 和 `bsp_usart.c` 全部移除 `#include <stdio.h>` 和 `snprintf` 调用
+  - 5 处 `snprintf` 替换为手写字符串操作 (`strcpy`/`strcat`/`Int2String`/`u32_to_str_pad`)
+  - 完全移除 `xprintfsmall_nomb.o` (1,265B) 等 printf 运行时库
+  - ro code 从 35,462 降至 34,225，净节省 **1,237 字节**
+  - 不影响 Modbus 读写和 DAC 输出，仅修改 OLED 显示渲染路径
+- **ftoa 轻量 float→string 模块**: 纯整数运算替代 `printf %f`，节省 3~8KB Flash
+  - `run_display.c` 和 `bsp_menu.c` 中所有 `%.1f`/`%.2f`/`%.3f`/`%.*f` 格式化均已替换为 `ftoa()`
+- **UART 配置扩展**: 波特率 → packed `uart_config` (bit[2:0]=baud, bit[4:3]=parity, bit[5]=stop)
+  - 新增 2400 波特率选项
+  - Modbus 寄存器 40093 写入完整 uart_config，向后兼容旧固件 baud_rate 值
+  - `bsp_usart2_apply_baud_rate()` → `bsp_usart2_apply_uart_config()` 支持校验位/停止位
 
 ### v2.1.0 (2026-05-08)
 
