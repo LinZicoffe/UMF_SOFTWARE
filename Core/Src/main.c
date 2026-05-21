@@ -132,7 +132,7 @@ int main(void)
     //DacValue = 800;
     param_storage_init();
     bsp_usart_set_modbus_addr(param_get_modbus_addr());
-    bsp_usart2_apply_baud_rate(param_get_baud_rate());
+    bsp_usart2_apply_uart_config(param_get_uart_config());
     /* 将 Flash Page 63 真实值同步到 param_storage (方向: SpanValueBuf → param) */
     param_set_value_4ma(SpanLoValue);
     param_set_value_20ma(SpanHiValue);

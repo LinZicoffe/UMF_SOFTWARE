@@ -7,7 +7,7 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "bmp.h"
-#include <stdio.h>
+#include "ftoa.h"
 #include <string.h>
 
 /* 内部状态 — 全部 static */
@@ -39,7 +39,8 @@ static void render_page_main(const run_display_input_t *p_in)
     press = p_in->p_pressure->num;
     if (press > 9999.9f)  press = 9999.9f;
     if (press < -999.9f)  press = -999.9f;
-    snprintf(buf, sizeof(buf), "%.1fKPa", press);
+    ftoa(press, 1, buf, sizeof(buf));
+    strcat(buf, "KPa");
     ssd1306_SetCursor(0, 0);
     ssd1306_WriteString(buf, Font_6x8, White);
 
@@ -47,7 +48,7 @@ static void render_page_main(const run_display_input_t *p_in)
     temp = p_in->p_temperature->num;
     if (temp > 999.9f)  temp = 999.9f;
     if (temp < -99.9f)  temp = -99.9f;
-    snprintf(buf, sizeof(buf), "%.1f", temp);
+    ftoa(temp, 1, buf, sizeof(buf));
     ssd1306_SetCursor(48, 0);
     ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_DrawBitmap(48 + (uint8_t)strlen(buf) * 6, 0, BMP, 6, 8, White);
@@ -64,13 +65,13 @@ static void render_page_main(const run_display_input_t *p_in)
     rate = p_in->p_flow_rate->num;
     if (rate < 0.0f) rate = 0.0f;
     if (rate >= 1000.0f) {
-        snprintf(buf, sizeof(buf), "%.0f", rate);
+        ftoa(rate, 0, buf, sizeof(buf));
     } else if (rate >= 100.0f) {
-        snprintf(buf, sizeof(buf), "%.1f", rate);
+        ftoa(rate, 1, buf, sizeof(buf));
     } else if (rate >= 10.0f) {
-        snprintf(buf, sizeof(buf), "%.2f", rate);
+        ftoa(rate, 2, buf, sizeof(buf));
     } else {
-        snprintf(buf, sizeof(buf), "%.3f", rate);
+        ftoa(rate, 3, buf, sizeof(buf));
     }
     len = (uint8_t)strlen(buf);
     x_start = (uint8_t)((128 - len * 16) / 2);
@@ -81,13 +82,13 @@ static void render_page_main(const run_display_input_t *p_in)
     rate = p_in->p_flow_rate->num;
     if (rate < 0.0f) rate = 0.0f;
     if (rate >= 1000.0f) {
-        snprintf(buf, sizeof(buf), "%.0f", rate);
+        ftoa(rate, 0, buf, sizeof(buf));
     } else if (rate >= 100.0f) {
-        snprintf(buf, sizeof(buf), "%.1f", rate);
+        ftoa(rate, 1, buf, sizeof(buf));
     } else if (rate >= 10.0f) {
-        snprintf(buf, sizeof(buf), "%.2f", rate);
+        ftoa(rate, 2, buf, sizeof(buf));
     } else {
-        snprintf(buf, sizeof(buf), "%.3f", rate);
+        ftoa(rate, 3, buf, sizeof(buf));
     }
     len = (uint8_t)strlen(buf);
     x_start = (uint8_t)((128 - len * 11) / 2);
@@ -118,7 +119,7 @@ static void render_page_aux(const run_display_input_t *p_in)
 #ifdef SSD1306_INCLUDE_FONT_6x8
     /* y=0: Flow */
     ssd1306_SetCursor(0, 0);  ssd1306_WriteString("Flow:", Font_6x8, White);
-    snprintf(buf, sizeof(buf), "%.1f", p_in->p_flow_rate->num);
+    ftoa(p_in->p_flow_rate->num, 1, buf, sizeof(buf));
     ssd1306_SetCursor(42, 0); ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_SetCursor(90, 0);
     ssd1306_WriteString((char *)p_in->p_flow_unit_str, Font_6x8, White);
@@ -130,20 +131,20 @@ static void render_page_aux(const run_display_input_t *p_in)
 
     /* y=16: Temp */
     ssd1306_SetCursor(0, 16); ssd1306_WriteString("Temp:", Font_6x8, White);
-    snprintf(buf, sizeof(buf), "%.1f", p_in->p_temperature->num);
+    ftoa(p_in->p_temperature->num, 1, buf, sizeof(buf));
     ssd1306_SetCursor(42, 16); ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_SetCursor(90, 16); ssd1306_WriteString("C", Font_6x8, White);
 
     /* y=24: Press */
     ssd1306_SetCursor(0, 24); ssd1306_WriteString("Press:", Font_6x8, White);
-    snprintf(buf, sizeof(buf), "%.1f", p_in->p_pressure->num);
+    ftoa(p_in->p_pressure->num, 1, buf, sizeof(buf));
     ssd1306_SetCursor(42, 24); ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_SetCursor(90, 24); ssd1306_WriteString("KPa", Font_6x8, White);
 
     /* y=32: Cur (4~20mA) */
     ssd1306_SetCursor(0, 32); ssd1306_WriteString("Cur:", Font_6x8, White);
     fval = dac_to_mA(*(p_in->p_dac_value), p_in->p_dac_buf);
-    snprintf(buf, sizeof(buf), "%.1f", fval);
+    ftoa(fval, 1, buf, sizeof(buf));
     ssd1306_SetCursor(42, 32); ssd1306_WriteString(buf, Font_6x8, White);
     ssd1306_SetCursor(90, 32); ssd1306_WriteString("mA", Font_6x8, White);
 

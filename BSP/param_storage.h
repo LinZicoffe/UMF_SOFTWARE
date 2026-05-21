@@ -50,9 +50,35 @@ typedef enum {
 /* 波特率 */
 typedef enum {
     BAUD_4800 = 0, BAUD_9600 = 1, BAUD_19200 = 2,
-    BAUD_38400 = 3, BAUD_115200 = 4,
+    BAUD_38400 = 3, BAUD_115200 = 4, BAUD_2400 = 5,
     BAUD_RATE_COUNT
 } baud_rate_t;
+
+/* 校验位 */
+typedef enum {
+    PARITY_NONE = 0,
+    PARITY_ODD  = 1,
+    PARITY_EVEN = 2,
+    PARITY_COUNT
+} parity_t;
+
+/* 停止位 */
+typedef enum {
+    STOPBITS_1 = 0,
+    STOPBITS_2 = 1,
+    STOPBITS_COUNT
+} stopbits_t;
+
+/* uart_config 位域编解码
+ *   bit 2:0 = 波特率索引 (baud_rate_t)
+ *   bit 4:3 = 校验位 (parity_t)
+ *   bit 5   = 停止位 (stopbits_t)
+ *   bit 7:6 = 保留 (0) */
+static inline uint8_t uart_cfg_baud(uint8_t cfg)   { return cfg & 0x07u; }
+static inline uint8_t uart_cfg_parity(uint8_t cfg) { return (cfg >> 3) & 0x03u; }
+static inline uint8_t uart_cfg_stop(uint8_t cfg)   { return (cfg >> 5) & 0x01u; }
+static inline uint8_t uart_cfg_pack(uint8_t baud, uint8_t par, uint8_t stop)
+    { return (uint8_t)((stop << 5) | (par << 3) | baud); }
 
 /* 语言 (仅英文, 中文已移除以释放 Flash; 保留枚举以兼容菜单 SCR_LANGUAGE 屏幕) */
 typedef enum {
@@ -96,7 +122,7 @@ typedef struct {
 
     /* --- Phase 4: 系统 --- */
     uint16_t modbus_addr;    /* 1~247, 默认 2 */
-    uint8_t  baud_rate;      /* baud_rate_t, 默认 4 (115200) */
+    uint8_t  uart_config;    /* packed: [5]=stop [4:3]=parity [2:0]=baud, 默认 4 (115200,8N1) */
     uint8_t  language;       /* language_t, 默认 0 (English) */
 
     /* --- Phase 5: OLED 抗干扰自愈 --- */
@@ -158,7 +184,8 @@ float    param_get_reverse_total(void);
 
 /* ===== Phase 4 系统 getter ===== */
 uint16_t param_get_modbus_addr(void);
-uint8_t  param_get_baud_rate(void);
+uint8_t  param_get_baud_rate(void);     /* 返回波特率索引 (uart_config bit[2:0]) */
+uint8_t  param_get_uart_config(void);   /* 返回完整 packed uart_config */
 uint16_t param_get_pwd_engineer(void);
 uint8_t  param_get_language(void);
 
@@ -198,7 +225,8 @@ HAL_StatusTypeDef param_set_reverse_total(float val);
 
 /* ===== Phase 4 系统 setter ===== */
 HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr);
-HAL_StatusTypeDef param_set_baud_rate(uint8_t idx);
+HAL_StatusTypeDef param_set_baud_rate(uint8_t idx);      /* 仅修改波特率索引, 保留校验/停止位 */
+HAL_StatusTypeDef param_set_uart_config(uint8_t cfg);    /* 设置完整 packed uart_config (Modbus 用) */
 HAL_StatusTypeDef param_set_language(uint8_t idx);
 
 /* ===== Phase 5 OLED 自愈 setter ===== */

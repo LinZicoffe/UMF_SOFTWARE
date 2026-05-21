@@ -16,6 +16,7 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "main.h"
+#include "ftoa.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -379,7 +380,7 @@ static void save_enum_idx(screen_t scr, uint8_t idx)
     case SCR_FLOW_UNIT:   param_set_flow_unit(idx);   break;
     case SCR_TOTAL_UNIT:  param_set_total_unit(idx);  break;
     case SCR_PULSE_EQUIV: param_set_pulse_equiv(idx); break;
-    case SCR_BAUD_RATE:   param_set_baud_rate(idx); bsp_usart2_apply_baud_rate(idx); break;
+    case SCR_BAUD_RATE:   param_set_baud_rate(idx); bsp_usart2_apply_uart_config(param_get_uart_config()); break;
     case SCR_LANGUAGE:    param_set_language(idx);    break;
     default: break;
     }
@@ -531,7 +532,7 @@ static void render_numeric(nav_frame_t *f)
 
 #ifdef SSD1306_INCLUDE_FONT_11x18
     /* 数值居中 */
-    snprintf(buf, sizeof(buf), "%.*f", (int)desc->decimals, f->edit_val);
+    ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
     {
         uint8_t x_start = (uint8_t)((128 - strlen(buf) * 11) / 2);
         ssd1306_SetCursor(x_start, 14);
@@ -541,14 +542,27 @@ static void render_numeric(nav_frame_t *f)
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
     /* 范围提示 */
-    snprintf(buf, sizeof(buf), "Min:%.*f Max:%.*f",
-             (int)desc->decimals, desc->min_val,
-             (int)desc->decimals, desc->max_val);
+    {
+        char tmp[16];
+        strcpy(buf, "Min:");
+        ftoa(desc->min_val, desc->decimals, tmp, sizeof(tmp));
+        strcat(buf, tmp);
+        strcat(buf, " Max:");
+        ftoa(desc->max_val, desc->decimals, tmp, sizeof(tmp));
+        strcat(buf, tmp);
+    }
     ssd1306_SetCursor(0, 40);
     ssd1306_WriteString(buf, Font_6x8, White);
 
     /* 步长 + 单位 */
-    snprintf(buf, sizeof(buf), "Step:%.*f %s", (int)desc->decimals, desc->step, desc->unit);
+    {
+        char tmp[16];
+        strcpy(buf, "Step:");
+        ftoa(desc->step, desc->decimals, tmp, sizeof(tmp));
+        strcat(buf, tmp);
+        strcat(buf, " ");
+        strcat(buf, desc->unit);
+    }
     ssd1306_SetCursor(0, 50);
     ssd1306_WriteString(buf, Font_6x8, White);
 #endif
@@ -671,7 +685,7 @@ static void render_readonly(nav_frame_t *f)
 
 #ifdef SSD1306_INCLUDE_FONT_11x18
     /* 数值居中 */
-    snprintf(buf, sizeof(buf), "%.1f", val);
+    ftoa(val, 1, buf, sizeof(buf));
     {
         uint8_t x_start = (uint8_t)((128 - strlen(buf) * 11) / 2);
         ssd1306_SetCursor(x_start, 14);

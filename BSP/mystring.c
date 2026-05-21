@@ -10,7 +10,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "mystring.h"
 #include "main.h"
-#include <stdio.h>
+#include "ftoa.h"
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
@@ -49,10 +49,10 @@ char *leftShift(char *str, int num)
             return NULL;
     }
 }
-char* Int2String(int num,char *str)//10进制 
+char* Int2String(int num,char *str)//10进制
 {
-    sprintf(str, "%d", num);
-     return str;//返回转换后的值 
+    itoa_local(num, str);
+     return str;//返回转换后的值
 }
 void insert_char(unsigned char *str, unsigned char ch, int pos)
 {
