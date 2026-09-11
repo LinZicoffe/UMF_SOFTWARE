@@ -75,19 +75,11 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | TIM3 | 1 | 0 | 10ms 系统定时 |
 | USART2 | 1 | 2 | Modbus RTU 通信 |
 
-## 硬件引脚分配
+## 硬件引脚关键信息
 
-### OLED 显示屏 (SPI bit-bang)
+> 完整引脚分配见 README.md "硬件平台" 章节。
 
-| 引脚 | 宏名 | 功能 |
-|------|------|------|
-| PB0 | `OLED_CLK` | SPI 时钟 (SCL) |
-| PA4 | `OLED_SDA` | SPI 数据 (MOSI/SDA) |
-| PA5 | `OLED_RES` | 硬件复位 |
-| PA6 | `OLED_DC` | 数据/命令选择 |
-| PA7 | `OLED_CS` | 片选 |
-
-### 按键输入
+### 按键输入（命名反转，易踩坑）
 
 | 引脚 | 代码宏名 | 实际面板功能 |
 |------|----------|-------------|
@@ -95,40 +87,18 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | PA11 | K_ADD (K3) | 向上选择 (KEY_UP) |
 | PA0 | K_SUB (K2) | 确认/进入 (KEY_ENTER) |
 
-**组合键**: K1+K2 = 返回上一级 (KEY_BACK), K1+K2+K3 = 返回主界面 (KEY_HOME)
+**组合键**: K1+K2 = KEY_BACK, K1+K2+K3 = KEY_HOME
 
 > **注意**: CubeMX 引脚命名与面板接线相反 — `K_MOV` 实为向下键，`K_SUB` 实为确认键。
 
-### 串口通信
+### 其他关键引脚
 
-| 引脚 | 功能 | 说明 |
+| 引脚 | 功能 | 备注 |
 |------|------|------|
-| PA9 | USART1_TX | 流量模组通信 |
-| PA10 | USART1_RX | 流量模组通信 |
-| PA2 | USART2_TX | Modbus RTU 从站 |
-| PA3 | USART2_RX | Modbus RTU 从站 |
-| PA1 | USART2_DE | RS-485 方向控制 |
-
-### DAC 输出 (PWM)
-
-| 引脚 | 定时器 | 说明 |
-|------|--------|------|
-| PA8 | TIM1_CH1 | DAC 高字节输出 |
-| PB6 | TIM4_CH1 | DAC 低字节输出 |
-
-### 调试接口
-
-| 引脚 | 功能 |
-|------|------|
-| PA13 | SWDIO (SWD 调试数据) |
-| PA14 | SWCLK (SWD 调试时钟) |
-
-### 其他
-
-| 引脚 | 功能 |
-|------|------|
-| PB5 | 电源指示 LED |
-| PD0/PD1 | 外部晶振 (HSE) |
+| PA1 | USART2_DE | RS-485 方向控制，发送前置高、发送后拉低 |
+| PA8 | TIM1_CH1 | DAC 高字节 PWM（高级定时器，需 `__HAL_TIM_MOE_ENABLE()`） |
+| PB6 | TIM4_CH1 | DAC 低字节 PWM |
+| PB5 | 电源指示 LED | |
 
 ## 模块结构
 
@@ -140,10 +110,11 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | `bsp_menu.c/h` | 菜单系统 — 5 层导航栈 + 6 种界面模式 + 两级密码门控，覆盖 S03~S44 共 42 屏幕 |
 | `key.c/h` | 事件驱动按键驱动 — 10ms 扫描、消抖、组合键检测，返回 `key_event_t` |
 | `param_storage.c/h` | 参数存储 — RAM 缓存 + Flash 持久化，getter/setter API，含七点标定参数 |
-| `cal_table.c/h` | 七点流量标定 — 分段线性插值，Modbus 寄存器 95~123 读写标定系数和标定点百分比 |
+| `cal_table.c/h` | 七点流量标定 — 分段线性插值，Modbus 寄存器 95~123 读写标定系数和标定点百分比（**注意**: `.c` 在 `BSP/Src/`，其余 BSP 文件均在 `BSP/` 根目录） |
 | `run_display.c/h` | 运行显示 — S01 主界面 + S02 辅助变量页，通过 `run_display_input_t` 接收 const 数据 |
 | `eeprom.c/h` | Flash 模拟 EEPROM（底层读写，Page 54~63 参数存储） |
 | `mystring.c/h` | 字符串工具函数（Int2String, insert_char） |
+| `ftoa.c/h` | 轻量 float→string 转换，纯整数运算，替代 printf %f 节省 3~8KB Flash |
 
 ### OLED 层 (`OLED/`)
 
@@ -151,7 +122,7 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 |------|------|
 | `ssd1306.c/h` | **当前驱动** — afiskon/stm32-ssd1306 库，bit-bang SPI 适配 |
 | `ssd1306_conf.h` | 硬件配置 — 引脚映射、字体选择、bit-bang SPI 标志 |
-| `ssd1306_fonts.c/h` | 字体数据 — Font_6x8 + Font_7x10 + Font_11x18（禁用 Font_16x26 节省 Flash） |
+| `ssd1306_fonts.c/h` | 字体数据 — Font_6x8 + Font_11x18（Font_7x10 和 Font_16x26 已禁用节省 Flash） |
 | `oled.c/h` | 旧版驱动（保留未删），已不参与编译 |
 | `oledfont.h` | 旧版字体数据（保留未删） |
 | `bmp.h` | 位图资源（温度度符号图标） |
@@ -173,7 +144,7 @@ ssd1306_InvertRectangle(x1, y1, x2, y2);          // 反色矩形
 ssd1306_SetContrast(value);                        // 对比度
 ```
 
-可用字体: `Font_6x8`, `Font_7x10`, `Font_11x18`
+可用字体: `Font_6x8`, `Font_11x18`
 
 ## 关键数据变量
 
@@ -250,11 +221,68 @@ S03 主菜单 (5 项)
 
 详细屏幕规格见 `UMF_HMI_Screen_Design.md`。
 
+## 信号链处理流水线
+
+```
+UFL-1A BCD 原始流量
+  → 累加器去极值滤波 (N=10, K=1, 扣除最大值取均值)
+  → × 仪表系数 (meter_coeff)
+  → × 介质系数 (medium_coeff)
+  → × 七点标定分段线性插值 (cal_table, 可选)
+  → 小信号切除判定 (< 量程下限 + 量程×N% 时输出零点)
+  → DAC 线性插值 ConvertFunc() → clamp [DacZero, DacFull]
+  → TIM1/TIM4 PWM 输出
+```
+
+- **滤波**: `flow_filter_feed()` 为 `bsp_usart.c` 内 static 函数（非独立模块文件），在 `Uart1_Receive_Function()` BCD 解析后调用；`effective_flow_rate()` 为 public API，优先返回滤波值，未就绪时回退原始值
+- **标定**: `cal_table` 模块，7 个标定点默认百分比 [0, 3, 10, 25, 50, 75, 100]，修正系数 k[0..6] 范围 0.5~2.0
+- **模拟模式**: Modbus 寄存器 40049=1 时，模拟流量/温度/累积值替代真实传感器数据（仅 RAM，掉电重置）
+
+## BCD 协议基础
+
+USART1 与 UFL-1A 通信，自定义 BCD 编码：
+- **帧最小长度**: 28 字节（<28 直接丢弃）
+- **帧类型**: `0x0b`（瞬时流量）等，`0x0b` 帧从当前帧 BCD 数据计算（非残留值）
+- **解析变量**: `FlowRateValue`（瞬时流量）、`FlowTemperature`、`FlowPressure` — 均为 `Uart_SendfloatTypeDef` union
+- **接收**: DMA + IDLE 中断，缓冲区 `UART_RX_LEN=150`
+
+## Modbus 寄存器映射 (USART2, 地址可配)
+
+| 地址 | 功能 | 数据类型 | 读写 |
+|------|------|----------|------|
+| 40001~40002 | 瞬时流量 | float | FC03 |
+| 40003~40004 | 温度 | float | FC03 |
+| 40005~40006 | 压力 | float | FC03 |
+| 40021~40022 | DAC 零点/满度 | uint16 | FC03/FC10 |
+| 40023~40024 | 流量单位/累积单位 | uint16 | FC03/FC06 |
+| 40025~40028 | 仪表系数/介质系数 | float | FC03/FC06 |
+| 40029~40030 | 小信号切除 | float | FC03/FC06 |
+| 40031~40032 | 量程低/高值 | float | FC03/FC10 |
+| 40041~40044 | 累积流量 | uint64 | FC03 |
+| 40049 | 模拟总开关 | uint16 | FC03/FC06 |
+| 40051~40056 | 模拟流量/温度/累积 | float | FC03/FC06 |
+| 40061 | 通信状态 ModuleState | uint16 | FC03 |
+| 40062~40067 | 正向/反向/净累积 | float | FC03 |
+| 40068~40069 | 实时 4-20mA 电流 | float | FC03 |
+| 40070~40091 | 扩展配置参数 | uint16/float | FC03/FC06/FC10 |
+| 40092 | 通信地址 | uint16 | FC03/FC06 |
+| 40093 | 波特率 | uint16 | FC03/FC06 |
+| 40094 | 语言 | uint16 | FC03/FC06 |
+| 40095 | OLED 自愈间隔 (×100ms) | uint16 | FC03/FC06 |
+| 40096 | 标定使能 | uint16 | FC03/FC06 |
+| 40097~40109 | 标定修正系数 k[0..6] | float | FC03/FC06 |
+| 40110~40123 | 标定点百分比 pct[0..6] | float | FC03/FC06 |
+
+> **float 参数**: 占 2 个连续寄存器，FC06 分次写入时低位字先缓存、高位字到达后触发 setter。
+> **地址/波特率**: FC06 写入后立即（地址）或延迟（波特率）生效并持久化到 Flash。上位机需切换到新参数才能继续通信。
+> **扩展参数详情**: 寄存器 40070~40091 包括标准工况、滤波、阻尼、频率、脉冲当量、密度、管径、气压、气温、雷诺、累积系数、预设总量。详见 README.md 完整表。
+
 ## 资源预算
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash | 64KB (代码区 54KB + EEPROM 10KB) | ~50KB | ~4KB 代码增长空间 |
+| Flash (代码区) | 54KB (Page 0~53) | ~34KB | ~20KB |
+| Flash (EEPROM) | 10KB (Page 54~63) | 参数存储 | — |
 | RAM | 20KB | ~7KB | ~13KB |
 
 ## 模块设计原则（强制）
@@ -432,127 +460,20 @@ s_current_page = (run_page_t)((s_current_page + 1) % RUN_PAGE_COUNT);
 5. Warning[Pe550]→ 删除未使用变量，或用 (void) 消除
 ```
 
-## 已安装 Skill 及使用方法
+## 已安装 Skill
 
-项目已安装以下嵌入式开发 Skill（位于 `.claude/skills/`），在对话中通过自然语言或 `/skill名` 调用。
+项目已安装以下嵌入式开发 Skill（`.claude/skills/`），通过自然语言或斜杠命令调用。详细参数请用 `--help` 查看。
 
-### build-iar — IAR 命令行编译
+| Skill | 触发方式 | 依赖 | 说明 |
+|-------|---------|------|------|
+| `build-iar` | `/build-iar` 或 "用 IAR 编译" | 无 | IAR 命令行编译，工程文件 `EWARM/UMF.ewp` |
+| `stm32-hal-development` | `/stm32-hal-development` | 无 | HAL 开发指导、BSP 模板、外设最佳实践 |
+| `peripheral-driver` | `/peripheral-driver` | 无 | 外设驱动搜索/适配/脚手架生成 |
+| `modbus-debug` | `/modbus-debug` | `pymodbus, pyserial` | Modbus RTU/TCP 读写、扫描从站 |
+| `serial-monitor` | `/serial-monitor` | `pyserial` | 串口监视、抓包、自动复位 |
+| `workflow` | `/workflow` 或 "编译烧录" | 无 | 编译→烧录→监控流水线 |
 
-触发方式: "用 IAR 编译" 或 `/build-iar`
-
-```bash
-# 探测 IAR 环境
-python .claude/skills/build-iar/scripts/iar_builder.py --detect
-
-# 扫描工作区 .ewp 工程文件
-python .claude/skills/build-iar/scripts/iar_builder.py --scan
-
-# 列出可用配置
-python .claude/skills/build-iar/scripts/iar_builder.py --list-configs --project EWARM/UMF.ewp
-
-# 执行编译（指定工程和配置）
-python .claude/skills/build-iar/scripts/iar_builder.py --project EWARM/UMF.ewp --config Debug
-```
-
-### stm32-hal-development — STM32 HAL 开发指导
-
-触发方式: "STM32 HAL 开发" 或 `/stm32-hal-development`
-
-- CubeMX USER CODE 区域保护规则、外设配置最佳实践
-- BSP 驱动架构模板: `skills/stm32-hal-development/assets/bsp-template.c/h`
-- 参考文档: `skills/stm32-hal-development/references/` 下含核心指南、外设驱动指南、API 速查、故障排查、用法示例
-
-### peripheral-driver — 外设驱动搜索与适配
-
-触发方式: "帮我适配 XXX 驱动" 或 `/peripheral-driver`
-
-```bash
-# 扫描已有驱动代码，生成适配建议
-python .claude/skills/peripheral-driver/scripts/bsp_adapter.py --scan ./downloaded_driver/
-
-# 将开源驱动适配到 BSP 规范
-python .claude/skills/peripheral-driver/scripts/bsp_adapter.py \
-  --adapt ./downloaded_driver/ --device SSD1306 --handle hspi1 \
-  --output ./BSP/
-
-# 无开源库时，生成 BSP 骨架
-python .claude/skills/peripheral-driver/scripts/bsp_adapter.py \
-  --scaffold --device AT24C02 --bus i2c --handle hi2c1 --addr 0x50 \
-  --output ./BSP/
-```
-
-### modbus-debug — Modbus RTU/TCP 调试
-
-触发方式: "调试 Modbus" 或 `/modbus-debug`
-
-依赖: `pip install pymodbus pyserial`
-
-```bash
-# 读保持寄存器 (FC03)
-python .claude/skills/modbus-debug/scripts/modbus_tool.py \
-  --port COM3 --slave 2 --read --address 0 --count 10
-
-# 写寄存器 (FC06/FC16)
-python .claude/skills/modbus-debug/scripts/modbus_tool.py \
-  --port COM3 --slave 2 --write --address 20 --values 100,200
-
-# 扫描从站地址
-python .claude/skills/modbus-debug/scripts/modbus_tool.py \
-  --port COM3 --scan --scan-range 1-247
-
-# TCP 模式
-python .claude/skills/modbus-debug/scripts/modbus_tool.py \
-  --tcp --host 192.168.1.100 --slave 1 --read --address 0 --count 10
-```
-
-### serial-monitor — 串口监视
-
-触发方式: "看串口" 或 `/serial-monitor`
-
-依赖: `pip install pyserial`
-
-```bash
-# 列出可用串口
-python .claude/skills/serial-monitor/scripts/serial_monitor.py --list
-
-# 抓取 10 秒日志
-python .claude/skills/serial-monitor/scripts/serial_monitor.py \
-  --port COM3 --baud 115200 --duration 10
-
-# 持续监视（带时间戳）
-python .claude/skills/serial-monitor/scripts/serial_monitor.py \
-  --port COM3 --baud 115200 --monitor --timestamp
-
-# 等待特定输出后自动复位
-python .claude/skills/serial-monitor/scripts/serial_monitor.py \
-  --port COM3 --baud 115200 --wait-reset --auto-reset
-```
-
-### workflow — 编译+烧录+监控流水线
-
-触发方式: "编译烧录" 或 `/workflow`
-
-```bash
-# 探测环境
-python .claude/skills/workflow/scripts/workflow_runner.py --detect
-
-# 查看可用流水线
-python .claude/skills/workflow/scripts/workflow_runner.py --list
-
-# 执行编译→烧录→监控
-python .claude/skills/workflow/scripts/workflow_runner.py \
-  --run build-flash-monitor --build-system iar --project .
-```
-
-### Skill 通用使用模式
-
-| 场景 | 触发方式 |
-|------|----------|
-| 自然语言描述 | "帮我用 IAR 编译"、"调试 Modbus 从站地址 2" |
-| 斜杠命令 | `/build-iar`、`/modbus-debug`、`/serial-monitor` |
-| 流水线 | `/workflow` 自动串联编译→烧录→监控 |
-
-> **注意**: IAR 编译仅限 Windows 环境。脚本使用 Python 标准库，无额外依赖（modbus-debug 和 serial-monitor 除外）。
+> **注意**: IAR 编译仅限 Windows 环境。
 
 ## Git 与文档管理规则
 

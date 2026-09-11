@@ -44,6 +44,9 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+# Claude 本机配置
+.claude/settings.local.json
+
 # 参考库目录（第三方 git 仓库，不跟踪）
 OLED github/
 

@@ -11,12 +11,14 @@
 #ifndef _MYSTRING_H_
 #define _MYSTRING_H_
 /* Includes ------------------------------------------------------------------*/
-#include "string.h"
+#include <stdint.h>
+#include <string.h>
 /* Exported constants --------------------------------------------------------*/
 /* Exported types ------------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 char *leftShift(char *str, int num);
-char* Int2String(int num,char *str);//10进制 
+char* Int2String(int num,char *str);//10进制
 void insert_char(unsigned char *str, unsigned char ch, int pos);
+void u32_to_str_pad(uint32_t val, char *buf, uint8_t width);
 #endif /* _MYSTRING_H_ */

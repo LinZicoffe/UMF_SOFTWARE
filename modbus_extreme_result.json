@@ -1,0 +1,223 @@
+{
+  "timestamp": "2026-05-21 11:36:38",
+  "flood": [
+    {
+      "burst_size": 3,
+      "delay_us": 0,
+      "round": 1,
+      "sent": 3,
+      "ok": 0,
+      "exceptions": 0,
+      "missing": 3,
+      "success_rate_pct": 0.0,
+      "response_rate_pct": 0.0,
+      "rx_bytes": 0,
+      "send_ms": 0.9,
+      "alive_after": true
+    },
+    {
+      "burst_size": 3,
+      "delay_us": 0,
+      "round": 2,
+      "sent": 3,
+      "ok": 0,
+      "exceptions": 0,
+      "missing": 3,
+      "success_rate_pct": 0.0,
+      "response_rate_pct": 0.0,
+      "rx_bytes": 0,
+      "send_ms": 0.9,
+      "alive_after": true
+    },
+    {
+      "burst_size": 3,
+      "delay_us": 0,
+      "round": 3,
+      "sent": 3,
+      "ok": 0,
+      "exceptions": 0,
+      "missing": 3,
+      "success_rate_pct": 0.0,
+      "response_rate_pct": 0.0,
+      "rx_bytes": 0,
+      "send_ms": 0.9,
+      "alive_after": true
+    },
+    {
+      "burst_size": 3,
+      "delay_us": 500,
+      "round": 1,
+      "sent": 3,
+      "ok": 0,
+      "exceptions": 0,
+      "missing": 3,
+      "success_rate_pct": 0.0,
+      "response_rate_pct": 0.0,
+      "rx_bytes": 0,
+      "send_ms": 2.9,
+      "alive_after": false
+    }
+  ],
+  "boundary": [
+    {
+      "address": 0,
+      "count": 1,
+      "description": "最小地址, 最小长度",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2002.7,
+      "ok": false
+    },
+    {
+      "address": 0,
+      "count": 2,
+      "description": "瞬时流量 (float, 2 regs)",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2004.9,
+      "ok": false
+    },
+    {
+      "address": 0,
+      "count": 62,
+      "description": "地址0读取62个寄存器",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2001.4,
+      "ok": false
+    },
+    {
+      "address": 0,
+      "count": 123,
+      "description": "地址0读取123个 (全覆盖)",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2004.7,
+      "ok": false
+    },
+    {
+      "address": 0,
+      "count": 124,
+      "description": "地址0读取124个 (超出1)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2003.9,
+      "ok": false
+    },
+    {
+      "address": 0,
+      "count": 125,
+      "description": "地址0读取125个 (超出2)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2002.4,
+      "ok": false
+    },
+    {
+      "address": 122,
+      "count": 1,
+      "description": "倒数第二个地址 (122)",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] No response received after 3 re",
+      "latency_ms": 2003.4,
+      "ok": false
+    },
+    {
+      "address": 122,
+      "count": 2,
+      "description": "最后两个有效地址 (122+123)",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2002.3,
+      "ok": false
+    },
+    {
+      "address": 123,
+      "count": 1,
+      "description": "最大有效地址 (123)",
+      "expected": "ok",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2001.6,
+      "ok": false
+    },
+    {
+      "address": 123,
+      "count": 2,
+      "description": "地址123读取2个 (越界)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2000.5,
+      "ok": false
+    },
+    {
+      "address": 124,
+      "count": 1,
+      "description": "第一个无效地址 (124)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2001.7,
+      "ok": false
+    },
+    {
+      "address": 125,
+      "count": 1,
+      "description": "无效地址+1 (125)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2003.0,
+      "ok": false
+    },
+    {
+      "address": 200,
+      "count": 1,
+      "description": "远越界地址 (200)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2002.6,
+      "ok": false
+    },
+    {
+      "address": 1000,
+      "count": 1,
+      "description": "极端越界地址 (1000)",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2003.2,
+      "ok": false
+    },
+    {
+      "address": 0,
+      "count": 0,
+      "description": "读取长度为0",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "1 < count 0 < 125 !",
+      "latency_ms": 0.0,
+      "ok": false
+    },
+    {
+      "address": 65535,
+      "count": 1,
+      "description": "地址0xFFFF",
+      "expected": "exception",
+      "actual": "timeout",
+      "detail": "Modbus Error: [Input/Output] ERROR: No response received of ",
+      "latency_ms": 2004.0,
+      "ok": false
+    }
+  ]
+}

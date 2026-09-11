@@ -10,7 +10,7 @@
 /* Private includes ----------------------------------------------------------*/
 #include "bsp_usart.h"
 #include "param_storage.h"
-#include <stdio.h>
+#include "mystring.h"
 
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
@@ -79,13 +79,13 @@ uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
 static uint16_t s_modbus_addr = 2;   /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
 
-/* 波特率切换 — 延迟应用机制 (确保 Modbus 响应在旧波特率下发送完成) */
-static volatile uint8_t  s_baud_rate_pending;     /* 非0表示有待应用的波特率变更 */
-static          uint8_t  s_baud_rate_pending_idx; /* 待应用的波特率索引 */
+/* UART 配置切换 — 延迟应用机制 (确保 Modbus 响应在旧配置下发送完成) */
+static volatile uint8_t  s_baud_rate_pending;     /* 非0表示有待应用的 UART 配置变更 */
+static          uint8_t  s_uart_cfg_pending;      /* 待应用的 packed uart_config */
 
 /* 波特率索引 → 实际频率查找表 */
 static const uint32_t s_baud_table[BAUD_RATE_COUNT] = {
-    4800, 9600, 19200, 38400, 115200
+    4800, 9600, 19200, 38400, 115200, 2400
 };
 
 /* 模拟参数 — static 内部变量 */
@@ -904,13 +904,12 @@ void Modbus_Function_6(void)
             bsp_usart_set_modbus_addr(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
             break;
 
-        /* ---- 扩展参数: 波特率 (延迟生效, 响应发送后再切换) ---- */
+        /* ---- 扩展参数: UART 配置 (延迟生效, 响应发送后再切换) ---- */
         case BaudRateReg:
         {
-            uint8_t new_idx = (uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
-            if (new_idx < BAUD_RATE_COUNT) {
-                param_set_baud_rate(new_idx);
-                s_baud_rate_pending_idx = new_idx;
+            uint8_t new_cfg = (uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
+            if (param_set_uart_config(new_cfg) == HAL_OK) {
+                s_uart_cfg_pending = new_cfg;
                 s_baud_rate_pending = 1;
             }
             break;
@@ -1243,7 +1242,7 @@ void Modbus_Function_3(void)
                     reg_val = s_modbus_addr;
                     break;
                 case BaudRateReg:
-                    reg_val = (uint16_t)param_get_baud_rate();
+                    reg_val = (uint16_t)param_get_uart_config();
                     break;
                 case LanguageReg:
                     reg_val = (uint16_t)param_get_language();
@@ -1598,13 +1597,12 @@ void Modbus_Function_10(void)
                     case CommAddrReg:
                         bsp_usart_set_modbus_addr(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
                         break;
-                    /* 波特率: 延迟生效, 响应发送后再切换 */
+                    /* UART 配置: 延迟生效, 响应发送后再切换 */
                     case BaudRateReg:
                     {
-                        uint8_t new_idx = (uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
-                        if (new_idx < BAUD_RATE_COUNT) {
-                            param_set_baud_rate(new_idx);
-                            s_baud_rate_pending_idx = new_idx;
+                        uint8_t new_cfg = (uint8_t)(((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
+                        if (param_set_uart_config(new_cfg) == HAL_OK) {
+                            s_uart_cfg_pending = new_cfg;
                             s_baud_rate_pending = 1;
                         }
                         break;
@@ -1682,24 +1680,40 @@ void bsp_usart_set_modbus_addr(uint16_t addr)
 }
 
 /**
- * @brief   应用波特率变更到 USART2 硬件
- * @param   idx  baud_rate_t 枚举索引 (0~4)
- * @note    DeInit → 重设 BaudRate → Init → 重启 DMA + IDLE 中断
+ * @brief   应用 UART 配置变更到 USART2 硬件
+ * @param   uart_config  packed 配置值 (bit[2:0]=baud, bit[4:3]=parity, bit[5]=stop)
+ * @note    DeInit → 重设 BaudRate/Parity/StopBits/WordLength → Init → 重启 DMA + IDLE
  *          仅限主循环上下文调用，禁止在 ISR 中使用
  */
-void bsp_usart2_apply_baud_rate(uint8_t idx)
+void bsp_usart2_apply_uart_config(uint8_t uart_config)
 {
-    if (idx >= BAUD_RATE_COUNT) return;
+    uint8_t baud_idx = uart_cfg_baud(uart_config);
+    uint8_t parity   = uart_cfg_parity(uart_config);
+    uint8_t stopbits = uart_cfg_stop(uart_config);
 
-    /* 停止 USART2 所有 DMA 传输 */
+    if (baud_idx >= BAUD_RATE_COUNT) return;
+
     HAL_UART_Abort(&huart2);
-
-    /* 重新配置 USART2 */
     HAL_UART_DeInit(&huart2);
-    huart2.Init.BaudRate = s_baud_table[idx];
+
+    huart2.Init.BaudRate = s_baud_table[baud_idx];
+
+    /* 校验位 → WordLength 耦合: 启用校验必须 UART_WORDLENGTH_9B */
+    if (parity == PARITY_NONE) {
+        huart2.Init.WordLength = UART_WORDLENGTH_8B;
+        huart2.Init.Parity     = UART_PARITY_NONE;
+    } else if (parity == PARITY_ODD) {
+        huart2.Init.WordLength = UART_WORDLENGTH_9B;
+        huart2.Init.Parity     = UART_PARITY_ODD;
+    } else {
+        huart2.Init.WordLength = UART_WORDLENGTH_9B;
+        huart2.Init.Parity     = UART_PARITY_EVEN;
+    }
+
+    huart2.Init.StopBits = (stopbits == STOPBITS_2) ? UART_STOPBITS_2 : UART_STOPBITS_1;
+
     HAL_UART_Init(&huart2);
 
-    /* 重新启用 IDLE 中断 + DMA 接收 */
     Uart2ReceiveType.RX_Flag = 0;
     Uart2ReceiveType.RX_Size = 0;
     __HAL_UART_CLEAR_IDLEFLAG(&huart2);
@@ -1710,8 +1724,8 @@ void bsp_usart2_apply_baud_rate(uint8_t idx)
 }
 
 /**
- * @brief   检查并应用延迟的波特率变更
- * @note    在 Uart2_Communication() 入口调用，确保 Modbus 响应已在旧波特率下发送完成
+ * @brief   检查并应用延迟的 UART 配置变更
+ * @note    在 Uart2_Communication() 入口调用，确保 Modbus 响应已在旧配置下发送完成
  */
 void bsp_usart2_check_baud_rate_pending(void)
 {
@@ -1720,10 +1734,10 @@ void bsp_usart2_check_baud_rate_pending(void)
     /* 等待 DMA 发送完成 (gState == READY 表示空闲) */
     if (huart2.gState != HAL_UART_STATE_READY) return;
 
-    uint8_t idx = s_baud_rate_pending_idx;
+    uint8_t cfg = s_uart_cfg_pending;
     s_baud_rate_pending = 0;
 
-    bsp_usart2_apply_baud_rate(idx);
+    bsp_usart2_apply_uart_config(cfg);
 }
 
 /* ========== 模拟参数 getter 实现 ========== */
@@ -1738,8 +1752,10 @@ static void sim_format_cumulative(float value)
     uint32_t scaled    = (uint32_t)(value * 1000.0f + 0.5f);
     uint32_t int_part  = scaled / 1000;
     uint32_t frac_part = scaled % 1000;
-    snprintf((char *)s_sim_flow_sum_buf, sizeof(s_sim_flow_sum_buf),
-             "%09lu.%03lu", (unsigned long)int_part, (unsigned long)frac_part);
+    u32_to_str_pad(int_part, (char *)s_sim_flow_sum_buf, 9);
+    s_sim_flow_sum_buf[9] = '.';
+    u32_to_str_pad(frac_part, (char *)s_sim_flow_sum_buf + 10, 3);
+    s_sim_flow_sum_buf[13] = '\0';
 }
 
 /**

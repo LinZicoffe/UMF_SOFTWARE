@@ -57,11 +57,11 @@ extern uint8_t ModuleState;//module state
 #define InputBufferStartMaxAddress 18
 #define InputBufferLength          10
 extern Uart_SendfloatTypeDef InputBuffer[10];
-#define FlowRateValue   InputBuffer[0] // 瞬时流量,Modbus address 40001
+#define FlowRateValue   InputBuffer[0] // 瞬时流量,Modbus address 40001, 固定单位 L/h (BCD 解析已按帧 flag 换算, 不随 40023 Flow Unit 变化)
 #define FlowTemperature InputBuffer[1] // 温度,Modbus address 40003
 #define FlowPressure    InputBuffer[2] // 压力,Modbus address 40005
 
-extern uint64_t Cumulativeflow;
+extern uint64_t Cumulativeflow;  // Modbus 40041, UFL-1A BCD 原始计数值, 固件未 ÷1000; LSB 由帧 byte[8] flag 决定 (0x0a=0.001L, 0x1a=0.001m³)
 #define CumulativeflowAddress 40 // MODBUS ADDRESS 4X:40041
 
 /* 运行参数寄存器地址 (寄存器 22~29) */
@@ -100,7 +100,10 @@ extern uint64_t Cumulativeflow;
 #define TotalFactorAddr        87  /* 累积系数 total_factor (float, 2 regs, R/W) */
 #define PresetTotalAddr        89  /* 预设总量 preset_total (float, 2 regs, R/W) */
 #define CommAddrReg            91  /* 通信地址 modbus_addr (uint16, R/W) */
-#define BaudRateReg            92  /* 波特率 baud_rate (uint16, R/W) */
+#define BaudRateReg            92  /* UART 配置 uart_config (uint16, R/W)
+                                    *   bit 2:0 = 波特率索引 (0~5)
+                                    *   bit 4:3 = 校验位 (0=无, 1=奇, 2=偶)
+                                    *   bit 5   = 停止位 (0=1位, 1=2位) */
 #define LanguageReg            93  /* 语言 language (uint16, R/W) */
 #define OledRecoveryAddr       94  /* OLED 抗干扰自愈重初始化间隔 (uint16, R/W)
                                     *   单位: 100ms; 0=禁用; 默认 50=5s; 最大 600=60s */
@@ -139,7 +142,7 @@ extern void          UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeD
 extern void          Uart1_Communication(void);
 extern void          Uart2_Communication(void);
 extern void          bsp_usart_set_modbus_addr(uint16_t addr);
-extern void          bsp_usart2_apply_baud_rate(uint8_t idx);
+extern void          bsp_usart2_apply_uart_config(uint8_t uart_config);
 extern void          bsp_usart2_check_baud_rate_pending(void);
 
 /* 模拟参数 API — 自动选择真实值或模拟值 */

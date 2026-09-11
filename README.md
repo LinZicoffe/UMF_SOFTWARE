@@ -66,7 +66,7 @@ UMF_SOFTWARE/
 │   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Flash 持久化, 含七点标定参数)
 │   ├── cal_table.c/h             # 七点流量标定 (分段线性插值, Modbus 95~123)
 │   ├── eeprom.c/h                # Flash 模拟 EEPROM (磨损均衡日志结构, Page 54~63)
-│   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char)
+│   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char, u32_to_str_pad)
 │   └── run_display.c/h           # 运行显示模块 (S01 主界面 + S02 辅助页)
 ├── OLED/                          # OLED 显示驱动
 │   ├── ssd1306_conf.h            # afiskon 库硬件配置 (引脚/字体/SPI 模式)
@@ -167,8 +167,8 @@ S03 主菜单 (5 项)
 
 | 地址 | 功能 | 数据类型 | 读写 |
 |------|------|----------|------|
-| 40001 | 瞬时流量 | float | FC03 读 |
-| 40003 | 温度 | float | FC03 读 |
+| 40001 | 瞬时流量 (固定 L/h, 见单位约定) | float | FC03 读 |
+| 40003 | 温度 (固定 ℃) | float | FC03 读 |
 | 40005 | 压力 | float | FC03 读 |
 | 40021~40022 | DAC 零点/满度 | uint16 | FC03/FC10 |
 | 40023~40024 | 流量单位/累积单位 | uint16 | FC03/FC06 |
@@ -176,7 +176,7 @@ S03 主菜单 (5 项)
 | 40027~40028 | 介质系数 | float | FC03/FC06 |
 | 40029~40030 | 小信号切除 | float | FC03/FC06 |
 | 40031~40032 | 量程低/高值 | float | FC03/FC10 |
-| 40041 | 累积流量 | uint64 | FC03 读 |
+| 40041 | 累积流量 (BCD 原值, LSB=0.001L/m³, 见单位约定) | uint64 | FC03 读 |
 | 40049 | 模拟总开关 | uint16 | FC03/FC06 |
 | 40051~40052 | 模拟瞬时流量 | float | FC03/FC06 |
 | 40053~40054 | 模拟温度 | float | FC03/FC06 |
@@ -226,11 +226,17 @@ S03 主菜单 (5 项)
 
 > **七点标定寄存器** (40096~40124): 标定使能 (40096) 为 uint16，0=禁用，1=启用。修正系数 k[0]~k[6] 各为 float (范围 0.5~2.0)，标定点百分比 pct[0]~pct[6] 各为 float (范围 0.0~100.0)。默认 pct 为 [0, 3, 10, 25, 50, 75, 100]。标定启用后，信号链中 flow × meter_coeff × medium_coeff 的结果会经过分段线性插值修正: corrected = flow × k(pct)。所有标定参数持久化到 Flash (Page 61 Len=16 合并组)。
 
+> **单位约定（上位机集成必读）**: Modbus 流量/累积寄存器的工程单位**固定**，与 40023(Flow Unit)/40024(Total Unit) **相互独立**——后两者仅作 OLED 显示标签，不影响 Modbus 输出数值。
+> - **40001 瞬时流量** (float): 固定 **L/h**。源自 UFL-1A BCD 帧，固件已按帧内 flag 换算（`0x0b`→÷100，`0x1b`→原值），Modbus 直传，**不随 40023 变化**。注意此值未经去极值滤波（OLED 显示用的是经滤波的 `effective_flow_rate()`，两者在波动工况下可能不一致）。
+> - **40003 温度** (float): 固定 **℃**。
+> - **40041 累积流量** (uint64, 4 regs): **直传 UFL-1A BCD 原始计数值，固件未做 ÷1000 换算**。其 LSB 由模组每帧 byte[8] flag 决定：`0x0a`→**0.001 L**（默认），`0x1a`→**0.001 m³**。上位机需自行 ÷1000 得到升或 m³，并据 flag 判断单位。字节序为重排大端 `[40,32,56,48,8,0,24,16]`（见 UMF_Modbus_Protocol.md）。
+> - **40062~40067 正/反/净累积** (float): 应用层自维护的 `forward_total`/`reverse_total`，量纲独立于 40041，单位由 40024 标签指示（数值本身未换算）。
+
 ## 资源预算
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash (代码区) | 54KB (Page 0~53) | ~50KB | ~4KB |
+| Flash (代码区) | 54KB (Page 0~53) | ~34KB | ~20KB |
 | Flash (EEPROM) | 10KB (Page 54~63) | 参数存储 | — |
 | RAM | 20KB | ~7KB | ~13KB |
 
@@ -248,6 +254,30 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v2.2.1 (2026-07-08)
+
+- **文档: 明确 Modbus 流量/累积寄存器单位约定**（纯文档/注释澄清，无代码逻辑变更）
+  - README 新增"单位约定"小节：40001 瞬时流量固定 L/h，40003 温度固定 ℃，40041 累积流量直传 BCD 原值（LSB 由模组 flag 决定，固件未 ÷1000）
+  - 澄清 40023/40024 单位参数仅作 OLED 显示标签，不影响 Modbus 输出数值
+  - 寄存器表 40001/40003/40041 行标注固定单位
+  - 代码注释同步（`bsp_usart.h` 的 `FlowRateValue`/`Cumulativeflow` 声明）
+  - 背景: 默认 `flow_unit=0`(m³/h) 与 40001 实际量纲(L/h) 存在标签错配，本次澄清以避免上位机集成时单位误用
+
+### v2.2.0 (2026-05-21)
+
+- **Flash 优化: 移除 snprintf/stdio 运行时依赖**
+  - `bsp_menu.c` 和 `bsp_usart.c` 全部移除 `#include <stdio.h>` 和 `snprintf` 调用
+  - 5 处 `snprintf` 替换为手写字符串操作 (`strcpy`/`strcat`/`Int2String`/`u32_to_str_pad`)
+  - 完全移除 `xprintfsmall_nomb.o` (1,265B) 等 printf 运行时库
+  - ro code 从 35,462 降至 34,225，净节省 **1,237 字节**
+  - 不影响 Modbus 读写和 DAC 输出，仅修改 OLED 显示渲染路径
+- **ftoa 轻量 float→string 模块**: 纯整数运算替代 `printf %f`，节省 3~8KB Flash
+  - `run_display.c` 和 `bsp_menu.c` 中所有 `%.1f`/`%.2f`/`%.3f`/`%.*f` 格式化均已替换为 `ftoa()`
+- **UART 配置扩展**: 波特率 → packed `uart_config` (bit[2:0]=baud, bit[4:3]=parity, bit[5]=stop)
+  - 新增 2400 波特率选项
+  - Modbus 寄存器 40093 写入完整 uart_config，向后兼容旧固件 baud_rate 值
+  - `bsp_usart2_apply_baud_rate()` → `bsp_usart2_apply_uart_config()` 支持校验位/停止位
 
 ### v2.1.0 (2026-05-08)
 

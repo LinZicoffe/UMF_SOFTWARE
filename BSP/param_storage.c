@@ -100,7 +100,7 @@
  * Page 55: 信号处理组 [small_signal, filter_time, damping_time]
  * Page 56: 输出配置组 [freq_output, pulse_equiv, language]
  * Page 57: 介质工况组 [medium_density, pipe_diameter, gas_ref_press, gas_ref_temp, reynolds_k]
- * Page 58: 系统/累积组 [modbus_addr, baud_rate, total_factor, preset_total]
+ * Page 58: 系统/累积组 [modbus_addr, uart_config, total_factor, preset_total]
  *
  * Phase 5 新增分组 (Page 54):
  * Page 54: 显示与 OLED 抗干扰组 [oled_recovery_interval]
@@ -130,7 +130,7 @@ static const char * const s_pulse_equiv_str[PULSE_EQUIV_COUNT] = {
     "1     L/p", "10    L/p", "100   L/p"
 };
 static const char * const s_baud_rate_str[BAUD_RATE_COUNT] = {
-    "4800", "9600", "19200", "38400", "115200"
+    "4800", "9600", "19200", "38400", "115200", "2400"
 };
 
 /* ===== 内部 RAM 缓存 — static ===== */
@@ -207,14 +207,14 @@ static HAL_StatusTypeDef flush_medium_param_group(void)
     return (HAL_StatusTypeDef)WriteBufferFlash(5, PARAM_PAGE_MEDIUM_PARAM, buf);
 }
 
-/* 系统/累积组: [modbus_addr, baud_rate, total_factor, preset_total]
+/* 系统/累积组: [modbus_addr, uart_config, total_factor, preset_total]
  * 注意: 字段长度固定为 4, 切勿扩展 (WriteBufferFlash 是链表式追加存储,
  *       槽位大小 = (Len+1)*4 字节, 改 Len 会让旧设备的 Flash 数据无法解码). */
 static HAL_StatusTypeDef flush_system_group(void)
 {
     uint32_t buf[4];
     buf[0] = (uint32_t)s_params.modbus_addr;
-    buf[1] = (uint32_t)s_params.baud_rate;
+    buf[1] = (uint32_t)s_params.uart_config;
     buf[2] = float_to_u32(s_params.total_factor);
     buf[3] = float_to_u32(s_params.preset_total);
     return (HAL_StatusTypeDef)WriteBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
@@ -359,14 +359,25 @@ HAL_StatusTypeDef param_storage_init(void)
                                   clamp_f(u32_to_float(buf[4]), REYNOLDS_K_MIN, REYNOLDS_K_MAX);
     }
 
-    /* 读取系统/累积组 (Page 58) - 4 字段, 与旧固件兼容 */
+    /* 读取系统/累积组 (Page 58) - 4 字段, 与旧固件兼容
+     * 旧固件 baud_rate=0~4 在新格式下自动映射为 uart_config=0~4 (8N1) */
     {
         uint32_t buf[4];
         ReadBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
         s_params.modbus_addr  = (buf[0] == 0xFFFFFFFFu) ? DEF_MODBUS_ADDR :
                                 clamp_u16((uint16_t)buf[0], MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
-        s_params.baud_rate    = (buf[1] == 0xFFFFFFFFu) ? DEF_BAUD_RATE :
-                                clamp_u8((uint8_t)buf[1], 0, (uint8_t)(BAUD_RATE_COUNT - 1));
+        if (buf[1] == 0xFFFFFFFFu) {
+            s_params.uart_config = DEF_BAUD_RATE; /* 4 = 115200,8N1 */
+        } else {
+            uint8_t raw = (uint8_t)buf[1];
+            uint8_t baud    = uart_cfg_baud(raw);
+            uint8_t parity  = uart_cfg_parity(raw);
+            uint8_t stop    = uart_cfg_stop(raw);
+            if (baud >= BAUD_RATE_COUNT) baud = DEF_BAUD_RATE;
+            if (parity >= PARITY_COUNT)  parity = PARITY_NONE;
+            if (stop >= STOPBITS_COUNT)  stop = STOPBITS_1;
+            s_params.uart_config = uart_cfg_pack(baud, parity, stop);
+        }
         s_params.total_factor = (buf[2] == 0xFFFFFFFFu) ? DEF_TOTAL_FACTOR :
                                 clamp_f(u32_to_float(buf[2]), TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
         s_params.preset_total = (buf[3] == 0xFFFFFFFFu) ? DEF_PRESET_TOTAL :
@@ -434,7 +445,8 @@ float    param_get_reverse_total(void) { return s_params.reverse_total; }
 
 /* ===== Phase 4 系统 getter ===== */
 uint16_t param_get_modbus_addr(void) { return s_params.modbus_addr; }
-uint8_t  param_get_baud_rate(void)   { return s_params.baud_rate; }
+uint8_t  param_get_baud_rate(void)   { return uart_cfg_baud(s_params.uart_config); }
+uint8_t  param_get_uart_config(void) { return s_params.uart_config; }
 uint16_t param_get_pwd_engineer(void) { return s_params.pwd_engineer; }
 uint8_t  param_get_language(void)    { return s_params.language; }
 
@@ -595,7 +607,21 @@ HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr)
 
 HAL_StatusTypeDef param_set_baud_rate(uint8_t idx)
 {
-    s_params.baud_rate = clamp_u8(idx, 0, (uint8_t)(BAUD_RATE_COUNT - 1));
+    uint8_t cfg = s_params.uart_config;
+    s_params.uart_config = (cfg & 0x38u) | (uint8_t)clamp_u8(idx, 0, (uint8_t)(BAUD_RATE_COUNT - 1));
+    return flush_system_group();
+}
+
+HAL_StatusTypeDef param_set_uart_config(uint8_t cfg)
+{
+    uint8_t baud   = uart_cfg_baud(cfg);
+    uint8_t parity = uart_cfg_parity(cfg);
+    uint8_t stop   = uart_cfg_stop(cfg);
+    if (baud >= BAUD_RATE_COUNT) return HAL_ERROR;
+    if (parity >= PARITY_COUNT)  return HAL_ERROR;
+    if (stop >= STOPBITS_COUNT)  return HAL_ERROR;
+    if (cfg & 0xC0u)            return HAL_ERROR;
+    s_params.uart_config = cfg;
     return flush_system_group();
 }
 
