@@ -42,7 +42,7 @@ static void render_page_main(const run_display_input_t *p_in)
     if (press > 9999.9f)  press = 9999.9f;
     if (press < -999.9f)  press = -999.9f;
     ftoa(press, 1, buf, sizeof(buf));
-    strcat(buf, "KPa");
+    strcat(buf, "KPa ");
     ssd1306_SetCursor(0, 0);
     ssd1306_WriteString(buf, Font_7x10, White);
     x_start = (uint8_t)(strlen(buf) * 7 + 1);
@@ -102,11 +102,12 @@ static void render_page_main(const run_display_input_t *p_in)
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* Zone C: 累积流量 (y=54, Font_7x10)
-     * "TOT"(21px) + 13位流量串(91px) + 最长2位单位(14px) = 126px。 */
+     * 主界面跳过累积量最高位："TOT "(28px) + 12位流量串(84px)
+     * + 最长2位单位(14px) = 126px，原始累积量数据保持不变。 */
     ssd1306_SetCursor(0, 54);
-    ssd1306_WriteString("TOT", Font_7x10, White);
-    ssd1306_SetCursor(21, 54);
-    ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_7x10, White);
+    ssd1306_WriteString("TOT ", Font_7x10, White);
+    ssd1306_SetCursor(28, 54);
+    ssd1306_WriteString((char *)p_in->p_flow_sum_buf + 1, Font_7x10, White);
     ssd1306_SetCursor(112, 54);
     ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_7x10, White);
 #endif

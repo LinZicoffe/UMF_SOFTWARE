@@ -248,7 +248,7 @@ int main(void)
                     if (corrected_flow < (param_get_value_4ma() + threshold))
                         DacValue = DacZeroValue;
                 }
-                }
+            }
         }
 
         /* PWM 输出 — 在 DAC 换算之后，确保使用最新 DacValue */
