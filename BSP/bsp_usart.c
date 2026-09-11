@@ -144,6 +144,11 @@ static float    BCDTOInt(uint32_t bcd);
 static uint64_t BCD_TO_LongInt(uint64_t bcd);
 static void     sim_format_cumulative(float value);
 static float    compute_dac_current_mA(void);
+static uint64_t mul_div_u64(uint64_t value, uint32_t multiplier, uint64_t divisor);
+static uint64_t convert_total_to_milli_unit(uint64_t raw_total, uint8_t source_unit,
+                                            uint8_t target_unit, float density_kg_m3);
+static void     format_milli_total(uint64_t milli_value, unsigned char *p_buf,
+                                   uint8_t buf_size);
 
 uint8_t  BCDtoStr(unsigned char *str, unsigned char *BCD, int BCD_length);
 uint16_t getCRC16(uint8_t *ptr, uint8_t len);
@@ -1810,6 +1815,95 @@ float convert_flow_rate_from_lph(
     }
 }
 
+static uint64_t mul_div_u64(uint64_t value, uint32_t multiplier, uint64_t divisor)
+{
+    uint64_t quotient;
+    uint64_t remainder;
+    uint64_t fraction;
+    uint64_t result;
+
+    quotient = value / divisor;
+    remainder = value % divisor;
+
+    if (quotient > UINT64_MAX / multiplier)
+        return UINT64_MAX;
+
+    result = quotient * multiplier;
+    fraction = (remainder * multiplier) / divisor;
+    if (result > UINT64_MAX - fraction)
+        return UINT64_MAX;
+
+    return result + fraction;
+}
+
+static uint64_t convert_total_to_milli_unit(
+    uint64_t raw_total,
+    uint8_t source_unit,
+    uint8_t target_unit,
+    float density_kg_m3)
+{
+    uint64_t milli_liter;
+    uint32_t density_x1000;
+
+    if (source_unit == 1)
+    {
+        if (raw_total > UINT64_MAX / 1000ULL)
+            return UINT64_MAX;
+        milli_liter = raw_total * 1000ULL;
+    }
+    else
+    {
+        milli_liter = raw_total;
+    }
+
+    switch (target_unit)
+    {
+    case TOTAL_UNIT_M3:
+        return milli_liter / 1000ULL;
+
+    case TOTAL_UNIT_L:
+        return milli_liter;
+
+    case TOTAL_UNIT_KG:
+        density_x1000 = (uint32_t)(density_kg_m3 * 1000.0f + 0.5f);
+        return mul_div_u64(milli_liter, density_x1000, 1000000ULL);
+
+    case TOTAL_UNIT_T:
+        density_x1000 = (uint32_t)(density_kg_m3 * 1000.0f + 0.5f);
+        return mul_div_u64(milli_liter, density_x1000, 1000000000ULL);
+
+    default:
+        return milli_liter / 1000ULL;
+    }
+}
+
+static void format_milli_total(
+    uint64_t milli_value,
+    unsigned char *p_buf,
+    uint8_t buf_size)
+{
+    uint64_t integer_part;
+    uint32_t fraction_part;
+
+    if ((p_buf == NULL) || (buf_size < 14))
+        return;
+
+    integer_part = milli_value / 1000ULL;
+    fraction_part = (uint32_t)(milli_value % 1000ULL);
+
+    if (integer_part > 999999999ULL)
+    {
+        memcpy(p_buf, "-------------", 13);
+        p_buf[13] = '\0';
+        return;
+    }
+
+    u32_to_str_pad((uint32_t)integer_part, (char *)p_buf, 9);
+    p_buf[9] = '.';
+    u32_to_str_pad(fraction_part, (char *)p_buf + 10, 3);
+    p_buf[13] = '\0';
+}
+
 float effective_temperature(void)
 {
     return sim_is_active() ? s_sim_temperature.num : FlowTemperature.num;
@@ -1817,7 +1911,42 @@ float effective_temperature(void)
 
 const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf)
 {
-    return sim_is_active() ? s_sim_flow_sum_buf : real_buf;
+    static unsigned char display_buf[20];
+    const unsigned char *source_buf;
+    uint64_t raw_total;
+    uint64_t milli_value;
+    uint8_t source_unit;
+    uint8_t target_unit;
+
+    target_unit = param_get_total_unit();
+
+    if (sim_is_active())
+    {
+        raw_total = (s_sim_cumulative.num > 0.0f)
+            ? (uint64_t)(s_sim_cumulative.num * 1000.0f + 0.5f)
+            : 0;
+        source_unit = 0;
+        source_buf = s_sim_flow_sum_buf;
+    }
+    else
+    {
+        raw_total = Cumulativeflow;
+        source_unit = Sumunit;
+        source_buf = real_buf;
+    }
+
+    if (((source_unit == 0) && (target_unit == TOTAL_UNIT_L)) ||
+        ((source_unit == 1) && (target_unit == TOTAL_UNIT_M3)))
+        return source_buf;
+
+    milli_value = convert_total_to_milli_unit(
+        raw_total,
+        source_unit,
+        target_unit,
+        param_get_medium_density());
+    format_milli_total(milli_value, display_buf, sizeof(display_buf));
+
+    return display_buf;
 }
 
 /**
