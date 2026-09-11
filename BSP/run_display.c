@@ -34,30 +34,34 @@ static void render_page_main(const run_display_input_t *p_in)
     uint8_t len, x_start;
     float press, temp;
 
-#ifdef SSD1306_INCLUDE_FONT_6x8
-    /* Zone A: 状态栏 (y=0) — 压力 (钳位防止异常浮点撑爆 buf) */
+#ifdef SSD1306_INCLUDE_FONT_7x10
+    /* Zone A: 状态栏 (y=0, Font_7x10)
+     * 三段内容使用动态坐标紧凑排列，通信状态缩写为 OK/ER，
+     * 确保压力和温度取钳位上限时仍不超出 128px 屏宽。 */
     press = p_in->p_pressure->num;
     if (press > 9999.9f)  press = 9999.9f;
     if (press < -999.9f)  press = -999.9f;
     ftoa(press, 1, buf, sizeof(buf));
     strcat(buf, "KPa");
     ssd1306_SetCursor(0, 0);
-    ssd1306_WriteString(buf, Font_6x8, White);
+    ssd1306_WriteString(buf, Font_7x10, White);
+    x_start = (uint8_t)(strlen(buf) * 7 + 1);
 
-    /* 温度 + 度符号 (钳位防止 strlen 导致 "C" 位置超出屏幕) */
+    /* 温度 + 6x8 度符号位图（字母和数字均为 7x10 字体） */
     temp = p_in->p_temperature->num;
     if (temp > 999.9f)  temp = 999.9f;
     if (temp < -99.9f)  temp = -99.9f;
     ftoa(temp, 1, buf, sizeof(buf));
-    ssd1306_SetCursor(48, 0);
-    ssd1306_WriteString(buf, Font_6x8, White);
-    ssd1306_DrawBitmap(48 + (uint8_t)strlen(buf) * 6, 0, BMP, 6, 8, White);
-    ssd1306_SetCursor(48 + (uint8_t)strlen(buf) * 6 + 6, 0);
-    ssd1306_WriteString("C", Font_6x8, White);
+    ssd1306_SetCursor(x_start, 0);
+    ssd1306_WriteString(buf, Font_7x10, White);
+    x_start = (uint8_t)(x_start + strlen(buf) * 7);
+    ssd1306_DrawBitmap(x_start, 1, BMP, 6, 8, White);
+    ssd1306_SetCursor((uint8_t)(x_start + 6), 0);
+    ssd1306_WriteString("C", Font_7x10, White);
 
-    /* 通信状态 */
-    ssd1306_SetCursor(90, 0);
-    ssd1306_WriteString((char *)(*(p_in->p_module_state) ? "Tx Err" : "Tx ok"), Font_6x8, White);
+    /* 通信状态固定右对齐：2 char x 7px */
+    ssd1306_SetCursor(114, 0);
+    ssd1306_WriteString((char *)(*(p_in->p_module_state) ? "ER" : "OK"), Font_7x10, White);
 #endif
 
 #ifdef SSD1306_INCLUDE_FONT_16x26
@@ -96,17 +100,15 @@ static void render_page_main(const run_display_input_t *p_in)
     ssd1306_WriteString(buf, Font_11x18, White);
 #endif
 
-#ifdef SSD1306_INCLUDE_FONT_6x8
-    /* Zone C: 累积流量 (y=56)
-     * 布局: "TOT "(0..23) + 13位流量串(24..101) + 单位(102..119)
-     * 原 x=30/96 时，13char×6px=78px 从30到107，而单位在96，导致覆盖最后2位小数
-     * 修正: 流量串从x=24起，结束于x=101；单位从x=102起不再重叠 */
-    ssd1306_SetCursor(0, 56);
-    ssd1306_WriteString("TOT ", Font_6x8, White);
-    ssd1306_SetCursor(24, 56);
-    ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_6x8, White);
-    ssd1306_SetCursor(102, 56);
-    ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_6x8, White);
+#ifdef SSD1306_INCLUDE_FONT_7x10
+    /* Zone C: 累积流量 (y=54, Font_7x10)
+     * "TOT"(21px) + 13位流量串(91px) + 最长2位单位(14px) = 126px。 */
+    ssd1306_SetCursor(0, 54);
+    ssd1306_WriteString("TOT", Font_7x10, White);
+    ssd1306_SetCursor(21, 54);
+    ssd1306_WriteString((char *)p_in->p_flow_sum_buf, Font_7x10, White);
+    ssd1306_SetCursor(112, 54);
+    ssd1306_WriteString((char *)p_in->p_total_unit_str, Font_7x10, White);
 #endif
 }
 
