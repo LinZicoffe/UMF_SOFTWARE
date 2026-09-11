@@ -150,5 +150,6 @@ uint8_t              sim_is_active(void);
 float                effective_flow_rate(void);
 float                effective_temperature(void);
 const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf);
+float                convert_flow_rate_from_lph(float flow_lph, uint8_t target_unit, float density_kg_m3);
 
 #endif
