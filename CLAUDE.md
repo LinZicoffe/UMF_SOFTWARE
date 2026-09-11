@@ -110,7 +110,7 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 | `bsp_menu.c/h` | 菜单系统 — 5 层导航栈 + 6 种界面模式 + 两级密码门控，覆盖 S03~S44 共 42 屏幕 |
 | `key.c/h` | 事件驱动按键驱动 — 10ms 扫描、消抖、组合键检测，返回 `key_event_t` |
 | `param_storage.c/h` | 参数存储 — RAM 缓存 + Flash 持久化，getter/setter API，含七点标定参数 |
-| `cal_table.c/h` | 七点流量标定 — 分段线性插值，Modbus 寄存器 95~123 读写标定系数和标定点百分比 |
+| `cal_table.c/h` | 七点流量标定 — 分段线性插值，Modbus 寄存器 95~123 读写标定系数和标定点百分比（**注意**: `.c` 在 `BSP/Src/`，其余 BSP 文件均在 `BSP/` 根目录） |
 | `run_display.c/h` | 运行显示 — S01 主界面 + S02 辅助变量页，通过 `run_display_input_t` 接收 const 数据 |
 | `eeprom.c/h` | Flash 模拟 EEPROM（底层读写，Page 54~63 参数存储） |
 | `mystring.c/h` | 字符串工具函数（Int2String, insert_char） |
@@ -122,7 +122,7 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 |------|------|
 | `ssd1306.c/h` | **当前驱动** — afiskon/stm32-ssd1306 库，bit-bang SPI 适配 |
 | `ssd1306_conf.h` | 硬件配置 — 引脚映射、字体选择、bit-bang SPI 标志 |
-| `ssd1306_fonts.c/h` | 字体数据 — Font_6x8 + Font_7x10 + Font_11x18（禁用 Font_16x26 节省 Flash） |
+| `ssd1306_fonts.c/h` | 字体数据 — Font_6x8 + Font_11x18（Font_7x10 和 Font_16x26 已禁用节省 Flash） |
 | `oled.c/h` | 旧版驱动（保留未删），已不参与编译 |
 | `oledfont.h` | 旧版字体数据（保留未删） |
 | `bmp.h` | 位图资源（温度度符号图标） |
@@ -144,7 +144,7 @@ ssd1306_InvertRectangle(x1, y1, x2, y2);          // 反色矩形
 ssd1306_SetContrast(value);                        // 对比度
 ```
 
-可用字体: `Font_6x8`, `Font_7x10`, `Font_11x18`
+可用字体: `Font_6x8`, `Font_11x18`
 
 ## 关键数据变量
 
@@ -234,7 +234,7 @@ UFL-1A BCD 原始流量
   → TIM1/TIM4 PWM 输出
 ```
 
-- **滤波**: `flow_filter_feed()` 在 `Uart1_Receive_Function()` BCD 解析后调用；`effective_flow_rate()` 优先返回滤波值，未就绪时回退原始值
+- **滤波**: `flow_filter_feed()` 为 `bsp_usart.c` 内 static 函数（非独立模块文件），在 `Uart1_Receive_Function()` BCD 解析后调用；`effective_flow_rate()` 为 public API，优先返回滤波值，未就绪时回退原始值
 - **标定**: `cal_table` 模块，7 个标定点默认百分比 [0, 3, 10, 25, 50, 75, 100]，修正系数 k[0..6] 范围 0.5~2.0
 - **模拟模式**: Modbus 寄存器 40049=1 时，模拟流量/温度/累积值替代真实传感器数据（仅 RAM，掉电重置）
 
@@ -281,7 +281,7 @@ USART1 与 UFL-1A 通信，自定义 BCD 编码：
 
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash (代码区) | 54KB (Page 0~53) | ~50KB | ~4KB |
+| Flash (代码区) | 54KB (Page 0~53) | ~34KB | ~20KB |
 | Flash (EEPROM) | 10KB (Page 54~63) | 参数存储 | — |
 | RAM | 20KB | ~7KB | ~13KB |
 
