@@ -481,15 +481,26 @@ static void render_list(nav_frame_t *f)
     uint8_t count;
     char buf[22];
     uint8_t i;
-    uint8_t visible_rows = 6;
+    const int is_main_menu = (f->screen_id == SCR_MAIN_MENU);
+    uint8_t visible_rows = is_main_menu ? 5 : 6;
 
     get_list_data(f->screen_id, &items, &count);
     if (!items || count == 0) return;
 
-    /* 标题行 (反色) */
-    ssd1306_FillRectangle(0, 0, 127, 7, White);
-    ssd1306_SetCursor(2, 0);
-    ssd1306_WriteString((char *)get_screen_title(f->screen_id), Font_6x8, Black);
+    if (is_main_menu) {
+#ifdef SSD1306_INCLUDE_FONT_7x10
+        /* 主菜单标题：7x10 黑底白字居中，不使用选中反色效果 */
+        const char *title = get_screen_title(f->screen_id);
+        uint8_t title_x = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
+        ssd1306_SetCursor(title_x, 0);
+        ssd1306_WriteString((char *)title, Font_7x10, White);
+#endif
+    } else {
+        /* 二级列表保持原有 6x8 反色标题 */
+        ssd1306_FillRectangle(0, 0, 127, 7, White);
+        ssd1306_SetCursor(2, 0);
+        ssd1306_WriteString((char *)get_screen_title(f->screen_id), Font_6x8, Black);
+    }
 
     /* 滚动窗口 */
     if (f->cursor >= visible_rows)
@@ -499,25 +510,36 @@ static void render_list(nav_frame_t *f)
 
     /* 列表项 */
     for (i = 0; i < visible_rows && (f->scroll + i) < count; i++) {
-        uint8_t y = (uint8_t)(8 + i * 9);  /* Font_6x8 行高 8px + 1px */
+        uint8_t y = is_main_menu
+                  ? (uint8_t)(10 + i * 11)  /* Font_7x10 行高 10px + 1px */
+                  : (uint8_t)(8 + i * 9);   /* Font_6x8 行高 8px + 1px */
         uint8_t idx = (uint8_t)(f->scroll + i);
         int is_sel = (idx == f->cursor);
 
         if (is_sel) {
-            ssd1306_FillRectangle(0, y, 127, (uint8_t)(y + 8), White);
+            ssd1306_FillRectangle(0, y, 127,
+                                  (uint8_t)(y + (is_main_menu ? 9 : 8)), White);
         }
         {
             const char *label = items[idx].label;
+            uint8_t field_chars = is_main_menu ? 18 : 19;
+            uint8_t max_label_chars = (uint8_t)(field_chars - 1);
             buf[0] = ' ';
             uint8_t llen = (uint8_t)strlen(label);
-            if (llen > 18) llen = 18;
+            if (llen > max_label_chars) llen = max_label_chars;
             (void)memcpy(buf + 1, label, llen);
             uint8_t total = 1 + llen;
-            while (total < 19) buf[total++] = ' ';
+            while (total < field_chars) buf[total++] = ' ';
             buf[total] = '\0';
         }
         ssd1306_SetCursor(2, y);
-        ssd1306_WriteString(buf, Font_6x8, is_sel ? Black : White);
+        if (is_main_menu) {
+#ifdef SSD1306_INCLUDE_FONT_7x10
+            ssd1306_WriteString(buf, Font_7x10, is_sel ? Black : White);
+#endif
+        } else {
+            ssd1306_WriteString(buf, Font_6x8, is_sel ? Black : White);
+        }
     }
 #else
     (void)f;
@@ -676,9 +698,10 @@ static void render_password(nav_frame_t *f)
     }
 #endif
 
-#ifdef SSD1306_INCLUDE_FONT_6x8
-    ssd1306_SetCursor(32, 48);
-    ssd1306_WriteString("Range:000~999", Font_6x8, White);
+#ifdef SSD1306_INCLUDE_FONT_7x10
+    /* 密码页的单独例外：13 char x 7px = 91px，居中显示 */
+    ssd1306_SetCursor(18, 48);
+    ssd1306_WriteString("Range:000~999", Font_7x10, White);
 #endif
 }
 
