@@ -79,6 +79,7 @@ typedef enum {
 
 /* ===== 导航栈帧 ===== */
 #define NAV_STACK_DEPTH  5
+#define COEFF_DIGIT_COUNT 5
 
 typedef struct {
     menu_mode_t mode;
@@ -86,6 +87,7 @@ typedef struct {
     uint8_t     cursor;         /* LIST/ENUM: 选中项; PASSWORD: 编辑位 */
     uint8_t     scroll;         /* LIST: 滚动窗口起始 */
     float       edit_val;       /* NUMERIC: 临时编辑值 */
+    uint8_t     coeff_digits[COEFF_DIGIT_COUNT]; /* NUMERIC: Coeff 的 00.000 数位 */
     uint8_t     pwd_digits[3];  /* PASSWORD: 3位数字 */
     uint8_t     pwd_target;     /* PASSWORD: 成功后跳转的目标屏幕 */
     uint8_t     pwd_err_timer;  /* PASSWORD: 错误倒计时 */
@@ -396,11 +398,41 @@ static float load_readonly_val(screen_t scr)
     }
 }
 
+static uint8_t is_coeff_screen(screen_t scr)
+{
+    return (uint8_t)(scr == SCR_METER_COEFF || scr == SCR_MEDIUM_COEFF);
+}
+
+static void coeff_digits_from_value(nav_frame_t *f, float val)
+{
+    uint32_t scaled = (uint32_t)(val * 1000.0f + 0.5f);
+
+    f->coeff_digits[0] = (uint8_t)((scaled / 10000U) % 10U);
+    f->coeff_digits[1] = (uint8_t)((scaled / 1000U) % 10U);
+    f->coeff_digits[2] = (uint8_t)((scaled / 100U) % 10U);
+    f->coeff_digits[3] = (uint8_t)((scaled / 10U) % 10U);
+    f->coeff_digits[4] = (uint8_t)(scaled % 10U);
+}
+
+static float coeff_value_from_digits(const nav_frame_t *f)
+{
+    uint32_t scaled = (uint32_t)f->coeff_digits[0] * 10000U
+                    + (uint32_t)f->coeff_digits[1] * 1000U
+                    + (uint32_t)f->coeff_digits[2] * 100U
+                    + (uint32_t)f->coeff_digits[3] * 10U
+                    + (uint32_t)f->coeff_digits[4];
+
+    return (float)scaled / 1000.0f;
+}
+
 /* ===== 初始化编辑状态 ===== */
 static void init_mode_state(nav_frame_t *f)
 {
     if (f->mode == MODE_NUMERIC) {
         f->edit_val = load_param_val(f->screen_id);
+        if (is_coeff_screen(f->screen_id)) {
+            coeff_digits_from_value(f, f->edit_val);
+        }
     } else if (f->mode == MODE_ENUM) {
         f->enum_val = load_enum_idx(f->screen_id);
     }
@@ -570,11 +602,33 @@ static void render_numeric(nav_frame_t *f)
     ssd1306_SetCursor(x_start, 0);
     ssd1306_WriteString((char *)title, Font_7x10, White);
 
-    /* 当前值居中 */
-    ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
-    x_start = (uint8_t)((SSD1306_WIDTH - strlen(buf) * 7U) / 2U);
-    ssd1306_SetCursor(x_start, 14);
-    ssd1306_WriteString(buf, Font_7x10, White);
+    if (is_coeff_screen(f->screen_id)) {
+        static const uint8_t c_digit_x[COEFF_DIGIT_COUNT] = { 43, 50, 64, 71, 78 };
+        uint8_t i;
+
+        /* Coeff 固定为 00.000，当前编辑位反色显示 */
+        for (i = 0; i < COEFF_DIGIT_COUNT; i++) {
+            buf[0] = (char)('0' + f->coeff_digits[i]);
+            buf[1] = '\0';
+            if (i == f->cursor) {
+                ssd1306_FillRectangle(c_digit_x[i], 14,
+                                      (uint8_t)(c_digit_x[i] + 6), 23, White);
+                ssd1306_SetCursor(c_digit_x[i], 14);
+                ssd1306_WriteString(buf, Font_7x10, Black);
+            } else {
+                ssd1306_SetCursor(c_digit_x[i], 14);
+                ssd1306_WriteString(buf, Font_7x10, White);
+            }
+        }
+        ssd1306_SetCursor(57, 14);
+        ssd1306_WriteString(".", Font_7x10, White);
+    } else {
+        /* 普通数值页保持固定步长编辑 */
+        ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
+        x_start = (uint8_t)((SSD1306_WIDTH - strlen(buf) * 7U) / 2U);
+        ssd1306_SetCursor(x_start, 14);
+        ssd1306_WriteString(buf, Font_7x10, White);
+    }
 
     /* Min/Max 拆成两行，避免 7x10 每行 18 字符的宽度限制 */
     strcpy(buf, "Min:");
@@ -589,12 +643,16 @@ static void render_numeric(nav_frame_t *f)
     ssd1306_SetCursor(0, 39);
     ssd1306_WriteString(buf, Font_7x10, White);
 
-    /* 步长 + 单位 */
-    strcpy(buf, "Step:");
-    ftoa(desc->step, desc->decimals, tmp, sizeof(tmp));
-    strcat(buf, tmp);
-    strcat(buf, " ");
-    strcat(buf, desc->unit);
+    if (is_coeff_screen(f->screen_id)) {
+        strcpy(buf, "Enter:Next/Save");
+    } else {
+        /* 步长 + 单位 */
+        strcpy(buf, "Step:");
+        ftoa(desc->step, desc->decimals, tmp, sizeof(tmp));
+        strcat(buf, tmp);
+        strcat(buf, " ");
+        strcat(buf, desc->unit);
+    }
     ssd1306_SetCursor(0, 50);
     ssd1306_WriteString(buf, Font_7x10, White);
 #endif
@@ -874,6 +932,39 @@ static void handle_numeric(key_event_t evt)
 {
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
     const num_desc_t *desc = &c_num_desc[f->screen_id];
+
+    if (is_coeff_screen(f->screen_id)) {
+        switch (evt) {
+        case KEY_UP:
+            f->coeff_digits[f->cursor] =
+                (uint8_t)((f->coeff_digits[f->cursor] + 1U) % 10U);
+            break;
+        case KEY_DOWN:
+            f->coeff_digits[f->cursor] =
+                (uint8_t)((f->coeff_digits[f->cursor] + 9U) % 10U);
+            break;
+        case KEY_ENTER:
+            if (f->cursor < (COEFF_DIGIT_COUNT - 1U)) {
+                f->cursor++;
+            } else {
+                float val = coeff_value_from_digits(f);
+                if (val < desc->min_val) val = desc->min_val;
+                if (val > desc->max_val) val = desc->max_val;
+                save_param_val(f->screen_id, val);
+                nav_pop();
+                if (s_nav_depth < 0) { menu_exit(); return; }
+            }
+            break;
+        case KEY_BACK:
+            nav_pop();  /* 不保存 */
+            if (s_nav_depth < 0) { menu_exit(); return; }
+            break;
+        default:
+            return;
+        }
+        render_current_frame();
+        return;
+    }
 
     switch (evt) {
     case KEY_UP:
