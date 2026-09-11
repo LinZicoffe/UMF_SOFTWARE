@@ -482,21 +482,27 @@ static void render_list(nav_frame_t *f)
     char buf[22];
     uint8_t i;
     const int is_main_menu = (f->screen_id == SCR_MAIN_MENU);
-    uint8_t visible_rows = is_main_menu ? 5 : 6;
+    const int is_secondary_menu =
+        (f->screen_id == SCR_BASIC_LIST ||
+         f->screen_id == SCR_ACCUM_LIST ||
+         f->screen_id == SCR_CALIB_LIST ||
+         f->screen_id == SCR_SYSTEM_LIST);
+    const int use_7x10_layout = is_main_menu || is_secondary_menu;
+    uint8_t visible_rows = use_7x10_layout ? 5 : 6;
 
     get_list_data(f->screen_id, &items, &count);
     if (!items || count == 0) return;
 
-    if (is_main_menu) {
+    if (use_7x10_layout) {
 #ifdef SSD1306_INCLUDE_FONT_7x10
-        /* 主菜单标题：7x10 黑底白字居中，不使用选中反色效果 */
+        /* 主菜单及直接二级菜单标题：7x10 黑底白字居中，不反色 */
         const char *title = get_screen_title(f->screen_id);
         uint8_t title_x = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
         ssd1306_SetCursor(title_x, 0);
         ssd1306_WriteString((char *)title, Font_7x10, White);
 #endif
     } else {
-        /* 二级列表保持原有 6x8 反色标题 */
+        /* 更深层列表保持原有 6x8 反色标题 */
         ssd1306_FillRectangle(0, 0, 127, 7, White);
         ssd1306_SetCursor(2, 0);
         ssd1306_WriteString((char *)get_screen_title(f->screen_id), Font_6x8, Black);
@@ -510,7 +516,7 @@ static void render_list(nav_frame_t *f)
 
     /* 列表项 */
     for (i = 0; i < visible_rows && (f->scroll + i) < count; i++) {
-        uint8_t y = is_main_menu
+        uint8_t y = use_7x10_layout
                   ? (uint8_t)(10 + i * 11)  /* Font_7x10 行高 10px + 1px */
                   : (uint8_t)(8 + i * 9);   /* Font_6x8 行高 8px + 1px */
         uint8_t idx = (uint8_t)(f->scroll + i);
@@ -518,11 +524,11 @@ static void render_list(nav_frame_t *f)
 
         if (is_sel) {
             ssd1306_FillRectangle(0, y, 127,
-                                  (uint8_t)(y + (is_main_menu ? 9 : 8)), White);
+                                  (uint8_t)(y + (use_7x10_layout ? 9 : 8)), White);
         }
         {
             const char *label = items[idx].label;
-            uint8_t field_chars = is_main_menu ? 18 : 19;
+            uint8_t field_chars = use_7x10_layout ? 18 : 19;
             uint8_t max_label_chars = (uint8_t)(field_chars - 1);
             buf[0] = ' ';
             uint8_t llen = (uint8_t)strlen(label);
@@ -533,7 +539,7 @@ static void render_list(nav_frame_t *f)
             buf[total] = '\0';
         }
         ssd1306_SetCursor(2, y);
-        if (is_main_menu) {
+        if (use_7x10_layout) {
 #ifdef SSD1306_INCLUDE_FONT_7x10
             ssd1306_WriteString(buf, Font_7x10, is_sel ? Black : White);
 #endif
