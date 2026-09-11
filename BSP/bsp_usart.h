@@ -57,11 +57,11 @@ extern uint8_t ModuleState;//module state
 #define InputBufferStartMaxAddress 18
 #define InputBufferLength          10
 extern Uart_SendfloatTypeDef InputBuffer[10];
-#define FlowRateValue   InputBuffer[0] // 瞬时流量,Modbus address 40001
+#define FlowRateValue   InputBuffer[0] // 瞬时流量,Modbus address 40001, 固定单位 L/h (BCD 解析已按帧 flag 换算, 不随 40023 Flow Unit 变化)
 #define FlowTemperature InputBuffer[1] // 温度,Modbus address 40003
 #define FlowPressure    InputBuffer[2] // 压力,Modbus address 40005
 
-extern uint64_t Cumulativeflow;
+extern uint64_t Cumulativeflow;  // Modbus 40041, UFL-1A BCD 原始计数值, 固件未 ÷1000; LSB 由帧 byte[8] flag 决定 (0x0a=0.001L, 0x1a=0.001m³)
 #define CumulativeflowAddress 40 // MODBUS ADDRESS 4X:40041
 
 /* 运行参数寄存器地址 (寄存器 22~29) */
