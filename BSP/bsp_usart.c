@@ -144,7 +144,7 @@ static float    BCDTOInt(uint32_t bcd);
 static uint64_t BCD_TO_LongInt(uint64_t bcd);
 static void     sim_format_cumulative(float value);
 static float    compute_dac_current_mA(void);
-static uint64_t mul_div_u64(uint64_t value, uint32_t multiplier, uint64_t divisor);
+static uint64_t mul_div_round_u64(uint64_t value, uint32_t multiplier, uint64_t divisor);
 static uint64_t convert_total_to_milli_unit(uint64_t raw_total, uint8_t source_unit,
                                             uint8_t target_unit, float density_kg_m3);
 static void     format_milli_total(uint64_t milli_value, unsigned char *p_buf,
@@ -1815,11 +1815,12 @@ float convert_flow_rate_from_lph(
     }
 }
 
-static uint64_t mul_div_u64(uint64_t value, uint32_t multiplier, uint64_t divisor)
+static uint64_t mul_div_round_u64(uint64_t value, uint32_t multiplier, uint64_t divisor)
 {
     uint64_t quotient;
     uint64_t remainder;
     uint64_t fraction;
+    uint64_t fraction_remainder;
     uint64_t result;
 
     quotient = value / divisor;
@@ -1829,7 +1830,11 @@ static uint64_t mul_div_u64(uint64_t value, uint32_t multiplier, uint64_t diviso
         return UINT64_MAX;
 
     result = quotient * multiplier;
-    fraction = (remainder * multiplier) / divisor;
+    remainder *= multiplier;
+    fraction = remainder / divisor;
+    fraction_remainder = remainder % divisor;
+    if (fraction_remainder >= (divisor + 1ULL) / 2ULL)
+        fraction++;
     if (result > UINT64_MAX - fraction)
         return UINT64_MAX;
 
@@ -1859,21 +1864,21 @@ static uint64_t convert_total_to_milli_unit(
     switch (target_unit)
     {
     case TOTAL_UNIT_M3:
-        return milli_liter / 1000ULL;
+        return mul_div_round_u64(milli_liter, 1, 1000ULL);
 
     case TOTAL_UNIT_L:
         return milli_liter;
 
     case TOTAL_UNIT_KG:
         density_x1000 = (uint32_t)(density_kg_m3 * 1000.0f + 0.5f);
-        return mul_div_u64(milli_liter, density_x1000, 1000000ULL);
+        return mul_div_round_u64(milli_liter, density_x1000, 1000000ULL);
 
     case TOTAL_UNIT_T:
         density_x1000 = (uint32_t)(density_kg_m3 * 1000.0f + 0.5f);
-        return mul_div_u64(milli_liter, density_x1000, 1000000000ULL);
+        return mul_div_round_u64(milli_liter, density_x1000, 1000000000ULL);
 
     default:
-        return milli_liter / 1000ULL;
+        return mul_div_round_u64(milli_liter, 1, 1000ULL);
     }
 }
 
