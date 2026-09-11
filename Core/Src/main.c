@@ -192,7 +192,10 @@ int main(void)
             {
                 Uart_SendfloatTypeDef eff_rate;
                 Uart_SendfloatTypeDef eff_temp;
-                eff_rate.num = effective_flow_rate();
+                eff_rate.num = convert_flow_rate_from_lph(
+                    effective_flow_rate(),
+                    param_get_flow_unit(),
+                    param_get_medium_density());
                 eff_temp.num = effective_temperature();
 
                 const run_display_input_t input = {

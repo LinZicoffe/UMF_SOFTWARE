@@ -1786,6 +1786,30 @@ float effective_flow_rate(void)
     return FlowRateValue.num;
 }
 
+float convert_flow_rate_from_lph(
+    float flow_lph,
+    uint8_t target_unit,
+    float density_kg_m3)
+{
+    switch (target_unit)
+    {
+    case FLOW_UNIT_M3H:
+        return flow_lph / 1000.0f;
+
+    case FLOW_UNIT_LH:
+        return flow_lph;
+
+    case FLOW_UNIT_LMIN:
+        return flow_lph / 60.0f;
+
+    case FLOW_UNIT_KGH:
+        return flow_lph * density_kg_m3 / 1000.0f;
+
+    default:
+        return flow_lph;
+    }
+}
+
 float effective_temperature(void)
 {
     return sim_is_active() ? s_sim_temperature.num : FlowTemperature.num;
