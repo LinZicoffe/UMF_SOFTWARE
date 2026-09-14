@@ -81,6 +81,14 @@ typedef enum {
 #define NAV_STACK_DEPTH  5
 #define COEFF_DIGIT_COUNT 5
 #define PASSWORD_ERROR_DISPLAY_MS 2000U
+#define OPERATOR_COEFF_MIN 0.800f
+#define OPERATOR_COEFF_MAX 1.200f
+
+typedef enum {
+    ACCESS_NONE = 0,
+    ACCESS_OPERATOR,
+    ACCESS_DEVELOPER
+} access_level_t;
 
 typedef struct {
     menu_mode_t mode;
@@ -224,6 +232,7 @@ static nav_frame_t        s_nav_stack[NAV_STACK_DEPTH];
 static int8_t             s_nav_depth;           /* -1 = 不活跃 */
 static volatile uint16_t  s_idle_counter;        /* ISR 递增 */
 static menu_config_t      s_config;
+static access_level_t     s_access_level;
 
 /* ===== 栈操作 ===== */
 static void nav_push(menu_mode_t mode, screen_t scr)
@@ -403,6 +412,18 @@ static float load_readonly_val(screen_t scr)
 static uint8_t is_coeff_screen(screen_t scr)
 {
     return (uint8_t)(scr == SCR_METER_COEFF || scr == SCR_MEDIUM_COEFF);
+}
+
+static void get_numeric_range(screen_t scr, float *p_min, float *p_max)
+{
+    const num_desc_t *desc = &c_num_desc[scr];
+
+    *p_min = desc->min_val;
+    *p_max = desc->max_val;
+    if (is_coeff_screen(scr) && s_access_level == ACCESS_OPERATOR) {
+        *p_min = OPERATOR_COEFF_MIN;
+        *p_max = OPERATOR_COEFF_MAX;
+    }
 }
 
 static void coeff_digits_from_value(nav_frame_t *f, float val)
@@ -591,10 +612,14 @@ static void render_list(nav_frame_t *f)
 static void render_numeric(nav_frame_t *f)
 {
     const num_desc_t *desc = &c_num_desc[f->screen_id];
+    float min_val;
+    float max_val;
     char buf[32];
     char tmp[16];
     const char *title = get_screen_title(f->screen_id);
     uint8_t x_start;
+
+    get_numeric_range(f->screen_id, &min_val, &max_val);
 
     ssd1306_Fill(Black);
 
@@ -634,13 +659,13 @@ static void render_numeric(nav_frame_t *f)
 
     /* Min/Max 拆成两行，避免 7x10 每行 18 字符的宽度限制 */
     strcpy(buf, "Min:");
-    ftoa(desc->min_val, desc->decimals, tmp, sizeof(tmp));
+    ftoa(min_val, desc->decimals, tmp, sizeof(tmp));
     strcat(buf, tmp);
     ssd1306_SetCursor(0, 28);
     ssd1306_WriteString(buf, Font_7x10, White);
 
     strcpy(buf, "Max:");
-    ftoa(desc->max_val, desc->decimals, tmp, sizeof(tmp));
+    ftoa(max_val, desc->decimals, tmp, sizeof(tmp));
     strcat(buf, tmp);
     ssd1306_SetCursor(0, 39);
     ssd1306_WriteString(buf, Font_7x10, White);
@@ -934,6 +959,10 @@ static void handle_numeric(key_event_t evt)
 {
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
     const num_desc_t *desc = &c_num_desc[f->screen_id];
+    float min_val;
+    float max_val;
+
+    get_numeric_range(f->screen_id, &min_val, &max_val);
 
     if (is_coeff_screen(f->screen_id)) {
         switch (evt) {
@@ -950,8 +979,8 @@ static void handle_numeric(key_event_t evt)
                 f->cursor++;
             } else {
                 float val = coeff_value_from_digits(f);
-                if (val < desc->min_val) val = desc->min_val;
-                if (val > desc->max_val) val = desc->max_val;
+                if (val < min_val) val = min_val;
+                if (val > max_val) val = max_val;
                 save_param_val(f->screen_id, val);
                 nav_pop();
                 if (s_nav_depth < 0) { menu_exit(); return; }
@@ -971,11 +1000,11 @@ static void handle_numeric(key_event_t evt)
     switch (evt) {
     case KEY_UP:
         f->edit_val += desc->step;
-        if (f->edit_val > desc->max_val) f->edit_val = desc->max_val;
+        if (f->edit_val > max_val) f->edit_val = max_val;
         break;
     case KEY_DOWN:
         f->edit_val -= desc->step;
-        if (f->edit_val < desc->min_val) f->edit_val = desc->min_val;
+        if (f->edit_val < min_val) f->edit_val = min_val;
         break;
     case KEY_ENTER:
         save_param_val(f->screen_id, f->edit_val);
@@ -1056,10 +1085,18 @@ static void handle_password(key_event_t evt)
             uint16_t pwd = (uint16_t)(f->pwd_digits[0] * 100 +
                           f->pwd_digits[1] * 10 +
                           f->pwd_digits[2]);
-            uint8_t ok = (uint8_t)(pwd == param_get_pwd_operator() ||
-                                   pwd == param_get_pwd_engineer());
+            access_level_t access_level = ACCESS_NONE;
+            uint8_t ok;
+
+            if (pwd == param_get_pwd_engineer()) {
+                access_level = ACCESS_DEVELOPER;
+            } else if (pwd == param_get_pwd_operator()) {
+                access_level = ACCESS_OPERATOR;
+            }
+            ok = (uint8_t)(access_level != ACCESS_NONE);
             if (ok) {
                 /* 成功: 弹出密码帧, 推入目标 */
+                s_access_level = access_level;
                 nav_pop();  /* 弹出密码帧 */
                 {
                     menu_mode_t m = detect_mode((screen_t)f->pwd_target);
@@ -1148,6 +1185,7 @@ static void handle_confirm(key_event_t evt)
 void menu_init(const menu_config_t *p_cfg)
 {
     s_nav_depth = -1;
+    s_access_level = ACCESS_NONE;
     s_config.idle_timeout_10ms = (p_cfg && p_cfg->idle_timeout_10ms) ? p_cfg->idle_timeout_10ms : 3000;
     s_idle_counter = 0;
 }
@@ -1232,6 +1270,7 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
 void menu_exit(void)
 {
     s_nav_depth = -1;
+    s_access_level = ACCESS_NONE;
     ssd1306_Fill(Black);
     ssd1306_UpdateScreen();
 }

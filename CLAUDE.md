@@ -206,7 +206,7 @@ ssd1306_SetContrast(value);                        // 对比度
 | M5 确认 (CONFIRM) | 危险操作 | KEY_UP/DOWN YES/NO, KEY_ENTER 执行 |
 | M6 密码 (PASSWORD) | 身份验证 | KEY_UP/DOWN 改数字, KEY_ENTER 下一位 |
 
-密码两级门控: 操作员 `000` (Parameter 菜单), 工程师 `123` (全部菜单)。菜单通过 `param_storage` getter/setter 读写参数。
+密码两级门控: 普通用户 `000`，工程师/开发者 `123`。普通用户通过 OLED 设置 `meter_coeff` 和 `medium_coeff` 时限制为 0.800~1.200，工程师/开发者可使用完整设备范围。菜单通过 `param_storage` getter/setter 读写参数。
 
 ### 菜单导航结构
 
