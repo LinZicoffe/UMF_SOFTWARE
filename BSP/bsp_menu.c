@@ -728,9 +728,9 @@ static void render_password(nav_frame_t *f)
     /* 错误倒计时中显示错误信息 */
     if (f->pwd_err_visible) {
 #ifdef SSD1306_INCLUDE_FONT_11x18
-        ssd1306_SetCursor(10, 12);
+        ssd1306_SetCursor(20, 12);  /* (128 - 8 x 11) / 2 */
         ssd1306_WriteString("Password", Font_11x18, White);
-        ssd1306_SetCursor(4, 36);
+        ssd1306_SetCursor(31, 36);  /* (128 - 6 x 11) / 2 */
         ssd1306_WriteString("Error!", Font_11x18, White);
 #endif
         return;
