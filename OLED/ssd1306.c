@@ -147,7 +147,7 @@ SSD1306_Error_t ssd1306_FillBuffer(uint8_t* buf, uint32_t len) {
  * 确保两条恢复路径配置完全一致, 避免参数漂移. */
 static void ssd1306_send_init_commands(void)
 {
-    ssd1306_SetDisplayOn(0); //display off
+    //ssd1306_SetDisplayOn(0); //display off 避免OLED周期性闪烁
 
     ssd1306_WriteCommand(0x20); //Set Memory Addressing Mode
     ssd1306_WriteCommand(0x02); // 10b = Page Addressing Mode (与 UpdateScreen 的 0xB0 命令一致)
