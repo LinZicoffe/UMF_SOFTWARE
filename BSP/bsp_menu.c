@@ -1155,6 +1155,9 @@ static void handle_confirm(key_event_t evt)
                 param_set_reverse_total(0.0f);
             } else if (f->screen_id == SCR_FACTORY_RST) {
                 param_storage_reset_defaults();
+                /* 参数缓存/Flash 已恢复默认值，同步更新当前运行中的通信配置。 */
+                bsp_usart_set_modbus_addr(param_get_modbus_addr());
+                bsp_usart2_apply_uart_config(param_get_uart_config());
                 /* 同步复位 DAC/Span 到默认值 */
                 DacZeroValue = 12100;
                 DacFullValue = 60000;
