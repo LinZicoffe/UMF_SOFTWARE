@@ -80,6 +80,7 @@ typedef enum {
 /* ===== 导航栈帧 ===== */
 #define NAV_STACK_DEPTH  5
 #define COEFF_DIGIT_COUNT 5
+#define PASSWORD_ERROR_DISPLAY_MS 2000U
 
 typedef struct {
     menu_mode_t mode;
@@ -90,7 +91,8 @@ typedef struct {
     uint8_t     coeff_digits[COEFF_DIGIT_COUNT]; /* NUMERIC: Coeff 的 00.000 数位 */
     uint8_t     pwd_digits[3];  /* PASSWORD: 3位数字 */
     uint8_t     pwd_target;     /* PASSWORD: 成功后跳转的目标屏幕 */
-    uint8_t     pwd_err_timer;  /* PASSWORD: 错误倒计时 */
+    uint32_t    pwd_err_start_ms;     /* PASSWORD: 错误提示开始时刻 */
+    uint8_t     pwd_err_visible;      /* PASSWORD: 错误提示正在显示 */
     uint8_t     confirm_sel;    /* CONFIRM: 0=NO(安全默认), 1=YES */
     uint8_t     enum_val;       /* ENUM: 临时枚举值 */
 } nav_frame_t;
@@ -724,7 +726,7 @@ static void render_password(nav_frame_t *f)
     ssd1306_Fill(Black);
 
     /* 错误倒计时中显示错误信息 */
-    if (f->pwd_err_timer > 0) {
+    if (f->pwd_err_visible) {
 #ifdef SSD1306_INCLUDE_FONT_11x18
         ssd1306_SetCursor(10, 12);
         ssd1306_WriteString("Password", Font_11x18, White);
@@ -1035,7 +1037,7 @@ static void handle_password(key_event_t evt)
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
 
     /* 错误倒计时中屏蔽按键 */
-    if (f->pwd_err_timer > 0) return;
+    if (f->pwd_err_visible) return;
 
     switch (evt) {
     case KEY_UP:
@@ -1065,7 +1067,8 @@ static void handle_password(key_event_t evt)
                     init_mode_state(&s_nav_stack[s_nav_depth]);
                 }
             } else {
-                f->pwd_err_timer = 7;  /* ~2.1 秒 */
+                f->pwd_err_start_ms = HAL_GetTick();
+                f->pwd_err_visible = 1;
                 f->cursor = 0;
                 memset(f->pwd_digits, 0, sizeof(f->pwd_digits));
             }
@@ -1177,15 +1180,19 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
         return 0;
     }
 
-    /* 4. KEY_NONE: 驱动密码错误倒计时 */
-    if (key_evt == KEY_NONE) {
-        if (s_nav_depth >= 0) {
-            nav_frame_t *f = &s_nav_stack[s_nav_depth];
-            if (f->mode == MODE_PASSWORD && f->pwd_err_timer > 0) {
-                f->pwd_err_timer--;
-                if (f->pwd_err_timer == 0) render_current_frame();
-            }
+    /* 4. 密码错误提示到期后，在主循环恢复输入界面 */
+    {
+        nav_frame_t *f = &s_nav_stack[s_nav_depth];
+        if (f->mode == MODE_PASSWORD &&
+            f->pwd_err_visible &&
+            (uint32_t)(HAL_GetTick() - f->pwd_err_start_ms) >= PASSWORD_ERROR_DISPLAY_MS) {
+            f->pwd_err_visible = 0;
+            render_current_frame();
         }
+    }
+
+    /* 5. KEY_NONE: 无按键事件 */
+    if (key_evt == KEY_NONE) {
         if (p_out && s_nav_depth >= 0) {
             p_out->active = 1;
             p_out->screen_id = (uint8_t)s_nav_stack[s_nav_depth].screen_id;
@@ -1194,10 +1201,10 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
         return 1;
     }
 
-    /* 5. 有按键: 重置空闲计时 */
+    /* 6. 有按键: 重置空闲计时 */
     s_idle_counter = 0;
 
-    /* 6. 按模式分发 */
+    /* 7. 按模式分发 */
     {
         nav_frame_t *f = &s_nav_stack[s_nav_depth];
         switch (f->mode) {
