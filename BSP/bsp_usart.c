@@ -15,24 +15,41 @@
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
 
-/* ── 瞬时流量去极值滤波 (累加器法, 去最大值) ────────── */
-#define FLOW_FILTER_N   10  /* 累计样本数 */
-static float    s_flt_sum;
-static float    s_flt_max;
+/* ── 瞬时流量去极值滤波 (10 点滑动窗口, 去最大值) ────── */
+#define FLOW_FILTER_N   10  /* 窗口样本数 */
+static float    s_flt_window[FLOW_FILTER_N];
+static uint8_t  s_flt_write_index;
 static uint8_t  s_flt_count;
 static float    s_flt_result;
 static uint8_t  s_flt_valid;
 
-/* 流量值恒 >= 0, s_flt_max 零初始化后首个正样本自动更新, 无需 init */
 static void flow_filter_feed(float sample)
 {
-    s_flt_sum += sample;
-    if (sample > s_flt_max) s_flt_max = sample;
-    if (++s_flt_count >= FLOW_FILTER_N) {
-        s_flt_result = (s_flt_sum - s_flt_max) / (float)(FLOW_FILTER_N - 1);
-        s_flt_valid = 1;
-        s_flt_sum = 0.0f; s_flt_count = 0; s_flt_max = 0.0f;
+    float sum;
+    float max;
+    uint8_t i;
+
+    s_flt_window[s_flt_write_index] = sample;
+    s_flt_write_index = (uint8_t)((s_flt_write_index + 1U) % FLOW_FILTER_N);
+
+    if (s_flt_count < FLOW_FILTER_N) {
+        s_flt_count++;
     }
+    if (s_flt_count < FLOW_FILTER_N) {
+        return;
+    }
+
+    sum = 0.0f;
+    max = s_flt_window[0];
+    for (i = 0; i < FLOW_FILTER_N; i++) {
+        sum += s_flt_window[i];
+        if (s_flt_window[i] > max) {
+            max = s_flt_window[i];
+        }
+    }
+
+    s_flt_result = (sum - max) / (float)(FLOW_FILTER_N - 1);
+    s_flt_valid = 1;
 }
 
 /* ── 常量定义 ─────────────────────────────────────── */
