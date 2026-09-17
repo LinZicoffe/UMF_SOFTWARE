@@ -33,12 +33,17 @@
   - 本文档。
 - 编译：`iarbuild` **0 错误 0 警告**；基线 ROM 348 B（intvec + 启动 + 空主循环），G1 余量 5,796 B。
 - 过程修正：ICF 中文注释被 IAR 以本地代码页解析报"注释未闭合"→ 改纯 ASCII 注释（App 工程的 ICF 同样为 ASCII，保持一致）。
-- 审查：_待独立 agent 审查后填写_
+- 审查：**PASS**（独立 agent，2026-09-17）。全部地址/魔数/解码与方案 §3/§4.5/§5.2/附录 A/B 逐字一致；SystemInit 空实现论证成立；D1~D5 自洽。4 条 Minor 已全部处置：
+  1. OBJCOPY 输出 `UMF.hex`→`UMF_Boot.hex`（防现场烧录拿错同名产物，§10.3 治理目标）；
+  2. BrowseInfoPath 独立为 `UMF_Boot\BrowseInfo`；
+  3. TrustZone 惰性输出名 `UMF_Boot_import_lib.o`；
+  4. 本文档前置清单第 2 条补注：后构建断言② 必须按 D2 口径实现——`u32@bin[0x200] == 0x554D4648`（内存字节序 "HFMU"），不得照方案 §4.5 字面写 `bin[0x200..0x203]=="UMFH"`（该文本与方案自己的 C 初始化数组矛盾）。
+  审查备注（记录不处置）：App 工程 ICF 的 RAM end 仍 0x20004FFF、仍用页 54~63 作 EEPROM——属 App 侧前置改造范围；AGENTS.md 写 EWARM 8.32 与实际 9.60.4 不符（工具链版本信息陈旧，另行更新）。
 
 ## App 侧前置改造清单（BL 之外，另行实施后方可端到端联调）
 
 1. App ICF 迁 `0x08001C00` + `USER_VECT_TAB_ADDRESS`/`VECT_TAB_OFFSET=0x1C00`（`Core/Src/system_stm32f1xx.c`）；
-2. `.fw_header` 32 B const 保留区（`App+0x200`，静态字段按 §4.5 表、BL 写入区全 `0xFF`）+ 后构建断言（§6.2 四项）；
+2. `.fw_header` 32 B const 保留区（`App+0x200`，静态字段按 §4.5 表、BL 写入区全 `0xFF`）+ 后构建断言（§6.2 四项；**断言② 按 D2 口径实现：`u32@bin[0x200] == 0x554D4648`，内存字节序为 "HFMU"，不是 "UMFH" 字节串**）；
 3. RAM 邮箱写入/清除 + Modbus 寄存器 40127/40128~129/40130/40131；
 4. `param_store` 3 页轮转 + 16 B BL 通信槽（M1，格式与 BL 侧 `bl_info.h` 一致后冻结）；
 5. App IWDG 放宽至约 1 s（`IWDG_PRESCALER_64`+624）+ `main()` 开头原始喂狗 `IWDG->KR=0xAAAA`；

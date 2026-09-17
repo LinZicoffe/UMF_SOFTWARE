@@ -16,7 +16,7 @@
                 <debug>1</debug>
                 <option>
                     <name>BrowseInfoPath</name>
-                    <state>UMF\BrowseInfo</state>
+                    <state>UMF_Boot\BrowseInfo</state>
                 </option>
                 <option>
                     <name>ExePath</name>
@@ -676,7 +676,7 @@
                 </option>
                 <option>
                     <name>OOCOutputFile</name>
-                    <state>UMF.hex</state>
+                    <state>UMF_Boot.hex</state>
                 </option>
                 <option>
                     <name>OOCCommandLineProducer</name>
@@ -1011,7 +1011,7 @@
                 </option>
                 <option>
                     <name>IlinkTrustzoneImportLibraryOut</name>
-                    <state>UMF_import_lib.o</state>
+                    <state>UMF_Boot_import_lib.o</state>
                 </option>
                 <option>
                     <name>OILinkExtraOption</name>
