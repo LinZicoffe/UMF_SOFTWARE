@@ -1118,6 +1118,15 @@
         <file>
             <name>$PROJ_DIR$\..\Boot\Src\bl_flash.c</name>
         </file>
+        <file>
+            <name>$PROJ_DIR$\..\Boot\Src\bl_clock.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\Boot\Src\bl_time.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\..\Boot\Src\bl_iwdg.c</name>
+        </file>
     </group>
     <group>
         <name>EWARM</name>
