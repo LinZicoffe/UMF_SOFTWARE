@@ -26,7 +26,8 @@ void bl_flash_set_backup_window(int enable);
 bl_status_t bl_flash_erase_page(uint32_t addr);
 
 /* 半字编程：[addr, addr + 2*count) 整体落在白名单内且半字对齐。
- * 逐半字检查状态（§6.1）；值为 0xFFFF 或目标已等于期望值时跳过。*/
+ * 逐半字检查状态（§6.1）；值为 0xFFFF 或目标已是期望值的半字被跳过，
+ * 因此 BL_OK 契约为"目标不劣于期望值"，严格逐字比对用 verify 接口。*/
 bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint16_t count);
 
 /* 回读比对（编程后校验）。*/

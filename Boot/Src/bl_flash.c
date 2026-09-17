@@ -3,7 +3,8 @@
  * @brief   F1 Flash 寄存器级驱动实现（零 HAL，RM0008 §3 闪存编程手册）
  *
  * 参照 OpenBLT 的 F1 flash 驱动惯例（本项目独立实现，无代码引用）：
- * 每次操作前清历史错误标志、每半字编程后检查状态、所有等待均有界。
+ * 每次操作前清历史错误标志并确认 BSY 已清零、每半字编程后检查状态、
+ * 所有等待均有界且超时上限按操作类型分档。
  */
 #include "stm32f103xb.h"
 #include "bl_flash.h"
@@ -11,16 +12,20 @@
 /* ===== 内部状态 ===== */
 static int s_backup_window;      /* 备份页写窗口（默认关闭）*/
 
-/* 有界等待计数：72MHz 下一次空循环约 4~6 周期，
- * 100_000 次 ≈ 数 ms，远大于单半字编程(≤4us)与标志去抖，足以兜底硬件异常。*/
-#define BL_FLASH_WAIT_LIMIT   100000u
+/* 有界等待上限（迭代次数，按 72MHz、每循环 4~15 周期估算）：
+ *   半字编程 t_PROG ≤ 4us   ⇒ 100k 次 ≈ 5~20ms，余量 >1000 倍；
+ *   页擦除   t_ERASE max 40ms ⇒ 40ms×72MHz/4周期 = 720k 次，
+ *           取 2,000,000 次（最保守 4 周期/循环时约 111ms）≈ 2.8 倍余量。*/
+#define BL_FLASH_WAIT_PROGRAM  100000u
+#define BL_FLASH_WAIT_ERASE    2000000u
 
 /* ===== 内部辅助 — static ===== */
 
 static int range_within(uint32_t addr, uint32_t len, uint32_t base, uint32_t end_incl)
 {
-    /* base <= addr <= end_incl 由第一个条件保证，end_incl-addr+1 不会下溢 */
-    return (addr >= base) && (len <= (end_incl - addr + 1u));
+    /* 三段判据缺一不可：addr 在区间内（含上下界）且 [addr,addr+len) 不越过 end_incl。
+     * 只有 addr<=end_incl 成立后，end_incl-addr+1 才不会无符号下溢。*/
+    return (addr >= base) && (addr <= end_incl) && (len <= (end_incl - addr + 1u));
 }
 
 /* 白名单校验：返回 1 表示 [addr, addr+len) 允许擦/写 */
@@ -57,11 +62,11 @@ static void flash_clear_flags(void)
     FLASH->SR = FLASH_SR_EOP | FLASH_SR_PGERR | FLASH_SR_WRPRTERR;
 }
 
-/* 等待 BSY 清零：超时返回 0，正常返回 1 */
-static int wait_not_busy(void)
+/* 等待 BSY 清零：超时返回 0，正常返回 1（limit 按操作类型分档）*/
+static int wait_not_busy(uint32_t limit)
 {
     uint32_t n;
-    for (n = 0; n < BL_FLASH_WAIT_LIMIT; n++)
+    for (n = 0; n < limit; n++)
     {
         if ((FLASH->SR & FLASH_SR_BSY) == 0u)
         {
@@ -80,6 +85,8 @@ void bl_flash_set_backup_window(int enable)
 
 bl_status_t bl_flash_erase_page(uint32_t addr)
 {
+    uint32_t sr;
+
     if ((addr & (BL_FLASH_PAGE_SIZE - 1u)) != 0u)
     {
         return BL_ERR_ADDR;              /* 未页对齐 */
@@ -90,50 +97,54 @@ bl_status_t bl_flash_erase_page(uint32_t addr)
     }
 
     flash_unlock();
-    flash_clear_flags();
 
-    FLASH->AR = addr;                    /* 页地址寄存器 */
-    FLASH->CR |= FLASH_CR_PER;           /* 页擦除模式 */
-    FLASH->CR |= FLASH_CR_STRT;          /* 启动 */
-
-    if (!wait_not_busy())
+    /* RM0008 擦除流程第 1 步：确认 BSY=0（前序操作不得悬挂）*/
+    if (!wait_not_busy(BL_FLASH_WAIT_PROGRAM))
     {
-        FLASH->CR &= ~FLASH_CR_PER;
         flash_lock();
         return BL_ERR_TIMEOUT;
     }
 
+    flash_clear_flags();
+    FLASH->CR |= FLASH_CR_PER;           /* 页擦除模式（RM0008 顺序：PER→AR→STRT）*/
+    FLASH->AR  = addr;                   /* 页地址寄存器 */
+    FLASH->CR |= FLASH_CR_STRT;          /* 启动 */
+
+    if (!wait_not_busy(BL_FLASH_WAIT_ERASE))
     {
-        uint32_t sr = FLASH->SR;
-        bl_status_t st = BL_OK;
-
-        FLASH->CR &= ~FLASH_CR_PER;
-        flash_clear_flags();             /* 清 EOP 与错误标志 */
+        /* BSY 置位期间写 CR 不生效（RM0008），故此处不做 CR 复位、仅尝试上锁并
+         * 报错；真正的恢复路径是会话期看门狗（5s）复位整机后重入升级模式。*/
         flash_lock();
-
-        if (sr & FLASH_SR_PGERR)         { st = BL_ERR_ERASE; }
-        else if (sr & FLASH_SR_WRPRTERR) { st = BL_ERR_ERASE; }
-        else if ((sr & FLASH_SR_EOP) == 0u) { st = BL_ERR_ERASE; } /* 无 EOP = 未完成 */
-
-        /* 回读校验：整页首半字与末半字须为 0xFFFF（快速抽检，整页逐字由
-         * 后续 program 的 per-halfword 预检查兜底）*/
-        if (st == BL_OK)
-        {
-            if (bl_flash_read16(addr) != 0xFFFFu ||
-                bl_flash_read16(addr + BL_FLASH_PAGE_SIZE - 2u) != 0xFFFFu)
-            {
-                st = BL_ERR_ERASE;
-            }
-        }
-        return st;
+        return BL_ERR_TIMEOUT;
     }
+
+    sr = FLASH->SR;
+    FLASH->CR &= ~FLASH_CR_PER;
+    flash_clear_flags();                 /* 清 EOP 与错误标志 */
+    flash_lock();
+
+    if (sr & FLASH_SR_PGERR)             { return BL_ERR_ERASE; }
+    if (sr & FLASH_SR_WRPRTERR)          { return BL_ERR_ERASE; }
+    if ((sr & FLASH_SR_EOP) == 0u)       { return BL_ERR_ERASE; } /* 无 EOP = 未完成 */
+
+    /* 回读抽检：整页首/末半字须为 0xFFFF（页内逐字由编程期 per-halfword
+     * 预检查兜底；此抽检用于拦截"部分擦除"页）*/
+    if (bl_flash_read16(addr) != 0xFFFFu ||
+        bl_flash_read16(addr + BL_FLASH_PAGE_SIZE - 2u) != 0xFFFFu)
+    {
+        return BL_ERR_ERASE;
+    }
+    return BL_OK;
 }
 
+/* 注意契约：value==0xFFFF 或目标已是期望值的半字会被跳过并计入成功，
+ * 因此 BL_OK 表示"目标不劣于期望值"，不保证逐半字等于 data；
+ * 需要严格比对时调用 bl_flash_verify_halfwords。*/
 bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint16_t count)
 {
     uint16_t i;
 
-    if (data == 0)
+    if (data == NULL)
     {
         return BL_ERR_PARAM;
     }
@@ -148,20 +159,30 @@ bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint
 
     flash_unlock();
 
+    /* RM0008 编程流程第 1 步：确认 BSY=0 */
+    if (!wait_not_busy(BL_FLASH_WAIT_PROGRAM))
+    {
+        flash_lock();
+        return BL_ERR_TIMEOUT;
+    }
+
     for (i = 0; i < count; i++)
     {
         uint32_t target = addr + (uint32_t)i * 2u;
         uint16_t  value = data[i];
+        uint16_t  current;
+        uint32_t sr;
 
         if (value == 0xFFFFu)
         {
             continue;                    /* 全 1 半字无需编程（擦除态天然一致）*/
         }
-        if (bl_flash_read16(target) == value)
+        current = bl_flash_read16(target);
+        if (current == value)
         {
             continue;                    /* 已是期望值（同包重发，T-07）*/
         }
-        if (bl_flash_read16(target) != 0xFFFFu)
+        if (current != 0xFFFFu)
         {
             flash_lock();
             return BL_ERR_PROGRAM;       /* 目标非擦除态且值不同 ⇒ 硬件必 PGERR */
@@ -171,36 +192,34 @@ bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint
         FLASH->CR |= FLASH_CR_PG;
         *(volatile uint16_t *)target = value;
 
-        if (!wait_not_busy())
+        if (!wait_not_busy(BL_FLASH_WAIT_PROGRAM))
         {
-            FLASH->CR &= ~FLASH_CR_PG;
+            /* BSY 期间写 CR 无效：不清 PG、仅尝试上锁并报错，恢复路径同上 */
             flash_lock();
             return BL_ERR_TIMEOUT;
         }
 
-        {
-            uint32_t sr = FLASH->SR;
-            FLASH->CR &= ~FLASH_CR_PG;
+        sr = FLASH->SR;
+        FLASH->CR &= ~FLASH_CR_PG;
 
-            if (sr & FLASH_SR_PGERR)
-            {
-                flash_clear_flags();
-                flash_lock();
-                return BL_ERR_PROGRAM;
-            }
-            if (sr & FLASH_SR_WRPRTERR)
-            {
-                flash_clear_flags();
-                flash_lock();
-                return BL_ERR_ADDR;      /* 写保护（本分区不应出现，防御性处理）*/
-            }
-            if ((sr & FLASH_SR_EOP) == 0u)
-            {
-                flash_lock();
-                return BL_ERR_PROGRAM;
-            }
-            flash_clear_flags();         /* 清 EOP，为下一半字准备 */
+        if (sr & FLASH_SR_PGERR)
+        {
+            flash_clear_flags();
+            flash_lock();
+            return BL_ERR_PROGRAM;
         }
+        if (sr & FLASH_SR_WRPRTERR)
+        {
+            flash_clear_flags();
+            flash_lock();
+            return BL_ERR_ADDR;          /* 写保护（本分区不应出现，防御性处理）*/
+        }
+        if ((sr & FLASH_SR_EOP) == 0u)
+        {
+            flash_lock();
+            return BL_ERR_PROGRAM;
+        }
+        flash_clear_flags();             /* 清 EOP，为下一半字准备 */
     }
 
     flash_lock();
@@ -211,13 +230,13 @@ bl_status_t bl_flash_verify_halfwords(uint32_t addr, const uint16_t *data, uint1
 {
     uint16_t i;
 
-    if (data == 0)
+    if (data == NULL)
     {
         return BL_ERR_PARAM;
     }
-    if (!addr_allowed(addr, (uint32_t)count * 2u) && (count != 0u))
+    /* 回读比对只需读权限，但仍限制在白名单内，防止误用（count==0 放行）*/
+    if ((count != 0u) && !addr_allowed(addr, (uint32_t)count * 2u))
     {
-        /* 回读比对只需读权限，但仍限制在白名单内，防止误用 */
         return BL_ERR_ADDR;
     }
 
