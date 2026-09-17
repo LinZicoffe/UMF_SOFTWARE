@@ -23,7 +23,8 @@ bl_status_t bl_usart_init(uint8_t uart_config);
 uint32_t bl_usart_baud_hz(void);
 
 /* 轮询收 1 字节：timeout_ms 内收到返回 0~255，超时返回 -1。
- * 等待期间每约 100ms 喂一次狗；ORE 置位时读 DR 清除。*/
+ * 按墙钟每约 100ms 喂一次狗（喂狗计时跨调用持久、检查先于 RXNE 返回，
+ * 字节立即命中的调用路径同样喂狗）；ORE 置位时读 DR 清除。*/
 int bl_usart_getc(uint32_t timeout_ms);
 
 /* 轮询发 1 字节 / 缓冲区：DE 拉高 → TXE 发送 → 等 TC → DE 拉低，

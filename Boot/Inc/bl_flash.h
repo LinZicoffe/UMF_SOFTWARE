@@ -22,6 +22,11 @@
  * 通过后立即关闭（§7.3 前置条件 ⇒ 备份就绪即永不重写）。*/
 void bl_flash_set_backup_window(int enable);
 
+/* App 区写窗口开关（默认开）。§7.3"备份未就绪 ⇒ 拒绝一切擦除类命令"：
+ * 备份建立失败时 main 关闭此窗口，协议层对 App 区的任何擦/写立即失败
+ * （保持旧 App 完好，T-26）。*/
+void bl_flash_set_app_window(int enable);
+
 /* 整页擦除。addr 必须页对齐且落在白名单内，否则 BL_ERR_ADDR。*/
 bl_status_t bl_flash_erase_page(uint32_t addr);
 

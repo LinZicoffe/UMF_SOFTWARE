@@ -11,6 +11,7 @@
 
 /* ===== 内部状态 ===== */
 static int s_backup_window;      /* 备份页写窗口（默认关闭）*/
+static int s_app_window = 1;     /* App 区写窗口（默认开；§7.3 备份失败时关）*/
 
 /* 有界等待上限（迭代次数，按 72MHz、每循环 4~15 周期估算）：
  *   半字编程 t_PROG ≤ 4us   ⇒ 100k 次 ≈ 5~20ms，余量 >1000 倍；
@@ -31,7 +32,7 @@ static int range_within(uint32_t addr, uint32_t len, uint32_t base, uint32_t end
 /* 白名单校验：返回 1 表示 [addr, addr+len) 允许擦/写 */
 static int addr_allowed(uint32_t addr, uint32_t len)
 {
-    if (range_within(addr, len, BL_APP_BASE, BL_APP_END))
+    if (s_app_window && range_within(addr, len, BL_APP_BASE, BL_APP_END))
     {
         return 1;
     }
@@ -81,6 +82,11 @@ static int wait_not_busy(uint32_t limit)
 void bl_flash_set_backup_window(int enable)
 {
     s_backup_window = (enable != 0);
+}
+
+void bl_flash_set_app_window(int enable)
+{
+    s_app_window = (enable != 0);
 }
 
 bl_status_t bl_flash_erase_page(uint32_t addr)

@@ -4,15 +4,17 @@
 /*-Specials-*/
 define symbol __ICFEDIT_intvec_start__     = 0x08000000;
 /*-Memory Regions-*/
-/* UMF Bootloader link regions (plan v3.2 sec.3 / Appendix A):
- *   ROM = Page 0..5 (0x08000000..0x080017FF), 6,144 B hard limit (gate G1).
- *   Page 6 (backup) / Page 7..60 (App) / Page 61..63 (params) are all
+/* UMF Bootloader link regions (plan v3.2 sec.3, amended by gate G1-d):
+ *   ROM = Page 0..7 (0x08000000..0x08001FFF), 8,192 B.
+ *   Page 8 (backup) / Page 9..60 (App) / Page 61..63 (params) are all
  *   outside the BL link region.
+ *   G1-d amendment: the original 6 KB region was exceeded at first full
+ *   build (7,244 B min with size optimization), see BL update log D7.
  *   RAM matches the App project: linked 0x20000000..0x20004BFF; the shared
  *   mailbox at 0x20004C00..0x20004DFF is linked by NEITHER image (plan
  *   v3.2 sec.5.2, survives warm reset). */
 define symbol __ICFEDIT_region_ROM_start__ = 0x08000000;
-define symbol __ICFEDIT_region_ROM_end__   = 0x080017FF;
+define symbol __ICFEDIT_region_ROM_end__   = 0x08001FFF;
 define symbol __ICFEDIT_region_RAM_start__ = 0x20000000;
 define symbol __ICFEDIT_region_RAM_end__   = 0x20004BFF;
 /*-Sizes-*/

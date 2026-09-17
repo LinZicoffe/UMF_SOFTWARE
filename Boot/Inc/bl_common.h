@@ -17,19 +17,24 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/* ===== Flash 分区（v3.2 §3：64KB = 6KB BL + 1KB 备份 + 54KB App + 3KB 参数）===== */
+/* ===== Flash 分区（G1-d 修订：64KB = 8KB BL + 1KB 备份 + 52KB App + 3KB 参数）=====
+ * v3.2 原分区（6KB BL）在 S9 首次全量编译实测 7,244B（Size 优化）后触发
+ * 方案 §4.10 G1-d 门限（裁剪后仍 >6.0KB ⇒ 方案级重评）。修订结论：
+ * BL 扩为页 0~7（8,192B），备份页移至页 8，App 基址 0x08002400（页 9~60，
+ * 52KB——现 App 46,168B，余量 7,080B 仍满足"余量 ≥4KB"验收门禁）。
+ * 详见 BL更新日志.md 决策 D7 与方案 §3 修订块。*/
 #define BL_FLASH_PAGE_SIZE        1024u   /* F103xB 页大小 1KB */
 
-#define BL_REGION_BASE            0x08000000u  /* 页 0~5  Bootloader 6,144 B（G1 上限）*/
-#define BL_REGION_END             0x080017FFu
+#define BL_REGION_BASE            0x08000000u  /* 页 0~7  Bootloader 8,192 B */
+#define BL_REGION_END             0x08001FFFu
 
-#define BL_BACKUP_PAGE_BASE       0x08001800u  /* 页 6   旧参数备份页（仅 BL，备份未就绪时可写）*/
-#define BL_BACKUP_PAGE_END        0x08001BFFu
+#define BL_BACKUP_PAGE_BASE       0x08002000u  /* 页 8   旧参数备份页（仅 BL，备份未就绪时可写）*/
+#define BL_BACKUP_PAGE_END        0x080023FFu
 
-#define BL_APP_BASE               0x08001C00u  /* 页 7~60 Application 55,296 B */
+#define BL_APP_BASE               0x08002400u  /* 页 9~60 Application 53,248 B */
 #define BL_APP_END                0x0800F3FFu
 #define BL_APP_LIMIT              0x0800F400u  /* 开区间上界 */
-#define BL_APP_REGION_SIZE        55296u
+#define BL_APP_REGION_SIZE        53248u
 
 #define BL_PARAM_PAGE1_BASE       0x0800F400u  /* 页 61 参数存储（3 页轮转）*/
 #define BL_PARAM_PAGE2_BASE       0x0800F800u  /* 页 62 */
