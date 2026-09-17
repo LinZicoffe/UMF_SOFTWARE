@@ -107,12 +107,25 @@ uint32_t bl_usart_baud_hz(void)
 
 int bl_usart_getc(uint32_t timeout_ms)
 {
-    uint32_t start    = bl_time_now();
-    uint32_t last_fd  = start;
+    /* 喂狗计时为跨调用持久（S8 审查修复）：以"距上次实际喂狗 ≥100ms"
+     * 为准，与单次调用的等待时长无关——50ms 轮询片可跨调用累计，
+     * 字节连续快速到达（RXNE 命中路径）也按墙钟时间喂狗。*/
+    static uint32_t s_last_feed;
+    static uint8_t  s_feed_init;
+    uint32_t start = bl_time_now();
 
     for (;;)
     {
         uint32_t sr = USART2->SR;
+        uint32_t now = bl_time_now();
+
+        /* 喂狗检查先于 RXNE 返回（S8 审查 #2：命中路径也必须能喂狗）*/
+        if (!s_feed_init || (bl_time_elapsed_ms(s_last_feed) >= BL_USART_FEED_MS))
+        {
+            bl_iwdg_feed();
+            s_last_feed = now;
+            s_feed_init = 1u;
+        }
 
         if (sr & USART_SR_RXNE)
         {
@@ -126,13 +139,6 @@ int bl_usart_getc(uint32_t timeout_ms)
         if (bl_time_elapsed_ms(start) >= timeout_ms)
         {
             return -1;                     /* 超时 */
-        }
-
-        /* 等待循环内周期喂狗（§4.6）*/
-        if (bl_time_elapsed_ms(last_fd) >= BL_USART_FEED_MS)
-        {
-            bl_iwdg_feed();
-            last_fd = bl_time_now();
         }
     }
 }

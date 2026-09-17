@@ -326,6 +326,10 @@ bl_proto_result_t bl_proto_session(void)
             {
                 return BL_PROTO_ABORTED;             /* CAN×2 显式中止（§8 取消）*/
             }
+            if ((c == XM_SOH) || (c == XM_STX))
+            {
+                first_byte = c;                      /* 回灌：新包首字节不丢弃 */
+            }
             continue;                                /* 单 CAN 视为噪声 */
         }
         if (c == XM_SOH)      { dlen = 128u; }
@@ -349,6 +353,17 @@ bl_proto_result_t bl_proto_session(void)
             ((uint8_t)(~hdr2[0]) != hdr2[1]) ||
             (bl_crc16_ccitt_false(pkt_bytes(), dlen) != crc_recv))
         {
+            /* 重复包恢复（标准 XModem，S8 审查 #3）：ACK 丢失后工具重发
+             * "前一包号"且 CRC 通过 ⇒ 该包已成功处理过，ACK 丢弃解死锁
+             * （不写盘；bl_flash 等值跳过仅作兜底）。expected_blk==1 时
+             * expected-1=0，包号 0 不会出现，自然不误判。*/
+            if ((hdr2[0] == (uint8_t)(expected_blk - 1u)) &&
+                ((uint8_t)(~hdr2[0]) == hdr2[1]) &&
+                (bl_crc16_ccitt_false(pkt_bytes(), dlen) == crc_recv))
+            {
+                bl_usart_putc(XM_ACK);
+                continue;
+            }
             if (!nak_or_abort(&nak_count))
             {
                 return BL_PROTO_ABORTED;
