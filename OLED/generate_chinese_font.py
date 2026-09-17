@@ -8,7 +8,8 @@ UMF_SOFTWARE 16x16 中文字模生成脚本
   - 自动生成 chinese_font_data.h 可直接拷贝到 chinese_font.c
 
 使用:
-  python generate_chinese_font.py
+  python generate_chinese_font.py > chinese_font_data.h
+  （生成内容输出到 stdout，由 shell 重定向落盘；脚本自身不做任何文件写入）
 
 依赖:
   - Python 3.6+
@@ -22,6 +23,7 @@ UMF_SOFTWARE 16x16 中文字模生成脚本
 """
 
 import struct
+import sys
 
 # ===== 汉字列表 (与 chinese_font.h 中索引对应) =====
 CHAR_LIST = [
@@ -124,49 +126,44 @@ def generate_font_header():
     return "\n".join(output)
 
 def main():
-    print("=" * 60)
-    print("UMF_SOFTWARE 16x16 中文字模生成器")
-    print("=" * 60)
-    print()
+    # 提示信息一律走 stderr，stdout 仅输出字模内容，
+    # 便于 `python generate_chinese_font.py > chinese_font_data.h` 直接落盘
+    def hint(msg):
+        print(msg, file=sys.stderr)
+
+    hint("=" * 60)
+    hint("UMF_SOFTWARE 16x16 中文字模生成器")
+    hint("=" * 60)
 
     header_content = generate_font_header()
+    print(header_content)
 
-    # 输出到文件
-    output_file = "chinese_font_data.h"
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(header_content)
-
-    print(f"生成完成: {output_file}")
-    print()
-    print("使用方法:")
-    print("  1. 将 chinese_font_data.h 内容替换到 chinese_font.c")
-    print("     的 s_chinese_font 数组定义中")
-    print()
-    print("  2. 如需添加新汉字, 编辑 CHAR_LIST 并重新运行脚本")
-    print()
+    hint("生成完成: 内容已输出到 stdout，请重定向到 chinese_font_data.h 保存")
+    hint("使用方法:")
+    hint("  1. 将 chinese_font_data.h 内容替换到 chinese_font.c")
+    hint("     的 s_chinese_font 数组定义中")
+    hint("  2. 如需添加新汉字, 编辑 CHAR_LIST 并重新运行脚本")
 
     # 如果没有字库文件, 提供在线取模工具说明
-    print("=" * 60)
-    print("备选方案: 使用在线取模工具")
-    print("=" * 60)
-    print()
-    print("  波特律动 LED 取模工具: https://led.baud-dance.com")
-    print("  取模设置:")
-    print("    - 点阵大小: 16x16")
-    print("    - 取模方式: 逐列式")
-    print("    - 扫描方式: 顺向 (从上到下)")
-    print("    - 输出格式: 十六进制, C语言")
-    print("    - 高位在前: 是")
-    print()
+    hint("=" * 60)
+    hint("备选方案: 使用在线取模工具")
+    hint("=" * 60)
+    hint("  波特律动 LED 取模工具: https://led.baud-dance.com")
+    hint("  取模设置:")
+    hint("    - 点阵大小: 16x16")
+    hint("    - 取模方式: 逐列式")
+    hint("    - 扫描方式: 顺向 (从上到下)")
+    hint("    - 输出格式: 十六进制, C语言")
+    hint("    - 高位在前: 是")
 
     # 显示前几个汉字的字模格式示例
-    print("字模格式示例 (主):")
-    print("  每字 32 字节, 排列: 第0列(2字节) → 第1列(2字节) → ...")
-    print("  {")
-    print("    0x10,0x00,  /* 第0列: 上半=0x10(第4位亮), 下半=0x00 */")
-    print("    0x10,0x00,  /* 第1列 */")
-    print("    ...")
-    print("  }")
+    hint("字模格式示例 (主):")
+    hint("  每字 32 字节, 排列: 第0列(2字节) → 第1列(2字节) → ...")
+    hint("  {")
+    hint("    0x10,0x00,  /* 第0列: 上半=0x10(第4位亮), 下半=0x00 */")
+    hint("    0x10,0x00,  /* 第1列 */")
+    hint("    ...")
+    hint("  }")
 
 if __name__ == "__main__":
     main()
