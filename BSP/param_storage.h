@@ -98,6 +98,7 @@ typedef struct {
     float    small_signal;   /* 小信号切除 0.0~10.0 (%) */
     float    filter_time;    /* 滤波参数 0.1~100.0 (秒) */
     uint16_t filter_window_count; /* 滑动窗口点数 2~10, 默认 10; Modbus 40125 */
+    uint16_t sample_interval_ms;  /* UFL-1A 被动采样间隔 100~60000ms, 默认 500ms; Modbus 40126 */
     float    damping_time;   /* 阻尼时间 0.1~100.0 (秒) */
 
     /* --- Phase 2: 输出设置 --- */
@@ -195,6 +196,7 @@ uint16_t param_get_oled_recovery_interval(void);
 
 /* ===== 瞬时流量滤波 getter ===== */
 uint16_t param_get_filter_window_count(void);
+uint16_t param_get_sample_interval_ms(void);
 
 /* ===== Phase 1 setter ===== */
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx);
@@ -238,6 +240,7 @@ HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val);
 
 /* ===== 瞬时流量滤波 setter ===== */
 HAL_StatusTypeDef param_set_filter_window_count(uint16_t val);
+HAL_StatusTypeDef param_set_sample_interval_ms(uint16_t val);
 
 /* ===== Phase 6 标定 getter ===== */
 uint8_t  param_get_cal_enabled(void);

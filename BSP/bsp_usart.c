@@ -15,26 +15,42 @@
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
 
-/* ── 瞬时流量去极值滤波 (可配置滑动窗口, 去最大值) ────── */
+/* ── 瞬时流量滤波: 去极值滑动窗口 + 一阶低通 ─────────────── */
 #define FLOW_FILTER_DEFAULT_N 10  /* 默认窗口样本数 */
 #define FLOW_FILTER_MIN_N     2   /* 去掉最大值时至少保留 1 个样本 */
 #define FLOW_FILTER_MAX_N     10  /* 固定数组容量, 避免动态分配 */
+#define FLOW_FILTER_DEFAULT_TAU 1.0f
+#define FLOW_FILTER_DEFAULT_INTERVAL_MS 500U
 static float    s_flt_window[FLOW_FILTER_MAX_N];
 static uint8_t  s_flt_write_index;
 static uint8_t  s_flt_count;
 static uint8_t  s_flt_window_size;
 static float    s_flt_result;
 static uint8_t  s_flt_valid;
+static float    s_flt_time_constant;
+static uint16_t s_flt_sample_interval_ms;
 
 static void flow_filter_sync_config(void)
 {
     uint8_t window_size = (uint8_t)param_get_filter_window_count();
+    float time_constant = param_get_filter_time();
+    uint16_t sample_interval_ms = param_get_sample_interval_ms();
 
     if ((window_size < FLOW_FILTER_MIN_N) || (window_size > FLOW_FILTER_MAX_N)) {
         window_size = FLOW_FILTER_DEFAULT_N;
     }
-    if (window_size != s_flt_window_size) {
+    if (time_constant <= 0.0f) {
+        time_constant = FLOW_FILTER_DEFAULT_TAU;
+    }
+    if (sample_interval_ms == 0u) {
+        sample_interval_ms = FLOW_FILTER_DEFAULT_INTERVAL_MS;
+    }
+    if ((window_size != s_flt_window_size) ||
+        (time_constant != s_flt_time_constant) ||
+        (sample_interval_ms != s_flt_sample_interval_ms)) {
         s_flt_window_size = window_size;
+        s_flt_time_constant = time_constant;
+        s_flt_sample_interval_ms = sample_interval_ms;
         s_flt_write_index = 0;
         s_flt_count = 0;
         s_flt_valid = 0;
@@ -45,6 +61,9 @@ static void flow_filter_feed(float sample)
 {
     float sum;
     float max;
+    float window_result;
+    float alpha;
+    float dt;
     uint8_t i;
     uint8_t window_size;
 
@@ -58,20 +77,29 @@ static void flow_filter_feed(float sample)
         s_flt_count++;
     }
     if (s_flt_count < window_size) {
-        return;
-    }
-
-    sum = 0.0f;
-    max = s_flt_window[0];
-    for (i = 0; i < window_size; i++) {
-        sum += s_flt_window[i];
-        if (s_flt_window[i] > max) {
-            max = s_flt_window[i];
+        window_result = sample;
+    } else {
+        sum = 0.0f;
+        max = s_flt_window[0];
+        for (i = 0; i < window_size; i++) {
+            sum += s_flt_window[i];
+            if (s_flt_window[i] > max) {
+                max = s_flt_window[i];
+            }
         }
+
+        window_result = (sum - max) / (float)(window_size - 1U);
     }
 
-    s_flt_result = (sum - max) / (float)(window_size - 1U);
-    s_flt_valid = 1;
+    /* 一阶低通: y[n] = y[n-1] + α(x[n] - y[n-1]), α = dt / (τ + dt) */
+    dt = (float)s_flt_sample_interval_ms / 1000.0f;
+    alpha = dt / (s_flt_time_constant + dt);
+    if (!s_flt_valid) {
+        s_flt_result = window_result;
+        s_flt_valid = 1;
+    } else {
+        s_flt_result += alpha * (window_result - s_flt_result);
+    }
 }
 
 /* ── 常量定义 ─────────────────────────────────────── */
@@ -117,6 +145,7 @@ uint8_t FlowActiveReadCmdEnable;  // TRUE:模组主动发送数据
 uint8_t Sumunit;
 /* Private define ------------------------------------------------------------*/
 static uint16_t s_modbus_addr = 2;   /* Modbus 从站地址, 可通过 bsp_usart_set_modbus_addr() 修改 */
+static uint16_t s_uart1_sample_interval_ticks;
 
 /* UART 配置切换 — 延迟应用机制 (确保 Modbus 响应在旧配置下发送完成) */
 static volatile uint8_t  s_baud_rate_pending;     /* 非0表示有待应用的 UART 配置变更 */
@@ -312,6 +341,7 @@ void Uart1_Send_Function(void)
 {
     uint8_t Comm1TaskFlag = 0; // 串口1发送任务标志
     uint8_t checkbuffer[2];
+    uint16_t sample_interval_ticks;
     if ((!Comm1TaskFlag) && FlowClearCmdFlag)
     {
         Comm1TaskFlag                 = 1;
@@ -378,7 +408,15 @@ void Uart1_Send_Function(void)
         Uart1SendDataType.TX_Size     = 7;
         HAL_UART_Transmit_DMA(&huart1, Uart1SendDataType.TxBuffer, Uart1SendDataType.TX_Size);
     }
-    if (Timer3Uart1TimeBase10ms >= 50)
+    sample_interval_ticks = (uint16_t)((param_get_sample_interval_ms() + 9u) / 10u);
+    if (sample_interval_ticks == 0u) {
+        sample_interval_ticks = 1u;
+    }
+    if (s_uart1_sample_interval_ticks != sample_interval_ticks) {
+        s_uart1_sample_interval_ticks = sample_interval_ticks;
+        Timer3Uart1TimeBase10ms = 0;
+    }
+    if (Timer3Uart1TimeBase10ms >= sample_interval_ticks)
     {
         Timer3Uart1TimeBase10ms = 0;
         ModuleRecTimes++;
@@ -971,6 +1009,12 @@ void Modbus_Function_6(void)
                 ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
             break;
 
+        /* ---- UFL-1A 被动采样间隔 (uint16, ms, 立即生效) ---- */
+        case SampleIntervalAddr:
+            param_set_sample_interval_ms(
+                ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
+            break;
+
         /* ---- 七点标定: 标定使能 (uint16, 立即生效) ---- */
         case CalEnableAddr:
             param_set_cal_enabled((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
@@ -1303,6 +1347,9 @@ void Modbus_Function_3(void)
                 case FilterWindowCountAddr:
                     reg_val = param_get_filter_window_count();
                     break;
+                case SampleIntervalAddr:
+                    reg_val = param_get_sample_interval_ms();
+                    break;
 
                 /* ---- 第四批: 七点标定参数 ---- */
                 case CalEnableAddr:
@@ -1535,9 +1582,11 @@ void Modbus_Function_10(void)
                 }
             }
         }
-        /* 扩展配置参数区域 (寄存器 69~94, 124) */
+        /* 扩展配置参数区域 (寄存器 69~94, 124~125) */
         if ((startaddress >= StdCondAddr) &&
-            ((startaddress <= OledRecoveryAddr) || (startaddress == FilterWindowCountAddr)))
+            ((startaddress <= OledRecoveryAddr) ||
+             ((startaddress >= FilterWindowCountAddr) &&
+              (startaddress + MbBufferLen - 1 <= ExtParamEndAddr))))
         {
             for (i = 0; i < MbBufferLen; i++)
             {
@@ -1669,6 +1718,10 @@ void Modbus_Function_10(void)
                         break;
                     case FilterWindowCountAddr:
                         param_set_filter_window_count(
+                            ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
+                        break;
+                    case SampleIntervalAddr:
+                        param_set_sample_interval_ms(
                             ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
                         break;
 

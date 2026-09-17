@@ -15,6 +15,7 @@
 #define DEF_SMALL_SIGNAL   2.0f
 #define DEF_FILTER_TIME    1.0f
 #define DEF_FILTER_WINDOW_COUNT 10
+#define DEF_SAMPLE_INTERVAL_MS  500
 #define DEF_DAMPING_TIME   1.0f
 #define DEF_VALUE_4MA      0.0f
 #define DEF_VALUE_20MA     100.0f
@@ -56,6 +57,8 @@
 #define FILTER_TIME_MAX    100.0f
 #define FILTER_WINDOW_COUNT_MIN ((uint16_t)2)
 #define FILTER_WINDOW_COUNT_MAX ((uint16_t)10)
+#define SAMPLE_INTERVAL_MIN_MS  ((uint16_t)100)
+#define SAMPLE_INTERVAL_MAX_MS  ((uint16_t)60000)
 #define DAMPING_TIME_MIN   0.1f
 #define DAMPING_TIME_MAX   100.0f
 #define VALUE_4MA_MIN      (-9999.0f)
@@ -105,9 +108,11 @@
  * Page 57: 介质工况组 [medium_density, pipe_diameter, gas_ref_press, gas_ref_temp, reynolds_k]
  * Page 58: 系统/累积组 [modbus_addr, uart_config, total_factor, preset_total]
  *
- * Phase 5 新增分组 (Page 54):
- * Page 54: 显示与 OLED 抗干扰组 [oled_recovery_interval]
- *          (独立成页, 避免与 system_group 槽位长度耦合, 兼容旧固件 Flash 数据)
+ * Phase 5/7 新增分组 (Page 54):
+ * Page 54: 显示、滤波与采样组
+ *          [oled_recovery_interval, filter_window_count, sample_interval_ms]
+ *          前两个 uint16 打包为一个 uint32，第三个 uint16 存为第二个 uint32；
+ *          读取时兼容旧版 Len=1 的 [oled_recovery_interval] 数据。
  */
 #define PARAM_PAGE_BASIC         ADDR_FLASH_PAGE_60
 #define PARAM_PAGE_METER         ADDR_FLASH_PAGE_61
@@ -223,14 +228,17 @@ static HAL_StatusTypeDef flush_system_group(void)
     return (HAL_StatusTypeDef)WriteBufferFlash(4, PARAM_PAGE_SYSTEM, buf);
 }
 
-/* 显示/OLED 抗干扰组: [oled_recovery_interval, filter_window_count]
- * 两个 uint16 打包为一个 uint32，保持 Page 54 的 Len=1，兼容旧数据. */
+/* 显示、滤波与采样组:
+ * buf[0] = [filter_window_count:16][oled_recovery_interval:16]
+ * buf[1] = sample_interval_ms
+ * 新记录使用 Len=2；读取路径兼容旧版 Len=1 数据. */
 static HAL_StatusTypeDef flush_display_group(void)
 {
-    uint32_t buf[1];
+    uint32_t buf[2];
     buf[0] = ((uint32_t)s_params.filter_window_count << 16) |
              (uint32_t)s_params.oled_recovery_interval;
-    return (HAL_StatusTypeDef)WriteBufferFlash(1, PARAM_PAGE_DISPLAY, buf);
+    buf[1] = (uint32_t)s_params.sample_interval_ms;
+    return (HAL_StatusTypeDef)WriteBufferFlash(2, PARAM_PAGE_DISPLAY, buf);
 }
 
 /* 仪表系数 + 标定合并组: [meter_coeff, cal_enabled, cal_k[0..6], cal_pct[0..6]]
@@ -388,17 +396,33 @@ HAL_StatusTypeDef param_storage_init(void)
                                 clamp_f(u32_to_float(buf[3]), PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
     }
 
-    /* 读取显示/OLED 抗干扰组 (Page 54, Phase 5 新增独立页) */
+    /* 读取显示、滤波与采样组 (Page 54)
+     * 新格式为 Len=2；若尚未写过新格式，则回退读取旧版 Len=1。 */
     {
-        uint32_t disp_buf;
+        uint32_t disp_buf[2];
+        uint32_t legacy_disp_buf;
         uint16_t stored_window_count;
-        ReadBufferFlash(1, PARAM_PAGE_DISPLAY, &disp_buf);
-        s_params.oled_recovery_interval = (disp_buf == 0xFFFFFFFFu) ? DEF_OLED_RECOVERY_INTERVAL :
-                                clamp_u16((uint16_t)(disp_buf & 0xFFFFu), OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
-        stored_window_count = (uint16_t)(disp_buf >> 16);
-        s_params.filter_window_count =
-            (stored_window_count == 0u) ? DEF_FILTER_WINDOW_COUNT :
-            clamp_u16(stored_window_count, FILTER_WINDOW_COUNT_MIN, FILTER_WINDOW_COUNT_MAX);
+        ReadBufferFlash(2, PARAM_PAGE_DISPLAY, disp_buf);
+        if ((disp_buf[0] != 0xFFFFFFFFu) && (disp_buf[1] != 0xFFFFFFFFu)) {
+            s_params.oled_recovery_interval = clamp_u16(
+                (uint16_t)(disp_buf[0] & 0xFFFFu), OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
+            stored_window_count = (uint16_t)(disp_buf[0] >> 16);
+            s_params.filter_window_count =
+                (stored_window_count == 0u) ? DEF_FILTER_WINDOW_COUNT :
+                clamp_u16(stored_window_count, FILTER_WINDOW_COUNT_MIN, FILTER_WINDOW_COUNT_MAX);
+            s_params.sample_interval_ms = clamp_u16(
+                (uint16_t)disp_buf[1], SAMPLE_INTERVAL_MIN_MS, SAMPLE_INTERVAL_MAX_MS);
+        } else {
+            ReadBufferFlash(1, PARAM_PAGE_DISPLAY, &legacy_disp_buf);
+            s_params.oled_recovery_interval = (legacy_disp_buf == 0xFFFFFFFFu) ? DEF_OLED_RECOVERY_INTERVAL :
+                                    clamp_u16((uint16_t)(legacy_disp_buf & 0xFFFFu), OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
+            stored_window_count = (legacy_disp_buf == 0xFFFFFFFFu) ? 0u :
+                                  (uint16_t)(legacy_disp_buf >> 16);
+            s_params.filter_window_count =
+                (stored_window_count == 0u) ? DEF_FILTER_WINDOW_COUNT :
+                clamp_u16(stored_window_count, FILTER_WINDOW_COUNT_MIN, FILTER_WINDOW_COUNT_MAX);
+            s_params.sample_interval_ms = DEF_SAMPLE_INTERVAL_MS;
+        }
     }
 
     /* value_4ma / value_20ma: 由 main.c 在 Data_Init() 后从 Span 页同步 */
@@ -464,6 +488,7 @@ uint16_t param_get_oled_recovery_interval(void) { return s_params.oled_recovery_
 
 /* ===== 瞬时流量滤波 getter ===== */
 uint16_t param_get_filter_window_count(void) { return s_params.filter_window_count; }
+uint16_t param_get_sample_interval_ms(void) { return s_params.sample_interval_ms; }
 
 /* ===== Phase 1 setter ===== */
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx)
@@ -657,6 +682,12 @@ HAL_StatusTypeDef param_set_filter_window_count(uint16_t val)
     return flush_display_group();
 }
 
+HAL_StatusTypeDef param_set_sample_interval_ms(uint16_t val)
+{
+    s_params.sample_interval_ms = clamp_u16(val, SAMPLE_INTERVAL_MIN_MS, SAMPLE_INTERVAL_MAX_MS);
+    return flush_display_group();
+}
+
 /* ===== Phase 6 标定 getter ===== */
 uint8_t  param_get_cal_enabled(void)          { return s_params.cal_enabled; }
 float    param_get_cal_k(uint8_t index)       { return (index < CAL_POINT_COUNT) ? s_params.cal_k[index] : 1.0f; }
@@ -745,6 +776,7 @@ HAL_StatusTypeDef param_storage_reset_defaults(void)
     param_set_oled_recovery_interval(DEF_OLED_RECOVERY_INTERVAL);
     /* 瞬时流量滤波 */
     param_set_filter_window_count(DEF_FILTER_WINDOW_COUNT);
+    param_set_sample_interval_ms(DEF_SAMPLE_INTERVAL_MS);
     /* Phase 6 标定 */
     {
         int i;

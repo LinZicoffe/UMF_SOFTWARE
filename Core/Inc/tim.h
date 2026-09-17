@@ -39,7 +39,7 @@ extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim4;
 
 /* USER CODE BEGIN Private defines */
-    extern volatile uint8_t  Timer3Uart1TimeBase10ms;
+    extern volatile uint16_t Timer3Uart1TimeBase10ms;
     extern volatile uint8_t  Timer3Uart2TimeBase10ms;
     extern volatile uint8_t  Timer3InitEnabled;
     extern volatile uint32_t Time3InitTimeBase;
