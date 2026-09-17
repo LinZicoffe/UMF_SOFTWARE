@@ -3,5 +3,8 @@
     <project>
         <path>$WS_DIR$\UMF.ewp</path>
     </project>
+    <project>
+        <path>$WS_DIR$\UMF_Boot.ewp</path>
+    </project>
     <batchBuild />
 </workspace>
