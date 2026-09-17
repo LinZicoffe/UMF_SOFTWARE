@@ -28,7 +28,7 @@
 - 变更：`bl_jump.h/c`（§4.4 固化模板）；`main.c` 完整启动状态机（§4.3）；`bl_flash` 新增 `set_app_window`（备份失败 ⇒ App 区擦写全拒）；PA0 恢复模式（≥3s+释放+10s 二次确认，未按零延迟；进入时固定 115200 重配串口）；LED PB5。
 - **G1-d 分区修订（决策 D7）**：6KB 分区首次全量编译实测 7,480B 触发方案级重评 ⇒ BL 页 0~7（8KB）、备份页 8、App 基址 0x08002400（52KB，余量 7,080B）。方案 §3 修订块+正文+附录同步，v3.0~v3.2 变更日志保留历史值。
 - 编译：0 错 0 警；修复后实测 **7,548 B / 8,192 B（余量 644 B）**。
-- 审查：首轮 **FAIL**（7 Major + 8 Minor）→ 全部处置 → 复审见下：
+- 审查：首轮 **FAIL**（7 Major + 8 Minor）→ 全部处置 → 复审 **PASS**（同一位独立 agent，2026-09-17）。7 项 Major 修复经行为推演确认（层 3 误标洗白路径消除、G3 随新镜像重算、三处 G1-d 同步、WRP 论据重评、契约统一）；复审遗留 3 条 Minor（方案 §9 两处 Page 6 残留、三处代码注释 Page 6、pre_jump 哨兵角落）已在 S10 收尾 commit 清掉；复审建议采纳：方案 §4.7 优先级 5 措辞改"固定 115200 守候"（XModem-CRC 接收方必须周期发 'C'，"仅监听"字面不可实现）。
   - **Major-1（代码）** 回跳路径 `pre_jump(…, verified=1, …)` 把"本靴从未复算层 3"的镜像误标"已验证"（cmd/G3/PA0 进入升级后窗口耗尽回跳的场景）→ 层 3 拆出 `verified_this_boot` 出参，回跳路径传真实标志；
   - **Major-2（代码）** pre_jump 无条件 `boot_attempt++` ⇒ 升级成功后新镜像首次崩溃即被旧计数≥3 误锁定（G3 不随新镜像重算）→ pre_jump 在 build_id 变化且 verified 时重置 `boot_attempt=0` 再 +1；
   - **Major-3/4/5（同步）** 方案 §5.1 `VECT_TAB_OFFSET=0x2400`、日志前置清单第 1 条、`bl_flash.h` 白名单注释（旧"Page 6"在新分区下位于 BL 区内部，严重误导）全部改为 G1-d 值；
@@ -37,6 +37,14 @@
   - Minor：CRC 自检快闪循环分段喂狗（防 100ms 残余预算复位循环）；PA0 恢复固定 115200 重配串口（原用三级链结果，与 §4.7 优先级 5 承诺不符）；bl_common.h 体积口径统一 7,480；方案 §5.2 邮箱 0x18 补 D3 字段名；§4.2 预算行加"G1-d 前"标注；正文残留 Page 6→8 清理（历史变更日志保留）。
   - **Minor-11（记录不处置）**：LED 等待慢闪仅在会话返回间隙采样（15s 窗口期间长亮）——观感与 §4.1"慢闪=等待"有偏差，功能无影响，实机阶段再定是否细化。
 - **栈核算归档**（S7 登记项）：map 无 stack usage 章节（ewp 未开 `--stack_usage`，该选项在 ewp schema 下不可靠），以 map 静态事实 + 审查员估算归档：.data 16B + .bss 0x6CB + CSTACK 0x400 = 2,788B / 19,456B；最深链 main→proto_session→store_block→bl_flash_program_halfwords 峰值估算 <400B，1KB CSTACK 余量充足。
+- 体积轨迹：首测 7,480 → 修复后 7,548 → S10 收尾 7,540 B（余量 652 B）。
+
+### S10 工程收尾（本 commit）
+
+- 日期：2026-09-17
+- 变更：复审遗留 Minor 清理（方案 §9 Page 6→8 两处、bl_info.h/legacy_param_read.h/bl_info.c 注释三处、pre_jump 重置条件去掉 last_verified==0 哨兵——重置方向安全）；工程清单核对（11/11 源文件 + startup；Project.eww 双工程）；清除 BL 输出目录早期残留的旧名产物 `UMF.hex`（§10.3 防误烧治理）；最终构建归档。
+- 最终构建：**0 错误 0 警告；ROM 7,540 B / 8,192 B（余量 652 B，G1-b 等效带）；RAM 2,779 B / 19,456 B**；产物 `EWARM/UMF_Boot/Exe/UMF_Boot.out` + `UMF_Boot.hex`。
+- BL 开发完成判定：S1~S10 全部通过分步独立审查；三方终审见下。
 
 ### S8 XModem-CRC 会话（commit 1bdcd67 + 修复 2117610）
 

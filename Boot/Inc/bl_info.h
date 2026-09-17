@@ -54,7 +54,7 @@ typedef enum
 } bl_backup_result_t;
 
 /* 备份编排：前置条件（固件头无效 且 无就绪备份）满足才抽取建立；
- * 备份窗口（Page 6 可写）仅在本函数内部开启，出口必关。*/
+ * 备份窗口（Page 8 可写）仅在本函数内部开启，出口必关。*/
 bl_backup_result_t bl_info_backup_ensure(void);
 
 /* 备份页当前是否已有有效 blob（magic+ver+n+crc32 全过）*/

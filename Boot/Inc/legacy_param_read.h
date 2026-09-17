@@ -3,7 +3,7 @@
  * @brief   旧参数页（Page 54~63，eeprom.c 追加日志格式）只读抽取器
  *
  * 方案 v3.2 §7.3：首次转换前 BL 抽取全部 10 页旧参数（152 B）构建 244 B
- * 备份块写入 Page 6。本模块只读（纯内存访问，无 Flash 操作），与 App 的
+ * 备份块写入 Page 8。本模块只读（纯内存访问，无 Flash 操作），与 App 的
  * ReadBufferFlash 扫描语义逐条对应。
  *
  * 旧格式两代长度（param_storage.c 兼容逻辑）：

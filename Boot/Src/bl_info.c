@@ -279,7 +279,7 @@ bl_backup_result_t bl_info_backup_ensure(void)
 
     legacy_build_blob(data, blob);
 
-    /* 写入 Page 6：备份窗口仅在此处开启，任何出口必关 */
+    /* 写入 Page 8：备份窗口仅在此处开启，任何出口必关 */
     bl_flash_set_backup_window(1);
     st = bl_flash_erase_page(BL_BACKUP_PAGE_BASE);
     if (st == BL_OK)
@@ -465,13 +465,12 @@ void bl_info_mailbox_pre_jump(uint32_t verified_build_id, int verified_valid,
 
     if (bl_info_mailbox_read(&mb))
     {
-        if (verified_valid &&
-            (mb.last_verified_build_id != 0u) &&
-            (mb.last_verified_build_id != verified_build_id))
+        if (verified_valid && (mb.last_verified_build_id != verified_build_id))
         {
             /* 新镜像（build_id 变化）：G3 重新起算（S9 审查 #2）——
              * 否则升级成功后新 App 首次启动崩溃即被旧计数≥3 误锁定，
-             * 失去 3 次启动机会 */
+             * 失去 3 次启动机会。last_verified==0（从未验证过）同样重置：
+             * 重置方向安全（S9 复审遗留角落 3）*/
             mb.boot_attempt = 0u;
         }
         /* G3：跳转前 boot_attempt+1，App 健康运行后清零（§10.2）*/
