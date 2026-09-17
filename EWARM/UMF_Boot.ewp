@@ -1136,6 +1136,9 @@
         <file>
             <name>$PROJ_DIR$\..\Boot\Src\bl_info.c</name>
         </file>
+        <file>
+            <name>$PROJ_DIR$\..\Boot\Src\bl_proto.c</name>
+        </file>
     </group>
     <group>
         <name>EWARM</name>
