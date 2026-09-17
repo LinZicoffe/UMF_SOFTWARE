@@ -2,12 +2,18 @@
  * @file    bl_info.c
  * @brief   BL 信息层实现（固件头 / 备份 / 通信槽 / 邮箱）
  */
-#include "stm32f103xb.h"
 #include "bl_info.h"
 #include "bl_flash.h"
 #include "bl_crc.h"
 #include "legacy_param_read.h"
 #include <string.h>
+
+/* 备份路径大缓冲（S7 审查：调用链栈峰值 ~1KB 逼近 1KB 栈预算，
+ * 提升为文件级 static——BL RAM 余量 ~17KB，无压力；本模块单次顺序
+ * 调用，无重入）。 */
+static uint8_t  s_backup_blob[LEGACY_BLOB_BYTES];
+static uint16_t s_backup_halfwords[LEGACY_BLOB_BYTES / 2u];
+static legacy_data_t s_backup_data;
 
 /* ===== 内部辅助 ===== */
 
@@ -119,6 +125,14 @@ uint32_t bl_info_image_crc32(uint32_t img_size)
 {
     bl_crc32_t c;
     uint32_t addr;
+
+    /* 入参界自检（层 1 已拦，此处防 S8/S9 误用；0xFFFFFFFF 为无效哨兵，
+     * 与层 1 保证的合法 crc32 != 0xFFFFFFFF 永不误匹配）*/
+    if ((img_size < BL_FW_IMG_MIN_SIZE) || (img_size > BL_FW_IMG_MAX_SIZE) ||
+        ((img_size & 1u) != 0u))
+    {
+        return 0xFFFFFFFFu;
+    }
 
     bl_crc32_start(&c);
 
@@ -234,9 +248,9 @@ int bl_info_backup_is_ready(void)
 
 bl_backup_result_t bl_info_backup_ensure(void)
 {
-    legacy_data_t data;
-    uint8_t  blob[LEGACY_BLOB_BYTES];
-    uint16_t halfwords[LEGACY_BLOB_BYTES / 2u];
+    legacy_data_t *data = &s_backup_data;
+    uint8_t  *blob = s_backup_blob;
+    uint16_t *halfwords = s_backup_halfwords;
     uint32_t i;
     bl_status_t st;
 
@@ -252,18 +266,18 @@ bl_backup_result_t bl_info_backup_ensure(void)
         return BL_BACKUP_READY;          /* 无需备份 */
     }
 
-    if (!legacy_extract_all(&data))
+    if (!legacy_extract_all(data))
     {
-        return BL_BACKUP_EMPTY_SRC;      /* 全空：无数据可丢，允许擦除 */
+        return BL_BACKUP_EMPTY_SRC;      /* 无可抽取记录：无数据可丢，允许擦除 */
     }
 
     /* 强制区间校验（§7.3：越界即无效内容，拒绝建立备份）*/
-    if (!legacy_validate_ranges(&data))
+    if (!legacy_validate_ranges(data))
     {
         return BL_BACKUP_FAILED;
     }
 
-    legacy_build_blob(&data, blob);
+    legacy_build_blob(data, blob);
 
     /* 写入 Page 6：备份窗口仅在此处开启，任何出口必关 */
     bl_flash_set_backup_window(1);
@@ -352,6 +366,8 @@ int bl_info_slot_uart_config(uint8_t *uart_config_out)
     uint32_t pages[3] = { BL_PARAM_PAGE1_BASE, BL_PARAM_PAGE2_BASE,
                           BL_PARAM_PAGE3_BASE };
 
+    if (uart_config_out == NULL) { return 0; }
+
     /* 取"页头有效且 seq 最大"者（u16 回绕用 int16 差值比较）；
      * 首选页槽无效则剔除后重选（单页数据损坏不阻断通信参数获取）*/
     for (;;)
@@ -404,6 +420,7 @@ int bl_info_mailbox_read(bl_mailbox_t *mb)
     volatile bl_mailbox_t *p = mailbox();
     bl_mailbox_t snap;
 
+    if (mb == NULL) { return 0; }
     memset(mb, 0, sizeof(*mb));
 
     snap.magic     = p->magic;

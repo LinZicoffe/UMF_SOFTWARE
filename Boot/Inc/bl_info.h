@@ -48,7 +48,8 @@ typedef enum
 {
     BL_BACKUP_READY = 0,   /* 已就绪（此前建立）或无需建立（App 头有效）*/
     BL_BACKUP_CREATED,     /* 本次新建并回读校验通过 */
-    BL_BACKUP_EMPTY_SRC,   /* 旧 10 页全空（全新/已擦除设备）——无数据可丢，可擦除 */
+    BL_BACKUP_EMPTY_SRC,   /* 旧 10 页无可抽取的有效记录（全空或不可识别）——
+                              无数据可丢，可擦除 */
     BL_BACKUP_FAILED       /* 建立失败/校验失败 ⇒ 调用方必须拒绝一切擦除 */
 } bl_backup_result_t;
 
