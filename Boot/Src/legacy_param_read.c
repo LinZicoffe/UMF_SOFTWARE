@@ -276,7 +276,9 @@ int legacy_validate_ranges(const legacy_data_t *d)
             if (!check_f32(pp, 0.0f, 100.0f)) return 0;
             if (!field_absent(pp))
             {
-                uint32_t key = fp_key(pp);
+                uint32_t key;
+                if (pp == 0x80000000u) { pp = 0u; }  /* -0.0 归一化（与 fp_in_range 一致）*/
+                key = fp_key(pp);
                 if (have_prev && (key < prev_key)) return 0;   /* 单调不减 */
                 prev_key  = key;
                 have_prev = 1;
