@@ -36,7 +36,7 @@
   - **Major-7（契约）** `bl_proto.h` 前提与 main 备份失败行为矛盾 → 前提改为"调用方须已关闭 App 写窗口"，并声明备份失败现场恢复路径（断电重上电重试 backup_ensure 或 SWD）；
   - Minor：CRC 自检快闪循环分段喂狗（防 100ms 残余预算复位循环）；PA0 恢复固定 115200 重配串口（原用三级链结果，与 §4.7 优先级 5 承诺不符）；bl_common.h 体积口径统一 7,480；方案 §5.2 邮箱 0x18 补 D3 字段名；§4.2 预算行加"G1-d 前"标注；正文残留 Page 6→8 清理（历史变更日志保留）。
   - **Minor-11（记录不处置）**：LED 等待慢闪仅在会话返回间隙采样（15s 窗口期间长亮）——观感与 §4.1"慢闪=等待"有偏差，功能无影响，实机阶段再定是否细化。
-- **栈核算归档**（S7 登记项）：map 无 stack usage 章节（ewp 未开 `--stack_usage`，该选项在 ewp schema 下不可靠），以 map 静态事实 + 审查员估算归档：.data 16B + .bss 0x6CB + CSTACK 0x400 = 2,788B / 19,456B；最深链 main→proto_session→store_block→bl_flash_program_halfwords 峰值估算 <400B，1KB CSTACK 余量充足。
+- **栈核算归档**（S7 登记项）：map 无 stack usage 章节（ewp 未开 `--stack_usage`，该选项在 ewp schema 下不可靠），以 map 静态事实 + 审查员估算归档：.data 16B + .bss 0x6CB(1,739B) + CSTACK 0x400(1,024B) = 2,779B / 19,456B；最深链 main→proto_session→store_block→bl_flash_program_halfwords 峰值估算 <400B，1KB CSTACK 余量充足。
 - 体积轨迹：首测 7,480 → 修复后 7,548 → S10 收尾 7,540 B（余量 652 B）。
 
 ### S10 工程收尾（本 commit）
@@ -150,7 +150,7 @@
 3. RAM 邮箱写入/清除 + Modbus 寄存器 40127/40128~129/40130/40131；
 4. `param_store` 3 页轮转 + 16 B BL 通信槽（M1，格式与 BL 侧 `bl_info.h` 一致后冻结）；
 5. App IWDG 放宽至约 1 s（`IWDG_PRESCALER_64`+624）+ `main()` 开头原始喂狗 `IWDG->KR=0xAAAA`；
-6. 上位机 `tools/ufl_update.py`：按 D1/D4 口径（补齐到块边界算 CRC32、CCITT-FALSE 包校验）。
+6. 上位机 `tools/ufl_update.py`：按 **D1/D4/D6 口径**——①先把 `.bin` 补齐到块大小整数倍再按"跳过 32B 头区"口径算 CRC32 与 img_size；②包 CRC16 用 CCITT-FALSE（init 0xFFFF，非通用 XModem 的 0x0000）；③最后一个数据包后、EOT 前发送 **D6 元数据包**（SOH/128B，包号顺延，"UMFM"+img_size+crc32+0xFF 填充）；④失败判定约定：EOT-ACK 后数秒内 'C' 重现 ⇒ 升级失败（BL 其余失败路径静默回等待窗口，见方案 §6.1）。
 
 ## 验证状态汇总
 

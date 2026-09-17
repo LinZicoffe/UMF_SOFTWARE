@@ -217,7 +217,7 @@ int main(void)
         if (!enter_upgrade && pa0_recovery_requested())
         {
             enter_upgrade = 1;                       /* 物理恢复（§4.7 优先级 5：
-                                                       固定 115200 仅监听——重配串口）*/
+                                                       固定 115200 守候——重配串口）*/
             uart_cfg = BL_UART_CFG_DEFAULT;
             (void)bl_usart_init(uart_cfg);
         }

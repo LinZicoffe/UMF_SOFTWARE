@@ -29,7 +29,7 @@
 #define PROTO_POLL_MS        50u      /* 建立窗口内轮询片 */
 #define PROTO_CAN_WAIT_MS    1000u    /* 等 CAN 第二字节 */
 
-/* App 区 54 页首触擦除位图（7 字节）*/
+/* App 区 52 页首触擦除位图（7 字节，页数由 BL_APP_REGION_SIZE 推导）*/
 #define ERASE_BITMAP_BYTES   ((BL_APP_REGION_SIZE / BL_FLASH_PAGE_SIZE + 7u) / 8u)
 
 /* 元数据包 "UMFM"（内存字节 55 4D 46 4D；按 u32 数值比较，D2/D6）*/
