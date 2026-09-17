@@ -1115,6 +1115,9 @@
         <file>
             <name>$PROJ_DIR$\..\Boot\Src\bl_crc.c</name>
         </file>
+        <file>
+            <name>$PROJ_DIR$\..\Boot\Src\bl_flash.c</name>
+        </file>
     </group>
     <group>
         <name>EWARM</name>
