@@ -173,14 +173,14 @@ ssd1306_SetContrast(value);                        // 对比度
 | 变量 | 类型 | 说明 |
 |------|------|------|
 | `DisplayTimeBase` | `uint8_t` | 显示刷新计数器（>= 20 时触发 200ms 刷新） |
-| `Timer3Uart1TimeBase10ms` | `uint8_t` | UART1 通信时序 |
+| `Timer3Uart1TimeBase10ms` | `uint16_t` | UART1 通信时序，按 `sample_interval_ms` 计时 |
 | `Timer3Uart2TimeBase10ms` | `uint8_t` | UART2 通信时序 |
 
 ## EEPROM 存储映射
 
 | Flash 页 | 地址 | 用途 |
 |----------|------|------|
-| Page 54 | `0x0800D800` | OLED 抗干扰自愈间隔 (oled_recovery_interval) |
+| Page 54 | `0x0800D800` | OLED 自愈间隔、滤波窗口点数、采样间隔 |
 | Page 55 | `0x0800DC00` | 信号处理组 (小信号切除/滤波/阻尼) |
 | Page 56 | `0x0800E000` | 输出配置组 (频率/脉冲当量/语言) |
 | Page 57 | `0x0800E400` | 介质工况组 (密度/管径/气压/气温/雷诺) |
@@ -225,7 +225,8 @@ S03 主菜单 (5 项)
 
 ```
 UFL-1A BCD 原始流量
-  → 累加器去极值滤波 (N=10, K=1, 扣除最大值取均值)
+  → 去极值滑动窗口 (N=2~10, 默认10, K=1, 扣除最大值取均值)
+  → 一阶低通 (τ=filter_time, dt=sample_interval_ms)
   → × 仪表系数 (meter_coeff)
   → × 介质系数 (medium_coeff)
   → × 七点标定分段线性插值 (cal_table, 可选)
@@ -234,7 +235,7 @@ UFL-1A BCD 原始流量
   → TIM1/TIM4 PWM 输出
 ```
 
-- **滤波**: `flow_filter_feed()` 为 `bsp_usart.c` 内 static 函数（非独立模块文件），在 `Uart1_Receive_Function()` BCD 解析后调用；`effective_flow_rate()` 为 public API，优先返回滤波值，未就绪时回退原始值
+- **滤波**: `flow_filter_feed()` 为 `bsp_usart.c` 内 static 函数（非独立模块文件），在 `Uart1_Receive_Function()` BCD 解析后调用；先做可配置去极值滑动窗口，再做一阶低通；`effective_flow_rate()` 为 public API，优先返回滤波值，未就绪时回退原始值
 - **标定**: `cal_table` 模块，7 个标定点默认百分比 [0, 3, 10, 25, 50, 75, 100]，修正系数 k[0..6] 范围 0.5~2.0
 - **模拟模式**: Modbus 寄存器 40049=1 时，模拟流量/温度/累积值替代真实传感器数据（仅 RAM，掉电重置）
 
@@ -264,14 +265,16 @@ USART1 与 UFL-1A 通信，自定义 BCD 编码：
 | 40061 | 通信状态 ModuleState | uint16 | FC03 |
 | 40062~40067 | 正向/反向/净累积 | float | FC03 |
 | 40068~40069 | 实时 4-20mA 电流 | float | FC03 |
-| 40070~40091 | 扩展配置参数 | uint16/float | FC03/FC06/FC10 |
+| 40070~40091 | 扩展配置参数（含一阶低通时间常数） | uint16/float | FC03/FC06/FC10 |
 | 40092 | 通信地址 | uint16 | FC03/FC06 |
 | 40093 | 波特率 | uint16 | FC03/FC06 |
 | 40094 | 语言 | uint16 | FC03/FC06 |
 | 40095 | OLED 自愈间隔 (×100ms) | uint16 | FC03/FC06 |
 | 40096 | 标定使能 | uint16 | FC03/FC06 |
-| 40097~40109 | 标定修正系数 k[0..6] | float | FC03/FC06 |
-| 40110~40123 | 标定点百分比 pct[0..6] | float | FC03/FC06 |
+| 40097~40110 | 标定修正系数 k[0..6] | float | FC03/FC06 |
+| 40111~40124 | 标定点百分比 pct[0..6] | float | FC03/FC06 |
+| 40125 | 滑动窗口点数 filter_window_count (2~10) | uint16 | FC03/FC06/FC10 |
+| 40126 | UFL-1A 被动采样间隔 sample_interval_ms (100~60000ms) | uint16 | FC03/FC06/FC10 |
 
 > **float 参数**: 占 2 个连续寄存器，FC06 分次写入时低位字先缓存、高位字到达后触发 setter。
 > **地址/波特率**: FC06 写入后立即（地址）或延迟（波特率）生效并持久化到 Flash。上位机需切换到新参数才能继续通信。

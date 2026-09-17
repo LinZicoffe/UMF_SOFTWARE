@@ -86,7 +86,7 @@ extern uint64_t Cumulativeflow;  // Modbus 40041, UFL-1A BCD 原始计数值, �
 
 /* 扩展参数寄存器地址 — 第二批 (读写配置参数, 寄存器 69~86) */
 #define StdCondAddr            69  /* 标准工况 std_cond (uint16, R/W) */
-#define FilterTimeAddr         70  /* 滤波参数 filter_time (float, 2 regs, R/W) */
+#define FilterTimeAddr         70  /* 一阶低通时间常数 filter_time (float, 2 regs, R/W) */
 #define DampingTimeAddr        72  /* 阻尼时间 damping_time (float, 2 regs, R/W) */
 #define FreqOutputAddr         74  /* 频率输出 freq_output (float, 2 regs, R/W) */
 #define PulseEquivAddr         76  /* 脉冲当量 pulse_equiv (uint16, R/W) */
@@ -126,9 +126,13 @@ extern uint64_t Cumulativeflow;  // Modbus 40041, UFL-1A BCD 原始计数值, �
 #define CalPct6Addr           122  /* p[6], 默认 100.0 */
 #define CalEndAddr            123  /* 标定区结束地址 */
 
+/* 扩展参数寄存器地址 — 第五批 (滤波与采样, 寄存器 124~125) */
+#define FilterWindowCountAddr 124  /* 去极值滑动窗口点数 (uint16, 2~10, R/W) */
+#define SampleIntervalAddr    125  /* UFL-1A 被动采样间隔 (uint16, ms, 100~60000, R/W) */
+
 /* 扩展参数区范围 */
 #define ExtParamStartAddr      60
-#define ExtParamEndAddr       123
+#define ExtParamEndAddr       125
 
 extern unsigned char strFlowSumBuf[20];
 extern unsigned char strFlowRateBuf[20];
