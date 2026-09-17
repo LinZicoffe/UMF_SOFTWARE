@@ -32,7 +32,7 @@
   - 复审确认：三条回退路径控制流符合 RM0008；DWT 顺序/回绕语义维持前轮结论。
 - **S9 必做项登记**：main() 首行 `bl_iwdg_feed()` 先于 `bl_clock_init()`；随后 `bl_iwdg_start_5s()` 进入会话期前调用（方案 §4.3/§4.6）。
 
-
+### S3 Flash 驱动（commit 15ac339 + 修复 6f49179）
 
 - 日期：2026-09-17
 - 变更：`Boot/Inc/bl_flash.h` + `Boot/Src/bl_flash.c`——F1 寄存器级页擦（PER→AR→STRT）/半字编程（逐半字查状态）/回读比对；§10.3 白名单两段式守卫（App 区常开 + 备份页仅窗口期）；per-halfword 预检查（0xFFFF 跳过 / 已等值跳过支持 T-07 同包重发 / 非擦除态且异值拒绝）。
@@ -44,7 +44,7 @@
   - 审查员确认：锁定纪律全路径复查通过（六条错误路径 + 正常路径全部 flash_lock，无裸 return）。
 - 遗留硬件验证项（记录，非代码问题）：整页擦除时序实测、连续多页擦除在 5s 看门狗预算内的最坏序列、T-07 同包重发实机。
 
-### S3 Flash 驱动（commit 15ac339 + 修复 6f49179）
+### S2 CRC 模块（commit 968bc99）
 
 - 日期：2026-09-17
 - 变更：`Boot/Inc/bl_crc.h` + `Boot/Src/bl_crc.c`——CRC32（ISO-HDLC，反射按位，流式接口 start/update/result）、CRC16（CCITT-FALSE，按位）、`bl_crc_self_test()`（三个 CRC32 定版向量 + CRC16 向量 + 流式 4+5 分段一致性）；工程文件组已注册。
