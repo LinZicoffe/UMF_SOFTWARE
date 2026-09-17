@@ -5,7 +5,8 @@
  * 实测现状（§1.3）：App 的 IWDG = 分频4 + 重载999 ≈ 100ms（v3.1 后放宽为 ~1s），
  * 暖复位（App→BL）后仍在运行 ⇒ BL 入口必须立即喂狗。
  * 会话期改 5s：分频64 + 重载 3124（64×3125/40kHz ≈ 5.0s，LSI 30~60kHz）。
- * 改 PR/RLR 后必须立即写 KR=0xAAAA 重载（否则按旧 RLR 继续计数）。
+ * 改 PR/RLR 后必须待 PVU/RVU 同步完成再写 KR=0xAAAA 重载（否则按旧 RLR
+ * 继续计数），实现见 bl_iwdg.c。
  */
 #ifndef BL_IWDG_H
 #define BL_IWDG_H

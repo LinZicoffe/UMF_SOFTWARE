@@ -51,7 +51,8 @@ static int wait_flag_value(volatile uint32_t *reg, uint32_t mask, uint32_t value
     return 0;
 }
 
-/* 回退到 HSI 8MHz：清总线分频（AHB/APB1/APB2 = /1）、降 Flash 0WS、关 PLL/HSE。
+/* 回退到 HSI 8MHz：清总线分频（AHB/APB1/APB2 = /1）、降 Flash 0WS、
+ * 更新频率记录。关 PLL/HSE 由各调用方在进入本函数前完成。
  * SYSCLK 已确认不在 PLL 上方可调用（先切 HSI 再关 PLL，顺序不可颠倒）。*/
 static void fallback_to_hsi(void)
 {

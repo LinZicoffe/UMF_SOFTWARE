@@ -20,7 +20,31 @@
 
 > 每步格式：日期 / 变更清单 / 编译结果 / 审查结论（agent 判定 + 问题处置）
 
-### S2 CRC 模块（commit 968bc99）
+### S4 平台层：时钟/时基/看门狗（commit 10879a8 + 修复 7abd736）
+
+- 日期：2026-09-17
+- 变更：`bl_clock.h/c`（HSE×9=72MHz，HSE/PLL/切换任一失败回退 HSI；跳转前 deinit 回 HSI）；`bl_time.h/c`（DWT CYCCNT 时基）；`bl_iwdg.h/c`（入口喂狗 + 会话期 5s 重配）。
+- 编译：0 错误 0 警告。
+- 审查：首轮 **FAIL**（1 Major 必修 + 1 Major 跨步 + 5 Minor）→ 修复 → 复审 **PASS**（同一位独立 agent）：
+  - **#1 Major（必修）**：`FLASH_ACR_LATENCY_2` 是 CMSIS"第 2 位掩码"（0x4=字段值 4，非法 4WS）而非"2 等待周期"（0b010=0x2）；HAL 的 `FLASH_LATENCY_2` 实际映射 `FLASH_ACR_LATENCY_1`（ST 社区确认的命名陷阱）。→ 按值语义改名 `BL_ACR_LATENCY_2WS=FLASH_ACR_LATENCY_1`；
+  - **#2 Major（跨步）**：暖复位看门狗预算——HSE 失败路径等待最长约 150ms 超过旧固件 100ms 预算。→ 本步把时钟等待上限压到 100k 次（~100ms，对 HSE 事件 25 倍余量）；**闭环手段是 S9 必做项：main 中 `bl_iwdg_feed()` 必须先于 `bl_clock_init()`**（IWDG 未启动时写入无害）；方案 §4.3 启动流程顺序已同步修正（喂狗行上移并注明理由）；
+  - Minor：SW 切换失败路径先 SW=HSI 等 SWS 再关 PLL（覆盖"误判超时"极端情形）；回退/降级真 0WS（清域不置位）；deinit 清总线分频使 s_pclk1_hz 与硬件一致（原 4MHz vs 记录 8MHz）；IWDG PR/RLR 写后补一次同步等待再重载（防装入旧 RLR）；两处注释时基/职责修正（复审 R2）。
+  - 复审确认：三条回退路径控制流符合 RM0008；DWT 顺序/回绕语义维持前轮结论。
+- **S9 必做项登记**：main() 首行 `bl_iwdg_feed()` 先于 `bl_clock_init()`；随后 `bl_iwdg_start_5s()` 进入会话期前调用（方案 §4.3/§4.6）。
+
+
+
+- 日期：2026-09-17
+- 变更：`Boot/Inc/bl_flash.h` + `Boot/Src/bl_flash.c`——F1 寄存器级页擦（PER→AR→STRT）/半字编程（逐半字查状态）/回读比对；§10.3 白名单两段式守卫（App 区常开 + 备份页仅窗口期）；per-halfword 预检查（0xFFFF 跳过 / 已等值跳过支持 T-07 同包重发 / 非擦除态且异值拒绝）。
+- 编译：0 错误 0 警告。
+- 审查：首轮 **FAIL**（2 Critical + 4 Minor）→ 修复 → 复审 **PASS**（同一位独立 agent，2026-09-17）：
+  - **Critical-1** `range_within` 缺 `addr <= end_incl` 上界，`addr > end` 时无符号下溢 ⇒ 白名单可被绕过（审查员实测：参数页 62 整页擦、参数页 61 内写、备份窗口开时擦参数页 61 均会被放行）→ 补三段判据后复验三个绕过用例全部拒绝、合法边界（App 末页/末半字/全长、备份页窗口内）不受损；
+  - **Critical-2** 等待上限 100k 次对页擦（t_ERASE max 40ms）不足，72MHz 下必然伪超时，且超时路径在 BSY=1 时写 CR 无效 → 分档 WAIT_PROGRAM=100k / WAIT_ERASE=2,000k（≈111ms@4 周期/循环，2.8 倍余量），超时路径改为失败安全（不触碰 CR、恢复靠会话期看门狗）；
+  - Minor：擦除寄存器顺序改 RM0008 文档序（PER→AR→STRT）；每次操作前先确认 BSY=0；BL_OK 契约（"目标不劣于期望值"）写入头文件；read16 单次读入局部。
+  - 审查员确认：锁定纪律全路径复查通过（六条错误路径 + 正常路径全部 flash_lock，无裸 return）。
+- 遗留硬件验证项（记录，非代码问题）：整页擦除时序实测、连续多页擦除在 5s 看门狗预算内的最坏序列、T-07 同包重发实机。
+
+### S3 Flash 驱动（commit 15ac339 + 修复 6f49179）
 
 - 日期：2026-09-17
 - 变更：`Boot/Inc/bl_crc.h` + `Boot/Src/bl_crc.c`——CRC32（ISO-HDLC，反射按位，流式接口 start/update/result）、CRC16（CCITT-FALSE，按位）、`bl_crc_self_test()`（三个 CRC32 定版向量 + CRC16 向量 + 流式 4+5 分段一致性）；工程文件组已注册。
