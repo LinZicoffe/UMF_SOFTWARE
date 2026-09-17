@@ -22,6 +22,33 @@
 
 > 每步格式：日期 / 变更清单 / 编译结果 / 审查结论（agent 判定 + 问题处置）
 
+### S9 启动状态机 + 跳转 + G1-d 分区修订（commit 124978a + 修复系列）
+
+- 日期：2026-09-17
+- 变更：`bl_jump.h/c`（§4.4 固化模板）；`main.c` 完整启动状态机（§4.3）；`bl_flash` 新增 `set_app_window`（备份失败 ⇒ App 区擦写全拒）；PA0 恢复模式（≥3s+释放+10s 二次确认，未按零延迟；进入时固定 115200 重配串口）；LED PB5。
+- **G1-d 分区修订（决策 D7）**：6KB 分区首次全量编译实测 7,480B 触发方案级重评 ⇒ BL 页 0~7（8KB）、备份页 8、App 基址 0x08002400（52KB，余量 7,080B）。方案 §3 修订块+正文+附录同步，v3.0~v3.2 变更日志保留历史值。
+- 编译：0 错 0 警；修复后实测 **7,548 B / 8,192 B（余量 644 B）**。
+- 审查：首轮 **FAIL**（7 Major + 8 Minor）→ 全部处置 → 复审见下：
+  - **Major-1（代码）** 回跳路径 `pre_jump(…, verified=1, …)` 把"本靴从未复算层 3"的镜像误标"已验证"（cmd/G3/PA0 进入升级后窗口耗尽回跳的场景）→ 层 3 拆出 `verified_this_boot` 出参，回跳路径传真实标志；
+  - **Major-2（代码）** pre_jump 无条件 `boot_attempt++` ⇒ 升级成功后新镜像首次崩溃即被旧计数≥3 误锁定（G3 不随新镜像重算）→ pre_jump 在 build_id 变化且 verified 时重置 `boot_attempt=0` 再 +1；
+  - **Major-3/4/5（同步）** 方案 §5.1 `VECT_TAB_OFFSET=0x2400`、日志前置清单第 1 条、`bl_flash.h` 白名单注释（旧"Page 6"在新分区下位于 BL 区内部，严重误导）全部改为 G1-d 值；
+  - **Major-6（论证）** WRP 不可用论据在 G1-d 分区下失效（页 0~7 恰可精确保护 BL 不连带）→ §10.3 重写为"不采用但降级为量产可选（Q5 保留）"，理由改为 OB 写禁令/工序等价/白名单已覆盖；
+  - **Major-7（契约）** `bl_proto.h` 前提与 main 备份失败行为矛盾 → 前提改为"调用方须已关闭 App 写窗口"，并声明备份失败现场恢复路径（断电重上电重试 backup_ensure 或 SWD）；
+  - Minor：CRC 自检快闪循环分段喂狗（防 100ms 残余预算复位循环）；PA0 恢复固定 115200 重配串口（原用三级链结果，与 §4.7 优先级 5 承诺不符）；bl_common.h 体积口径统一 7,480；方案 §5.2 邮箱 0x18 补 D3 字段名；§4.2 预算行加"G1-d 前"标注；正文残留 Page 6→8 清理（历史变更日志保留）。
+  - **Minor-11（记录不处置）**：LED 等待慢闪仅在会话返回间隙采样（15s 窗口期间长亮）——观感与 §4.1"慢闪=等待"有偏差，功能无影响，实机阶段再定是否细化。
+- **栈核算归档**（S7 登记项）：map 无 stack usage 章节（ewp 未开 `--stack_usage`，该选项在 ewp schema 下不可靠），以 map 静态事实 + 审查员估算归档：.data 16B + .bss 0x6CB + CSTACK 0x400 = 2,788B / 19,456B；最深链 main→proto_session→store_block→bl_flash_program_halfwords 峰值估算 <400B，1KB CSTACK 余量充足。
+
+### S8 XModem-CRC 会话（commit 1bdcd67 + 修复 2117610）
+
+- 日期：2026-09-17
+- 变更：`bl_proto.h/c`——建立窗口 15s/每 1s 'C'、单包超时 max(1.5s, 2×传输+0.5s)、连续 NAK≤6 超限 CAN×2、页首触即擦（54→52 页位图随 D7 更新）、三重包校验、静态头尽早校验、EOT 收尾全链校验后写头（state 最后）；**D6 元数据包**（UMFM+img_size+crc32）补全方案 §6.2 的带内期望 CRC 缺口。
+- 编译：0 错 0 警。
+- 审查：首轮 **FAIL**（1 Critical + 2 Major + 3 Minor）→ 修复 → 复审 **PASS**：
+  - **Critical** getc 喂狗计时的局部变量导致 50ms 轮询片永远凑不满 100ms 阈值——建立窗口 15s 必被看门狗复位（方案 §4.6 时序完全不可用）→ 喂狗计时改跨调用 static 且检查先于 RXNE 返回（同时消除 2400bps×STX 4.3s 字节流盲区）；
+  - **Major** 重复包（ACK 丢失重发）6 次 NAK 耗尽整会话作废 → 补标准 XModem"前一包号+CRC 通过 ⇒ ACK 丢弃"恢复路径（不计 NAK）；
+  - Minor：CAN 等待的 SOH/STX 回灌；EOT 单字节无校验与 REJECTED 可观测性按 D4 配套工具语义记录（工具侧约定"EOT-ACK 后 N 秒内 'C' 重现 ⇒ 失败"，登记到上位机实现说明）；头注释契约同步。
+  - 复审确认：恢复分支不写盘不递增 expected 不计 NAK——标准解死锁语义；关键不变量（expected_blk 仅在完整处理后递增）成立；误判由整镜像 CRC32+meta.size 双兜底。
+
 ### S7 信息层（commit c089f6c + 建议 b57c10f）
 
 - 日期：2026-09-17
@@ -110,7 +137,7 @@
 
 ## App 侧前置改造清单（BL 之外，另行实施后方可端到端联调）
 
-1. App ICF 迁 `0x08001C00` + `USER_VECT_TAB_ADDRESS`/`VECT_TAB_OFFSET=0x1C00`（`Core/Src/system_stm32f1xx.c`）；
+1. App ICF 迁 `0x08002400` + `USER_VECT_TAB_ADDRESS`/`VECT_TAB_OFFSET=0x2400`（`Core/Src/system_stm32f1xx.c`；D7 G1-d 修订值）；
 2. `.fw_header` 32 B const 保留区（`App+0x200`，静态字段按 §4.5 表、BL 写入区全 `0xFF`）+ 后构建断言（§6.2 四项；**断言② 按 D2 口径实现：`u32@bin[0x200] == 0x554D4648`，内存字节序为 "HFMU"，不是 "UMFH" 字节串**）；
 3. RAM 邮箱写入/清除 + Modbus 寄存器 40127/40128~129/40130/40131；
 4. `param_store` 3 页轮转 + 16 B BL 通信槽（M1，格式与 BL 侧 `bl_info.h` 一致后冻结）；

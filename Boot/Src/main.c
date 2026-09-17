@@ -115,11 +115,15 @@ static int app_layers_1_2_ok(uint32_t *img_size, uint32_t *build_id)
 }
 
 /* 层 3（§4.5：冷启动必做；暖复位且 build_id 未变则跳过——D3）。
- * 返回 1=通过（或合法跳过），0=整镜像 CRC 不符（App 不可信）。*/
+ * 返回 1=通过（或合法跳过），0=整镜像 CRC 不符（App 不可信）。
+ * *verified_this_boot：本靴是否实际复算并通过（合法跳过时置 0——
+ * S9 审查 #1：回跳路径的 pre_jump 不得把"未复算"标成"已验证"）。*/
 static int app_layer3_ok(uint32_t img_size, uint32_t build_id, int mb_valid,
-                         const bl_mailbox_t *mb)
+                         const bl_mailbox_t *mb, int *verified_this_boot)
 {
     uint32_t crc_expect;
+
+    *verified_this_boot = 0;
 
     if (mb_valid && (mb->last_verified_build_id == build_id))
     {
@@ -127,7 +131,12 @@ static int app_layer3_ok(uint32_t img_size, uint32_t build_id, int mb_valid,
     }
 
     crc_expect = bl_flash_read32(BL_FW_HDR_ADDR + 0x18u);
-    return bl_info_image_crc32(img_size) == crc_expect;
+    if (bl_info_image_crc32(img_size) == crc_expect)
+    {
+        *verified_this_boot = 1;
+        return 1;
+    }
+    return 0;
 }
 
 int main(void)
@@ -139,6 +148,7 @@ int main(void)
     uint32_t build_id = 0u;
     int      app_ok;
     int      g3_lockout = 0;
+    int      app_verified = 0;   /* App 当前镜像已通过层 3（本靴复算或既往合法验证）*/
     bl_backup_result_t bk;
 
     /* ---- 基础初始化（§4.3；喂狗先于时钟初始化——S4 审查修正）---- */
@@ -148,13 +158,15 @@ int main(void)
     led_init();
     pa0_init();
 
-    /* CRC 定版向量自检（§6.2）：失败 ⇒ 停滞快闪，绝不进入升级会话 */
+    /* CRC 定版向量自检（§6.2）：失败 ⇒ 停滞快闪，绝不进入升级会话
+     * （S9 审查 #10：每段延时后各喂一次狗，防旧固件 100ms 残余预算复位循环）*/
     if (!bl_crc_self_test())
     {
         for (;;)
         {
             led_set(1);
             bl_time_delay_ms(100u);
+            bl_iwdg_feed();
             led_set(0);
             bl_time_delay_ms(100u);
             bl_iwdg_feed();
@@ -204,21 +216,29 @@ int main(void)
         }
         if (!enter_upgrade && pa0_recovery_requested())
         {
-            enter_upgrade = 1;                       /* 物理恢复（固定监听）*/
+            enter_upgrade = 1;                       /* 物理恢复（§4.7 优先级 5：
+                                                       固定 115200 仅监听——重配串口）*/
+            uart_cfg = BL_UART_CFG_DEFAULT;
+            (void)bl_usart_init(uart_cfg);
         }
         if (!enter_upgrade)
         {
+            int verified_now = 0;
             /* 层 3 整镜像 CRC32（冷启动必做 / 暖复位按 D3 跳过）*/
-            if (!app_layer3_ok(img_size, build_id, mb_valid, &mb))
+            if (!app_layer3_ok(img_size, build_id, mb_valid, &mb, &verified_now))
             {
                 enter_upgrade = 1;                   /* 域外损坏：App 不可信 */
+            }
+            else
+            {
+                app_verified = 1;                    /* 复算通过或既往合法验证 */
             }
         }
 
         if (!enter_upgrade)
         {
             /* 正常跳转（冷启动 <150ms 含层 3；暖复位 <100ms）*/
-            bl_info_mailbox_pre_jump(build_id, 1, uart_cfg);
+            bl_info_mailbox_pre_jump(build_id, app_verified, uart_cfg);
             (void)bl_jump_to_app();
             /* 跳转失败（向量表突变）⇒ 落入升级模式 */
         }
@@ -234,7 +254,9 @@ int main(void)
 
         if (r == BL_PROTO_DONE)
         {
-            /* 升级成功：读新头 → 更新邮箱（G3 重新起算）→ 跳转新 App */
+            /* 升级成功：读新头 → 更新邮箱（新镜像 G3 重新起算——S9 审查 #2
+             * 由 pre_jump 的 build_id 变更重置实现）→ 跳转新 App。
+             * verified=1：finish_session 已做整镜像 CRC + 向量表 + 静态头全检 */
             if (bl_info_hdr_check(&img_size, &build_id) == BL_HDR_OK)
             {
                 bl_info_mailbox_pre_jump(build_id, 1, uart_cfg);
@@ -251,10 +273,12 @@ int main(void)
         else
         {
             /* IDLE_TIMEOUT/ABORTED/REJECTED：App 仍可信 ⇒ 回跳（§4.3
-             * 空闲窗口耗尽跳 App；取消/中止亦回跳）*/
+             * 空闲窗口耗尽跳 App；取消/中止亦回跳）。
+             * verified 用本靴实际状态（S9 审查 #1：cmd/G3/PA0 进入升级时
+             * 本靴可能从未复算层 3，不得误标"已验证"）*/
             if (app_layers_1_2_ok(&img_size, &build_id))
             {
-                bl_info_mailbox_pre_jump(build_id, 1, uart_cfg);
+                bl_info_mailbox_pre_jump(build_id, app_verified, uart_cfg);
                 (void)bl_jump_to_app();
             }
             /* App 无效：回到等待（下一轮 bl_proto_session 的 15s 窗口）*/

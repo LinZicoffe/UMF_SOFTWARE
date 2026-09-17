@@ -25,7 +25,11 @@ typedef enum
 } bl_proto_result_t;
 
 /* 阻塞式升级会话。前提：USART2 已按通信参数初始化、会话期 IWDG 5s 已
- * 启动、备份已就绪（BL_BACKUP_FAILED 时调用方不得进入）。
+ * 启动；备份失败的场合（BL_BACKUP_FAILED）调用方必须已调用
+ * bl_flash_set_app_window(0) 关闭 App 区写窗口——此时会话仍可进入
+ * （15s 窗口发 'C' 供恢复工具接入），但对 App 区的任何擦/写会在
+ * store_block 即被白名单拒绝并 CAN 中止（旧 App 保持完好，T-26）；
+ * 备份重建只能靠断电重上电（backup_ensure 重试）或 SWD。
  * 会话失败后可再次调用重试（页擦位图等状态每次重置）。*/
 bl_proto_result_t bl_proto_session(void);
 

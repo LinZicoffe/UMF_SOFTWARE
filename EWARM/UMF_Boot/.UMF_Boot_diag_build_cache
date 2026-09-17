@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BuildDb>
+    <Tool>
+        <Name>linker</Name>
+        <Parent>
+            <Path>D:\C_C++text\UMF_SOFTWARE - 0508-瘦身版本\EWARM\UMF_Boot\Exe\UMF_Boot.out</Path>
+            <Output>
+                <Path>D:\C_C++text\UMF_SOFTWARE - 0508-瘦身版本\EWARM\UMF_Boot\List\UMF_Boot.map</Path>
+            </Output>
+        </Parent>
+    </Tool>
+</BuildDb>
