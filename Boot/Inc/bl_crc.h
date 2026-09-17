@@ -34,7 +34,8 @@ uint32_t bl_crc32_calc(const uint8_t *data, uint32_t len);
 /* CRC16-CCITT-FALSE，一次性计算（包校验场景均为整包）*/
 uint16_t bl_crc16_ccitt_false(const uint8_t *data, uint32_t len);
 
-/* 上电自检：三个 CRC32 向量 + 一个 CRC16 向量全部通过返回 1，否则 0。
+/* 上电自检：三个 CRC32 向量 + 一个 CRC16 向量 + 流式分段一致性（4+5 拆段）
+ * 全部通过返回 1，否则 0。
  * main() 启动早期调用，失败则拒绝进入升级会话（§6.2"两侧互验"的 BL 侧）。*/
 int bl_crc_self_test(void);
 
