@@ -6,6 +6,8 @@
  * 接收为轮询（RXNE），等待循环内周期喂狗（约 100ms 一次）。
  * 校验位/字长语义与 App 的 bsp_usart2_apply_uart_config 完全一致：
  * 启用校验时 M=1（9 位字长：8 数据 + 1 校验），保证 XModem 字节流不变形。
+ * 注：轮询接收不检查 PE 标志——校验错误字节的数据位不受影响，错误由
+ * XModem 整包 CRC16 兜底（表现为 NAK 重传）。
  */
 #ifndef BL_USART_H
 #define BL_USART_H

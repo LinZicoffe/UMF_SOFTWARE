@@ -57,7 +57,7 @@ bl_status_t bl_usart_init(uint8_t uart_config)
         crl |= ((uint32_t)0xAu << 8);    /* PA2: MODE=10 CNF=10(复用推挽) */
         crl |= ((uint32_t)0x4u << 12);   /* PA3: MODE=00 CNF=01(浮空输入) */
         GPIOA->CRL = crl;
-        GPIOA->BSRR = (1u << 1);         /* BRR 置位 = PA1 输出低（DE=0）*/
+        GPIOA->BSRR = (1u << (1 + 16));   /* BR1 置位 = PA1 输出低（DE=0 接收态）*/
     }
 
     /* 先关 USART 再配置（幂等）*/
