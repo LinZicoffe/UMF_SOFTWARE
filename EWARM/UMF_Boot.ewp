@@ -1130,6 +1130,9 @@
         <file>
             <name>$PROJ_DIR$\..\Boot\Src\bl_usart.c</name>
         </file>
+        <file>
+            <name>$PROJ_DIR$\..\Boot\Src\legacy_param_read.c</name>
+        </file>
     </group>
     <group>
         <name>EWARM</name>
