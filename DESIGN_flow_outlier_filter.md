@@ -1,7 +1,7 @@
 # 瞬时流量异常值过滤 — 累加器去极值方案
 
-> 状态: **已实现** (v2.1.0)
-> 实现: 去最大值单极值方案 (K=1), 内联于 `bsp_usart.c`
+> 状态: **已实现** (v2.3.2)
+> 实现: 可配置滑动窗口去最大值方案 (K=1), 内联于 `bsp_usart.c`
 > 目标: 去除 UART1 BCD 通信毛刺引入的异常流量值
 
 ## 1. 问题背景
@@ -33,21 +33,21 @@ BCD 通信毛刺产生的异常值几乎都是**偏大**的（垃圾数据解码
 
 | 参数 | 值 | 说明 |
 |------|----|------|
-| 窗口大小 N | 10 | 累计 10 个样本后输出一次 |
+| 窗口大小 N | 2~10 (默认 10) | 由 Modbus 40125 配置，修改后清空旧窗口并重新累计 |
 | 去极值数 | 1 (最大值) | 从累加和中扣除 1 个最大值 |
 | 有效样本数 | N - 1 = 9 | 最终参与均值的样本数 |
 
 ### 2.4 内存开销
 
 ```
-static float    s_flt_sum;       // 累加和          4 字节
-static float    s_flt_max;       // 当前轮最大值    4 字节
-static uint8_t  s_flt_count;     // 样本计数        1 字节
-static float    s_flt_result;    // 本轮滤波结果    4 字节
-static uint8_t  s_flt_valid;     // 结果有效标志    1 字节
+static float    s_flt_window[10]; // 固定最大窗口   40 字节
+static uint8_t  s_flt_write_index; // 环形写入位置    1 字节
+static uint8_t  s_flt_count;       // 样本计数        1 字节
+static uint8_t  s_flt_window_size;  // 当前窗口点数    1 字节
+static float    s_flt_result;       // 滤波结果        4 字节
+static uint8_t  s_flt_valid;        // 结果有效标志    1 字节
 ──────────────────────────────────────────────
-总计                              14 字节 (RAM)
-Flash 代码                        ~120 字节
+总计约                              48 字节 (RAM)
 ```
 
 ### 2.5 算法流程
@@ -55,14 +55,11 @@ Flash 代码                        ~120 字节
 ```
 输入: FlowRateValue.num (每次 BCD 解析完成后触发)
 
-1. s_flt_sum += sample
-2. if sample > s_flt_max: s_flt_max = sample
-3. s_flt_count++
-4. if s_flt_count >= N (10):
-     s_flt_result = (s_flt_sum - s_flt_max) / (N - 1)
-     s_flt_valid  = 1
-     清零: sum=0, count=0, max=0
-5. 输出: s_flt_result (仅在 valid 时使用)
+1. 将 sample 写入固定容量环形窗口，窗口容量取 `filter_window_count` (N)
+2. 窗口未填满 N 个样本时，继续使用原始流量值
+3. 窗口填满后遍历 N 个样本，计算总和并扣除 1 个最大值
+4. `s_flt_result = (sum - max) / (N - 1)`，标记结果有效
+5. 后续每收到一个新样本，覆盖最旧样本并重新计算
 ```
 
 ## 3. 实现位置
@@ -97,10 +94,15 @@ float effective_flow_rate(void)
 display（S01/S02）和 DAC 换算两处调用 `effective_flow_rate()` 均自动获得滤波值。
 模拟流量路径 (`sim_is_active()`) 完全不经过滤波器，不受影响。
 
-### 3.3 初始化
+### 3.3 参数修改
+
+滑动窗口点数通过 Modbus 保持寄存器 40125 (`filter_window_count`) 读写，范围为 2~10。
+窗口点数变化后，滤波器清空已有样本和旧结果，从下一帧开始重新累计，避免新旧窗口数据混用。
+
+### 3.4 初始化
 
 无需显式调用 init 函数。所有 static 变量通过 C 语言零初始化机制自动初始化，
-首个正流量样本自动更新 `s_flt_max`。
+首个正流量样本写入窗口，窗口填满后再计算窗口内最大值。
 
 ## 4. 数据流
 
@@ -109,7 +111,7 @@ UFL-1A → USART1 DMA+IDLE → BCD 解码 → FlowRateValue.num
                                               │
                               flow_filter_feed(FlowRateValue.num)
                                               │
-                              累加器 (N=10, 去最大值)
+                              累加器 (N=filter_window_count, 去最大值)
                                               │
                               effective_flow_rate()
                                 ├─ sim_is_active() → s_sim_flow_rate (不受影响)
@@ -130,18 +132,19 @@ UFL-1A → USART1 DMA+IDLE → BCD 解码 → FlowRateValue.num
 | 标定/强制 DAC 模式 | DAC 换算被 gate 跳过，滤波器持续喂入不受影响 |
 | 模块通信中断 | 无新 BCD 数据，滤波器不触发，保持上一轮有效结果 |
 | 菜单激活期间 | 显示暂停但数据持续喂入，不丢失样本 |
-| 全零流量 | `s_flt_max = 0.0f`，sum/count 正常工作，结果为 0 |
+| 全零流量 | 窗口内最大值为 0，sum/count 正常工作，结果为 0 |
+| 窗口点数修改 | 清空旧窗口、旧结果失效，按新点数重新累计 |
 
 ## 6. 延迟
 
 假设 UFL-1A 数据帧间隔约 500ms（被动模式 Timer3Uart1TimeBase10ms >= 50）：
 
-- 窗口 N=10，需累计 ~5 秒
-- 首次输出延迟: ~5 秒
-- 后续每 ~5 秒更新一次结果
+- 窗口 N=2~10、数据帧间隔约 500ms，首次输出延迟约 N×0.5 秒
+- 默认窗口 N=10 时，首次输出延迟约 5 秒
+- 窗口填满后每收到一个新样本即更新结果
 - 两轮之间滤波输出保持上一轮结果（零阶保持）
 
-**降低延迟**: 将 `FLOW_FILTER_N` 改为 5，延迟降至 ~2.5 秒。
+**降低延迟**: 通过 Modbus 将 40125 写为 5，延迟约降至 2.5 秒。
 
 ## 7. 后续扩展方向 (需要更大 Flash 的芯片)
 

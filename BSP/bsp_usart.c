@@ -15,40 +15,62 @@
 #include "tim.h"
 /* Private define ----------------------------------------------------------*/
 
-/* ── 瞬时流量去极值滤波 (10 点滑动窗口, 去最大值) ────── */
-#define FLOW_FILTER_N   10  /* 窗口样本数 */
-static float    s_flt_window[FLOW_FILTER_N];
+/* ── 瞬时流量去极值滤波 (可配置滑动窗口, 去最大值) ────── */
+#define FLOW_FILTER_DEFAULT_N 10  /* 默认窗口样本数 */
+#define FLOW_FILTER_MIN_N     2   /* 去掉最大值时至少保留 1 个样本 */
+#define FLOW_FILTER_MAX_N     10  /* 固定数组容量, 避免动态分配 */
+static float    s_flt_window[FLOW_FILTER_MAX_N];
 static uint8_t  s_flt_write_index;
 static uint8_t  s_flt_count;
+static uint8_t  s_flt_window_size;
 static float    s_flt_result;
 static uint8_t  s_flt_valid;
+
+static void flow_filter_sync_config(void)
+{
+    uint8_t window_size = (uint8_t)param_get_filter_window_count();
+
+    if ((window_size < FLOW_FILTER_MIN_N) || (window_size > FLOW_FILTER_MAX_N)) {
+        window_size = FLOW_FILTER_DEFAULT_N;
+    }
+    if (window_size != s_flt_window_size) {
+        s_flt_window_size = window_size;
+        s_flt_write_index = 0;
+        s_flt_count = 0;
+        s_flt_valid = 0;
+    }
+}
 
 static void flow_filter_feed(float sample)
 {
     float sum;
     float max;
     uint8_t i;
+    uint8_t window_size;
+
+    flow_filter_sync_config();
+    window_size = s_flt_window_size;
 
     s_flt_window[s_flt_write_index] = sample;
-    s_flt_write_index = (uint8_t)((s_flt_write_index + 1U) % FLOW_FILTER_N);
+    s_flt_write_index = (uint8_t)((s_flt_write_index + 1U) % window_size);
 
-    if (s_flt_count < FLOW_FILTER_N) {
+    if (s_flt_count < window_size) {
         s_flt_count++;
     }
-    if (s_flt_count < FLOW_FILTER_N) {
+    if (s_flt_count < window_size) {
         return;
     }
 
     sum = 0.0f;
     max = s_flt_window[0];
-    for (i = 0; i < FLOW_FILTER_N; i++) {
+    for (i = 0; i < window_size; i++) {
         sum += s_flt_window[i];
         if (s_flt_window[i] > max) {
             max = s_flt_window[i];
         }
     }
 
-    s_flt_result = (sum - max) / (float)(FLOW_FILTER_N - 1);
+    s_flt_result = (sum - max) / (float)(window_size - 1U);
     s_flt_valid = 1;
 }
 
@@ -943,6 +965,12 @@ void Modbus_Function_6(void)
                 ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
             break;
 
+        /* ---- 瞬时流量滤波窗口点数 (uint16, 立即生效) ---- */
+        case FilterWindowCountAddr:
+            param_set_filter_window_count(
+                ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]);
+            break;
+
         /* ---- 七点标定: 标定使能 (uint16, 立即生效) ---- */
         case CalEnableAddr:
             param_set_cal_enabled((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
@@ -1123,7 +1151,7 @@ void Modbus_Function_3(void)
             Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
         }
     }
-    /* 扩展参数区域 (寄存器 60~93) */
+    /* 扩展参数区域 (寄存器 60~124) */
     if ((startaddress >= ExtParamStartAddr) && (startaddress + MbBufferLen - 1 <= ExtParamEndAddr))
     {
         uint16_t j;
@@ -1271,6 +1299,9 @@ void Modbus_Function_3(void)
                     break;
                 case OledRecoveryAddr:
                     reg_val = param_get_oled_recovery_interval();
+                    break;
+                case FilterWindowCountAddr:
+                    reg_val = param_get_filter_window_count();
                     break;
 
                 /* ---- 第四批: 七点标定参数 ---- */
@@ -1504,8 +1535,9 @@ void Modbus_Function_10(void)
                 }
             }
         }
-        /* 扩展配置参数区域 (寄存器 69~93) */
-        if ((startaddress >= StdCondAddr) && (startaddress <= OledRecoveryAddr))
+        /* 扩展配置参数区域 (寄存器 69~94, 124) */
+        if ((startaddress >= StdCondAddr) &&
+            ((startaddress <= OledRecoveryAddr) || (startaddress == FilterWindowCountAddr)))
         {
             for (i = 0; i < MbBufferLen; i++)
             {
@@ -1633,6 +1665,10 @@ void Modbus_Function_10(void)
                     /* OLED 自愈重初始化间隔: 立即生效 */
                     case OledRecoveryAddr:
                         param_set_oled_recovery_interval(
+                            ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
+                        break;
+                    case FilterWindowCountAddr:
+                        param_set_filter_window_count(
                             ((uint16_t)Uart2RxBuffer[7 + 2 * i] << 8) + Uart2RxBuffer[7 + 2 * i + 1]);
                         break;
 
@@ -1803,6 +1839,7 @@ uint8_t sim_is_active(void)
 
 float effective_flow_rate(void)
 {
+    flow_filter_sync_config();
     if (sim_is_active()) return s_sim_flow_rate.num;
     if (s_flt_valid) return s_flt_result;
     return FlowRateValue.num;
