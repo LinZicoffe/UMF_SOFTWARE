@@ -36,7 +36,8 @@ static const legacy_group_def_t s_group_def[LEGACY_GROUP_COUNT] =
     { 63u,  2u,  0u, 0u, LG_OFF_63 },
 };
 
-/* 旧页基址：0x0800D800 + (page_id - 54) * 1KB */
+/* 旧页基址：0x0800D800 + (page_id - 54) * 1KB
+ * （与 BSP/eeprom.h ADDR_FLASH_PAGE_54 同源；旧格式事实，不随新分区调整）*/
 static uint32_t page_base(uint8_t page_id)
 {
     return 0x0800D800u + (uint32_t)(page_id - 54u) * 1024u;
@@ -58,6 +59,10 @@ static int fp_in_range(uint32_t bits, float lo, float hi)
     if ((bits & 0x7F800000u) == 0x7F800000u)
     {
         return 0;                         /* NaN / ±Inf 拒绝 */
+    }
+    if (bits == 0x80000000u)
+    {
+        bits = 0u;                        /* -0.0 归一化为 +0.0（键序修正）*/
     }
     l.f = lo;
     h.f = hi;
@@ -129,7 +134,28 @@ static int read_group_into(const legacy_group_def_t *g, legacy_data_t *out)
                         off += 4u;
                     }
                 }
-                out->group[g->page_id - 54u].len = len;
+                /* 单条旧代记录（页 54：Len=1）会被 Len=2 视角同步"误读"
+                 * （App 的兼容读法同样如此）——按"w1 缺失即旧代"修正标记，
+                 * 使 desc.len 与事实一致（数据本身无歧义）。*/
+                if ((len == 2u) && (g->len_fallback == 1u))
+                {
+                    uint32_t w1 = g->api16
+                                ? bl_flash_read16(addr + 2u * unit)
+                                : bl_flash_read32(addr + 2u * unit);
+                    if (w1 == (g->api16 ? 0xFFFFu : 0xFFFFFFFFu))
+                    {
+                        out->group[g->page_id - 54u].len = g->len_fallback;
+                        out->legacy_fmt_id = 1u;
+                    }
+                    else
+                    {
+                        out->group[g->page_id - 54u].len = len;
+                    }
+                }
+                else
+                {
+                    out->group[g->page_id - 54u].len = len;
+                }
                 if (i != 0u)
                 {
                     out->legacy_fmt_id = 1u;   /* 使用了旧代长度 */
@@ -154,6 +180,7 @@ int legacy_extract_all(legacy_data_t *out)
         out->group[i].page_id = s_group_def[i].page_id;
         out->group[i].len     = s_group_def[i].len;   /* 缺省新代长度 */
         out->group[i].api16   = s_group_def[i].api16;
+        out->group[i].found   = 0u;                   /* memset 0xFF 后必须显式清零 */
         if (read_group_into(&s_group_def[i], out))
         {
             out->group[i].found = 1u;
@@ -163,8 +190,18 @@ int legacy_extract_all(legacy_data_t *out)
     return any;
 }
 
-/* ===== 区间校验（§7.3；缺失字段跳过）===== */
-
+/* ===== 区间校验（§7.3 强制清单；缺失字段跳过）=====
+ *
+ * 校准原则（S6 审查修正）：只做方案 §7.3 明确列出的强制检查——
+ *   cal_k / cal_pct 单调 / modbus_addr / baud idx / sample_interval /
+ *   filter_window_count / 15 个 float 的 NaN/Inf+MIN/MAX。
+ * 刻意【不做】App 读取路径会自愈（clamp/清洗/默认值）的检查：
+ *   DAC 零满度组合（Data_Init 自愈 12100/60000）、oled_recovery、
+ *   cal_enabled、language、std_cond/flow_unit/total_unit、pulse_equiv、
+ *   uart_config bit[7:6] 保留位（App 按位域掩码后接受）。
+ * 理由：备份校验过严会把"App 正常自愈运行"的设备挡在升级门外
+ * （备份未就绪 ⇒ 拒绝一切擦除 ⇒ 该设备永久无法升级，且 BL 无本地提示）。
+ * 自愈类字段以原始值入备份，App 恢复时走与现网完全相同的自愈逻辑。*/
 static int check_u32(uint32_t v, uint32_t lo, uint32_t hi)
 {
     return field_absent(v) || ((v >= lo) && (v <= hi));
@@ -177,17 +214,17 @@ static int check_f32(uint32_t v, float lo, float hi)
 
 int legacy_validate_ranges(const legacy_data_t *d)
 {
-    /* 页 54：[oled_recovery:16|window_count:16]、sample_interval_ms */
+    /* 页 54：[oled_recovery:16|window_count:16]、sample_interval_ms
+     * （oled_recovery 不在强制清单，App clamp；仅查 window/sample）*/
     {
         uint32_t w0 = payload_word(d, LG_OFF_54);
         uint32_t w1 = payload_word(d, LG_OFF_54 + 4u);
-        uint16_t oled_rec = (uint16_t)(w0 & 0xFFFFu);
-        uint16_t win_cnt  = (uint16_t)(w0 >> 16);
+        uint16_t win_cnt = (uint16_t)(w0 >> 16);
 
-        if (!field_absent(w0))
+        if (!field_absent(w0) && (win_cnt != 0u) &&
+            ((win_cnt < 2u) || (win_cnt > 10u)))
         {
-            if (oled_rec > 600u)  return 0;          /* OLED_RECOVERY_MAX */
-            if ((win_cnt != 0u) && ((win_cnt < 2u) || (win_cnt > 10u))) return 0;
+            return 0;
         }
         if (!check_u32(w1, 100u, 60000u)) return 0;  /* sample_interval_ms */
     }
@@ -197,10 +234,8 @@ int legacy_validate_ranges(const legacy_data_t *d)
     if (!check_f32(payload_word(d, LG_OFF_55 + 4u), 0.1f,  100.0f))    return 0;
     if (!check_f32(payload_word(d, LG_OFF_55 + 8u), 0.1f,  100.0f))    return 0;
 
-    /* 页 56：freq_output / pulse_equiv / language */
+    /* 页 56：freq_output（pulse_equiv / language 自愈类，不查）*/
     if (!check_f32(payload_word(d, LG_OFF_56),      0.0f, 10000.0f))   return 0;
-    if (!check_u32(payload_word(d, LG_OFF_56 + 4u), 0u,     5u))       return 0;
-    if (!check_u32(payload_word(d, LG_OFF_56 + 8u), 0u,     0u))       return 0;
 
     /* 页 57：density / pipe_diameter / gas_ref_press / gas_ref_temp / reynolds_k */
     if (!check_f32(payload_word(d, LG_OFF_57),      0.001f, 99999.0f)) return 0;
@@ -212,44 +247,23 @@ int legacy_validate_ranges(const legacy_data_t *d)
     /* 页 58：modbus_addr / uart_config / total_factor / preset_total */
     if (!check_u32(payload_word(d, LG_OFF_58),      1u,   247u))       return 0;
     {
+        /* baud idx ≤ 5：按 App 读取路径语义（位域掩码后校验，bit[7:6] 不拒绝）*/
         uint32_t cfg = payload_word(d, LG_OFF_58 + 4u);
-        if (!field_absent(cfg) && !bl_uart_cfg_valid((uint8_t)cfg)) return 0;
+        if (!field_absent(cfg) && (bl_uart_cfg_baud((uint8_t)cfg) >= BL_UART_BAUD_COUNT))
+        {
+            return 0;
+        }
     }
     if (!check_f32(payload_word(d, LG_OFF_58 + 8u), 0.001f, 99.999f))  return 0;
     if (!check_f32(payload_word(d, LG_OFF_58 + 12u), 0.0f, 9999999.0f)) return 0;
 
-    /* 页 59（16bit API）：DacZero / DacFull —— 与 App Data_Init 同语义 */
-    {
-        uint16_t zero, full;
-        memcpy(&zero, &d->payload[LG_OFF_59], 2u);
-        memcpy(&full, &d->payload[LG_OFF_59 + 2u], 2u);
-        if (zero != 0xFFFFu)
-        {
-            if (zero < 100u)   return 0;
-            if (full == 0xFFFFu) return 0;          /* 有零点无量程：组合非法 */
-            if (full == 0u)     return 0;
-            if (zero >= full)   return 0;
-        }
-        /* full 存在而 zero 缺失（0xFFFF）：视为字段缺失组合，交 App 默认 */
-    }
+    /* 页 59（16bit API）：DacZero / DacFull —— 全部自愈类（App Data_Init
+     * 对 zero<100 / full==0 / zero>=full 均自愈并正常运行），不查 */
 
-    /* 页 60：std_cond / flow_unit / total_unit（字节打包）*/
-    {
-        uint32_t w = payload_word(d, LG_OFF_60);
-        if (!field_absent(w))
-        {
-            if (((w >> 16) & 0xFFu) > 2u) return 0;  /* STD_COND_COUNT-1 */
-            if (((w >>  8) & 0xFFu) > 3u) return 0;  /* FLOW_UNIT_COUNT-1 */
-            if (( w        & 0xFFu) > 3u) return 0;  /* TOTAL_UNIT_COUNT-1 */
-        }
-    }
+    /* 页 60：std_cond / flow_unit / total_unit —— 自愈类（App clamp），不查 */
 
-    /* 页 61：meter_coeff / cal_enabled / cal_k[7] / cal_pct[7] */
+    /* 页 61：meter_coeff / cal_k[7] / cal_pct[7]（cal_enabled 自愈类不查）*/
     if (!check_f32(payload_word(d, LG_OFF_61), 0.001f, 99.999f)) return 0;
-    {
-        uint32_t ce = payload_word(d, LG_OFF_61 + 4u);
-        if (!field_absent(ce) && (ce > 1u)) return 0;
-    }
     {
         uint8_t  k;
         uint32_t prev_key = 0u;
