@@ -2,22 +2,23 @@
 /*-Editor annotation file-*/
 /* IcfEditorFile="$TOOLKIT_DIR$\config\ide\IcfEditor\cortex_v1_0.xml" */
 /*-Specials-*/
-define symbol __ICFEDIT_intvec_start__ = 0x08000000;
+define symbol __ICFEDIT_intvec_start__ = 0x08002400;
 /*-Memory Regions-*/
-/* STM32F103C8 Flash: 64KB (Page 0..63, 1KB/page, 0x08000000..0x0800FFFF).
- * Top 10KB (Page 54..63, 0x0800D800..0x0800FFFF) reserved for Flash-EEPROM
- * emulation (param_storage groups + DAC calibration + Span).
- * Therefore ROM_region for code/const limited to Page 0..53 (first 54KB).
- *
- * HardFault root cause (2026-04-30):
- *   ROM_end was 0x0800FFFF, linker placed const/code into Page 55..63,
- *   those pages were full-page-erased by WriteBufferFlash() on param save,
- *   wiping code to 0xFFFFFFFF and causing UNDEFINSTR HardFault.
- *   Fixed: ROM_end = 0x0800D7FF, strict isolation code vs EEPROM area. */
-define symbol __ICFEDIT_region_ROM_start__   = 0x08000000 ;
-define symbol __ICFEDIT_region_ROM_end__     = 0x0800D7FF;
+/* STM32F103C8 Flash 64KB (Page 0..63, 1KB/page) - Bootloader partition (D7/G1-d):
+ *   Page 0..7  0x08000000-0x08001FFF  Bootloader (8,192 B, UMF_Boot project)
+ *   Page 8     0x08002000-0x080023FF  legacy param backup page (BL only)
+ *   Page 9..60 0x08002400-0x0800F3FF  Application (53,248 B, this project)
+ *   Page 61..63 0x0800F400-0x0800FFFF param storage, 3-page rotation
+ * .fw_header: 32 B firmware header fixed at App+0x200 (0x08002600); static
+ * fields come from boot_flag.c; BL write area (0x14..0x1F) must stay 0xFF.
+ * RAM: 0x20004C00-0x20004DFF is the BL shared mailbox (512 B, bl_common.h);
+ * the rest of the top 1KB is unassigned, so the App linked RAM upper bound
+ * is 0x20004BFF, and the initial SP equals 0x20004C00 at most, which is
+ * exactly the SP limit accepted by BL/host jump checks. */
+define symbol __ICFEDIT_region_ROM_start__   = 0x08002400 ;
+define symbol __ICFEDIT_region_ROM_end__     = 0x0800F3FF;
 define symbol __ICFEDIT_region_RAM_start__   = 0x20000000;
-define symbol __ICFEDIT_region_RAM_end__     = 0x20004FFF;
+define symbol __ICFEDIT_region_RAM_end__     = 0x20004BFF;
 /*-Sizes-*/
 define symbol __ICFEDIT_size_cstack__ = 0x800;
 define symbol __ICFEDIT_size_heap__   = 0x200;
@@ -28,6 +29,8 @@ define memory mem with size = 4G;
 define region ROM_region   = mem:[from __ICFEDIT_region_ROM_start__   to __ICFEDIT_region_ROM_end__];
 define region RAM_region   = mem:[from __ICFEDIT_region_RAM_start__   to __ICFEDIT_region_RAM_end__];
 
+define symbol __FW_HDR_ADDR__ = 0x08002600;
+
 define block CSTACK    with alignment = 8, size = __ICFEDIT_size_cstack__   { };
 define block HEAP      with alignment = 8, size = __ICFEDIT_size_heap__     { };
 
@@ -35,6 +38,7 @@ initialize by copy { readwrite };
 do not initialize  { section .noinit };
 
 place at address mem:__ICFEDIT_intvec_start__ { readonly section .intvec };
+place at address mem:__FW_HDR_ADDR__          { readonly section .fw_header };
 
 place in ROM_region   { readonly };
 place in RAM_region   { readwrite,

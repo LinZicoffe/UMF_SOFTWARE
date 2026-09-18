@@ -183,3 +183,87 @@
 - 分支 `feat/bootloader`，HEAD 通过 S1~S10 + 终审全部审查环节；
 - BL 交付边界：仅 BL 侧（Boot/ 11 模块 + UMF_Boot 工程）；App 侧前置改造与上位机工具见"App 侧前置改造清单"（其中第 1 条地址/偏移为 D7 修订值，第 6 条为 D1/D4/D6 完整口径）；
 - 端到端可用性：BL 已可独立部署（SWD 烧页 0~7 → RS-485 升级 App）；App 接入需完成前置清单 1~5。
+
+## App 侧前置改造（A 系列，2026-09-18 起）
+
+上位机实机全链路升级验证通过后启动。要求与 BL 开发一致：每步独立 agent 审查通过才继续，逐步记录于本节。
+硬件危险期提示（A1 审查登记）：param_store 迁移（A3/A4）落地前，App 镜像严禁在实机执行任何 Flash 参数写入路径（菜单保存 / DAC 校准 / Span），否则将擦除自身代码区（新 App 区覆盖旧参数页 54~60）。
+
+### A1 — App 链接迁移 + 后构建镜像（2026-09-18，审查 PASS 7/7）
+
+改动：
+- `EWARM/stm32f103xb_flash.icf`：intvec 0x08002400、ROM [0x08002400,0x0800F3FF]、RAM [0x20000000,0x20004BFF]（避开 0x20004C00 起 BL 邮箱 512B）、新增 `place at address 0x08002600 { readonly section .fw_header }`；
+- `Core/Src/system_stm32f1xx.c`：启用 `USER_VECT_TAB_ADDRESS`，`VECT_TAB_OFFSET=0x00002400U`（Cortex-M3 VTOR 128B 对齐满足）；
+- `EWARM/UMF.ewp`：BUILDACTION post-build `ielftool --bin --fill 0xFF;0x08002400-0x0800F3FF` → `EWARM/UMF_app.bin`（UMF.hex 原样保留）。
+
+构建实测：0 错 0 警；`.intvec`@0x08002400 大小 0xEC（<0x200，与固件头无重叠）；ROM 实占 47,044B（区余量 ~6.2KB）；CSTACK$$Limit=0x20001588（≤BL_RAM_LIMIT 且 8 对齐）；UMF_app.bin 恒 53,248B（fill 到区上界），SP=0x20001588 / PC=0x0800D781(Thumb) 均在 BL/host 跳转校验范围内。
+审查（agent_473ac3ee）：7/7 PASS，ICF 常量与 bl_common.h 逐项一致；Minor①（ICF 邮箱注释 1KB/512B 措辞）已当场修正并复编；Minor② = 上述硬件危险期提示。bin[0x200..0x21F] 暂为代码占位属预期，A2 段保留后解决。
+
+### A2 — .fw_header 固件头常量 + boot_flag 邮箱模块（2026-09-18，审查 PASS 7/7，经 1 轮 FAIL→修复→复审）
+
+新增文件：
+- `BSP/boot_flag.h` / `BSP/boot_flag.c`：`.fw_header` 32B 常量（`#pragma location` + `__root`，ICF 固定放 0x08002600；静态字段 magic/hw_id=0x0103/bl_min=1/app_ver/build_id/fmt=1，rsvd0 与 BL 写入区全 0xFF）；`boot_mailbox_t` 32B（布局=bl_info.h 逐字段）+ 读（magic+反码+CRC32 三重校验）/clear（cmd=NONE、boot_attempt=0、seq+1）/request_upgrade（cmd=UPGRADE，保留有效字段）；`boot_crc32`（ISO-HDLC，与 BL/host 三方同口径）；`boot_flag_init`（CSTACK 上界断言 + 启动期邮箱快照）+ `boot_flag_iap_mirror`（40130 回显源）；负数组布局断言 7 条。
+- `BSP/app_fw_version.h`：APP_FW_VERSION 0x00010700 (v1.7.0) / APP_BUILD_ID 0x20260918（A6 双版本构建只改此文件）。
+- `EWARM/UMF.ewp`：BSP 组加入 boot_flag.c。
+
+构建实测：0 错 0 警；map `.fw_header const 0x8002600 0x20`；bin 全部四项 §6.2 断言过（magic@0x200=0x554D4648、0x211..0x21F 全 0xFF、SP/PC 合法、53,248B）。
+审查（agent_886bb6cb）：首轮 FAIL —— **boot_flag_init 的 `(uint32_t)CSTACK$$Limit` 缺 `&`**（读的是无存储绝对符号地址处的随机 SRAM，断言失效且有误触发死循环风险）；修复为 `(uint32_t)&CSTACK$$Limit`（IAR 绝对符号标准取法）后复审 PASS。非阻塞备忘：①上位机 FirmwareImage.cs 实际不查 0x211..0x213（rsvd0），文档表述以代码为准；②A4/A5 接入 main() 后建议做一次"改坏 ICF 触发断言"负向实机验证（T 系列）。
+另：A2 期间误删 `BSP/Src/cal_table.c`（BSP 为混合平铺布局的历史特例），已即时从 git 恢复，无损失。
+
+### A3 — param_storage 3 页轮转重写（2026-09-18，审查 PASS 10/10 + 复核通过）
+
+改动：
+- `BSP/param_storage.c` 全量重写：Page 61~63（0x0800F400~0x0800FFFF）3 页轮转整页镜像存储，页格式/BL 槽逐字段对齐 bl_info.c 冻结契约（页头 PPG1/seq/state/fmt/data_crc16(覆盖 0x010~0x10F 含槽)/hdr_crc16(覆盖 0x000~0x009)；槽 BLCF@0x100/uart_config@0x104/slot_crc16@0x108）；读取取有效页 seq 最大（int16 回绕差值）；提交目标按 §7.2 v3.1 四规则（优先无效页→全有效选 seq 最小→并列物理序号→new_seq=max+1）；`store_page_guard` 只放行 3 页基址（T-35）；提交期喂狗（擦前后+每 64B）；回读逐半字+整页有效性校验。旧 eeprom.c 依赖全部移除。
+- `BSP/param_storage.h`：param_basic_t 新增 dac_zero/dac_full；新增 API param_get_dac_zero/full、param_set_dac_values（一次提交）、param_set_span_values（一次提交）、param_get_status 与 PARAM_STATUS_MIGRATED/PARTIAL/DEFAULTS；param_set_value_4ma/20ma 维持 RAM-only（与旧版一致），落盘分工给 set_span_values。
+- NaN/±Inf 解码防护（审查建议当场落实）：`dec_f()` 对指数全 1 位形（含 0xFFFFFFFF 擦除态）回落逐字段默认值，decode 全部 17 个 float 字段走该辅助。
+
+构建实测：0 错 0 警；ROM 47,478B / RAM 5,787B（+s_page_img 272B static）。
+审查（agent_3914a5d2）：10/10 PASS——页格式与 BL 解析逐字节闭合（字节序/CRC 覆盖范围/uart_config 钳制三点确认 BL 读 App 页全过校验）、CRC16 与 bl_crc 位级等价、三场景提交目标推演正确、掉电至多损坏目标页；NaN 防护补丁复核通过。事实更正：eeprom.o 此刻仍是活代码（main/bsp_menu/bsp_usart 的旧调用未删，map 占 522B）。
+**部署闸门（A4 未完成前）**：A3 固件严禁刷入带旧标定数据的设备——三页均无效时以默认值提交会擦掉旧 Page 61 标定数据且 Page8 备份不存在的设备不可恢复；旧 span 写 Page 63 与新存储页 3 同页双写者待 A4 移除。
+
+### A4 — 旧数据迁移 + 旧页调用点改造 + Data_Init 重写（2026-09-18，审查 PASS 10/10 + 复核通过）
+
+改动：
+- `BSP/param_storage.c`：无有效新页分支接入 `migrate_from_legacy()`——数据源优先级：旧页 61~63 直读（`legacy_read_group`，槽扫描语义与 eeprom.c/BL legacy_param_read.c 逐条一致，双代回退返回实际 len）> 页 8 备份块（`backup_blob_read` 只读，magic/ver/n/crc32 四重校验；**desc[1]=found?len:0**，desc[3] 为 rsvd——开发者首版误当 found 标志，经真机 dump 仿真发现后修正）> 默认值兜底；54~60 一律走备份块（已落入 App 代码区，直扫代码字节有误匹配风险）；`legacy_apply` 10 组逐字段解码（0xFFFFFFFF/NaN/Inf 缺失跳过，clamp 保留），PARAM_STATUS 三态（0x3FF=MIGRATED / 非零=PARTIAL|DEFAULTS / 零=DEFAULTS）；部分迁移不自动改写 modbus_addr/uart_config。
+- `Core/Src/main.c`：启动顺序 `param_storage_init()` → `Data_Init()`（§5.4 硬性要求①）；`Data_Init()` 重写为 store→RAM 同步（param_get_dac_zero/full + param_get_value_4ma/20ma），保留 Span/DAC 自愈；删除旧反向同步。
+- `Core/Inc/main.h`：删除 `DAC_FLASH_PAGE_ADDR`（注释禁恢复）与 `#include "eeprom.h"`。
+- `BSP/bsp_menu.c`：SCR_DAC_ZERO/FULL → `param_set_dac_values`；SCR_SPAN_ZERO/FULL → `param_set_span_values`；SCR_FACTORY_RST → reset 后 param_get 同步 RAM。
+- `BSP/bsp_usart.c`：FC10 DAC/Span → 统一存储 setter；删除 BackupBuf。
+- `EWARM/UMF.ewp`：移除 eeprom.c（全仓零调用者，文件保留）。
+
+真机数据仿真（`D:\bl_test\sim_migration.js`，rollback_full.bin + page8_backup.bin 双 dump 复算）：直读命中 61（meter=0.001+标定表）/62（0.100）；备份块命中 54(len=1 旧代回退,fmt_id=1 真机命中)/55/58(addr=2,115200 8N1)/60/61/62；56/57/59/63 真机为空→默认；found_mask=0x1D3→PARTIAL|DEFAULTS。与 BL 冒烟测试对页 8 的独立解析一致。
+审查（agent_b6c7cc04）：10/10 PASS（扫描数学/双代回退/备份块解析/逐组等价/优先级/§5.4 三条/掉电幂等/状态语义/调用点完整性/栈安全）；范围外发现 **A3 遗留缺陷：新页直载路径 memset 把 pwd_engineer 清 0（鉴权绕过）**——已改为 `param_load_defaults()` 预置（34 字段覆盖矩阵复核通过）。备注：40131 为组级粒度（字段级缺失不单独置 bit2，登记为已知限制）。
+
+### A5 — Modbus IAP 寄存器 + 邮箱触发 + IWDG 放宽 + 启动顺序收尾（2026-09-18，审查 PASS 10/10 + 复核通过）
+
+改动：
+- `BSP/bsp_usart.h/.c`：新增 PDU 126~130（4x 40127~40131）——FC06 写 126=0x5AA5 置 `s_iap_reset_pending`（延迟复位：`bsp_usart2_check_baud_rate_pending()` 开头处理，等 DMA+TC 完成（gState READY）→ `boot_mailbox_request_upgrade(param_get_uart_config())` → `NVIC_SystemReset()`）；FC03 新增 126~130 读块（127/128=固件头 app_ver 低/高字、129=启动期邮箱 cmd 回显、130=PARAM_STATUS、126 读回 0）。
+- `Core/Src/main.c`：USER CODE 1 开头 `boot_flag_init()`（§5.4 第一步：CSTACK 断言+邮箱快照）+ IWDG 喂狗/放宽（0xAAAA→0x5555→PR=64→RLR=624→0xAAAA，1.0s）；USER CODE 2 末尾（MX_IWDG_Init 后）`boot_mailbox_clear()`（迁移确认后清 cmd+G3）。
+- `Core/Src/iwdg.c`：USER CODE IWDG_Init 2 覆盖生成代码的 100ms 为 1s（同参数；HAL_IWDG_Init 自带 PVU/RVU 同步等待，覆盖写有效）。
+- `Core/Inc/main.h`：删除 `#include "eeprom.h"`。
+
+构建实测：0 错 0 警；bin 53,248B 四项断言过（SP=0x200017C0 / PC=0x0800E011）。
+审查（agent_df590375）：10/10 PASS——触发链端到端推演闭合（TC 后复位、邮箱写序、BL 侧校验/优先级 1 采信）、跨块读取与既有行为一致、IWDG 键序列与 PVU/RVU 时序安全（1s 窗口下最坏路径余量充足）、上位机 TriggerDeviceBootloaderAsync 兼容（复位<100ms + 30s 'C' 窗口）。Minor 已当场修复：**request_upgrade 有效分支同时刷新 mb.uart_config**（同会话改波特率后触发升级的失配消除），复核通过。
+已知限制登记：FC03 跨块/越界读取回发缓冲残留字节为既有全局行为（非本次引入），上位机全量快照应按块内地址读取。
+
+### A6 — 流量系数双版本测试构建（2026-09-18，代码审查 PASS 7/7；实机验证待 485 适配器恢复）
+
+改动（均为代码与产物，仓库提交状态为正式版配方）：
+- `BSP/app_fw_version.h`：新增 `APP_FORCE_METER_COEFF`（0.0f=正式版不覆盖；k1=1.0f+ver 0x00010700+build 0x2026A001，k2=2.0f+ver 0x00010701+build 0x2026A002，配方写入注释）。
+- `BSP/param_storage.c`：`param_storage_init` 末尾（两分支汇合后）仅 RAM 覆盖流量系数（不落盘；0.0f 时编译期消除——k1↔k2 bin 仅 4 字节差（ver/build/浮点字面量）、正式版↔k1 全局收缩佐证）。
+- 测试产物：`D:\bl_test\UMF_app_1.7.0_k1.bin`、`UMF_app_1.7.1_k2.bin`（各 53,248B=52 块 @1024，magic 校验过；"46 块"旧口径更正为 **52 块**，@115200 全程约 12~15s）。
+- 联调探针 `D:\bl_test\h5probe\Program.cs`：subcommand 化（upgrade/mread/mwrite/listen；自带 Modbus CRC16，mread float 字节序经 0.001=0x3A83126F 推演验证：[24]=0x126F、[25]=0x3A83）。
+
+审查（agent_4a172178）：7/7 PASS——覆盖时序（commit 先于覆盖）、正式版常量折叠无残留（bin 字节级证据链）、三方可分辨闭环（文件名/版本/系数）、探针 CRC 与字节序正确、init 重构无回归（pwd 修复完好）。非阻塞备注：①h5probe 引用仓库外上位机工程，上位机升级链路（FirmwareImage/XModemSender/SerialPortChannel/XModemCrc）尚未同步回仓库内 HostApplication——**待办**；②A1~A6 改动随本条提交。
+**实机验证推迟**：USB-485 适配器当前不在位（设备管理器中 CH340 COM6/COM7 均 Unknown），JLink SWD/JTAG 亦无法连接（VTref 3.277V 正常，疑似调试线被碰松）。恢复后流程见下节。
+
+#### A6 实机验证操作单（485 适配器恢复后执行）
+
+1. 插回适配器，确认 COM 号（可能不再是 COM6，下称 `<COMx>`）。
+2. `cd D:\bl_test\h5probe && dotnet run -- listen <COMx> 5000`——设备当前运行死循环测试镜像且不清邮箱，BL 侧 IWDG(5s) 复位 3 次后 G3 锁定，应已在升级模式每秒发 'C'；若无 'C'，给设备断电重上电等 ~20s 再听。
+3. `dotnet run -- upgrade <COMx> D:\bl_test\UMF_app_1.7.0_k1.bin`（约 12~15s）→ BL 校验写头跳转 k1（真 App 首次运行，含旧数据迁移）。
+4. 验证读回：`dotnet run -- mread <COMx> 24 2` → float=1（k1）；`mread <COMx> 127 4` → [127]=0x0700 [128]=0x0001（ver 1.7.0）、[129]=0（镜像）、[130]=0x06（PARTIAL|DEFAULTS，与迁移仿真一致）。
+5. `dotnet run -- mwrite <COMx> 126 0x5AA5` → 回显 OK 后设备复位进 BL（'C' 重现）。
+6. `dotnet run -- upgrade <COMx> D:\bl_test\UMF_app_1.7.1_k2.bin` → 完成后 `mread <COMx> 24 2` → float=2（k2）。
+7. 同样步骤可用上位机 UI 复做（固件升级页选 bin + 参数页读流量系数 40025）。
+通过标准：3/4/6 步读值符合预期即全链路（迁移+触发+升级+版本区分）闭环；随后补记本节实测数据并进入 A7 三方终审。

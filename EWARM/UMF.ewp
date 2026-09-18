@@ -1104,7 +1104,10 @@
         <settings>
             <name>BUILDACTION</name>
             <archiveVersion>2</archiveVersion>
-            <data />
+            <data>
+                <prebuild></prebuild>
+                <postbuild>&quot;$TOOLKIT_DIR$\bin\ielftool.exe&quot; --bin --fill 0xFF;0x08002400-0x0800F3FF &quot;$TARGET_PATH$&quot; &quot;$PROJ_DIR$\UMF_app.bin&quot;</postbuild>
+            </data>
         </settings>
         <settings>
             <name>Coder</name>
@@ -1120,9 +1123,6 @@
                 <name>$PROJ_DIR$\..\BSP\bsp_usart.c</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\BSP\eeprom.c</name>
-            </file>
-            <file>
                 <name>$PROJ_DIR$\..\BSP\key.c</name>
             </file>
             <file>
@@ -1136,6 +1136,9 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\BSP\param_storage.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\boot_flag.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\BSP\bsp_menu.c</name>

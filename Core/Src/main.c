@@ -30,6 +30,7 @@
 #include "bsp_menu.h"
 #include "param_storage.h"
 #include "bsp_usart.h"
+#include "boot_flag.h"
 #include "run_display.h"
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
@@ -97,7 +98,19 @@ void Time_Delay(uint32_t nCount)
 int main(void)
 {
     /* USER CODE BEGIN 1 */
+    /* §5.4 启动序列第一步（须在任何外设初始化前）：
+     * CSTACK 上界断言 + 读取启动期邮箱快照（40130 回显源）。*/
+    boot_flag_init();
 
+    /* BL 跳转后 IWDG 仍在运行（无法停止，仅复位可关）：先喂狗消除 BL 残余
+     * 计数的立即复位风险，随即放宽到 ~1s（前置清单 5：Prescaler 64 + 624
+     * → 40kHz/64=625Hz，625 计数=1.0s），覆盖参数迁移（含页擦 20~40ms×n）
+     * 与 OLED 等长初始化路径。*/
+    IWDG->KR = 0xAAAAu;             /* 喂狗 */
+    IWDG->KR = 0x5555u;             /* 允许写 PR/RLR */
+    IWDG->PR = IWDG_PRESCALER_64;
+    IWDG->RLR = 624u;
+    IWDG->KR = 0xAAAAu;             /* 以新值立即重载 */
     /* USER CODE END 1 */
 
     /* MCU Configuration--------------------------------------------------------*/
@@ -127,15 +140,14 @@ int main(void)
     MX_TIM3_Init();
     MX_TIM4_Init();
     /* USER CODE BEGIN 2 */
+    /* 顺序硬性要求（方案 §5.4 ①）：参数存储初始化（含旧数据迁移）必须早于
+     * Data_Init()——后者现在从统一参数存储同步 DAC/Span（store → RAM 镜像）。*/
+    param_storage_init();
     Data_Init();
     DacValue = DacZeroValue;/* 初始化为零点值 (4mA)，避免初始输出异常 */
     //DacValue = 800;
-    param_storage_init();
     bsp_usart_set_modbus_addr(param_get_modbus_addr());
     bsp_usart2_apply_uart_config(param_get_uart_config());
-    /* 将 Flash Page 63 真实值同步到 param_storage (方向: SpanValueBuf → param) */
-    param_set_value_4ma(SpanLoValue);
-    param_set_value_20ma(SpanHiValue);
     key_init();
     menu_init(NULL);
     __HAL_UART_CLEAR_IDLEFLAG(&huart1);
@@ -145,6 +157,10 @@ int main(void)
     FlowPassiveReadCmdEnable = 1;
     run_display_init(NULL);  /* NULL = 使用默认配置 (200ms 刷新) */
     MX_IWDG_Init();
+    /* §5.4 启动序列收尾：参数迁移已确认完成（param_storage_init 返回），
+     * 清除邮箱 cmd 并清零 G3 计数。此后发生的复位（看门狗/断电）由 BL
+     * 按 App 有效性与 G3 重新判定，不会误入升级模式。*/
+    boot_mailbox_clear();
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -338,29 +354,22 @@ float ConvertFunc(float pv, float x0, float x1, float y0, float y1)
     return y0 + (pv - x0) * (y1 - y0) / span;
 }
 /**
- * @Author: liyongtai
- * @description: data initialization
- * @return {*}
- */
+* @Author: liyongtai
+* @description: data initialization
+* @return {*}
+*/
 void Data_Init(void)
 {
-    uint32_t BackupBuf[2];
-    ReadBufferFlash(2, ADDR_FLASH_PAGE_63, BackupBuf);
-    SpanValueBuf[0].str[0] = (uint8_t)(BackupBuf[0] >> 24);
-    SpanValueBuf[0].str[1] = (uint8_t)(BackupBuf[0] >> 16);
-    SpanValueBuf[0].str[2] = (uint8_t)(BackupBuf[0] >> 8);
-    SpanValueBuf[0].str[3] = (uint8_t)(BackupBuf[0] >> 0);
-    SpanValueBuf[1].str[0] = (uint8_t)(BackupBuf[1] >> 24);
-    SpanValueBuf[1].str[1] = (uint8_t)(BackupBuf[1] >> 16);
-    SpanValueBuf[1].str[2] = (uint8_t)(BackupBuf[1] >> 8);
-    SpanValueBuf[1].str[3] = (uint8_t)(BackupBuf[1] >> 0);
+    /* A4 重写：DAC/Span 一律经统一参数存储（param_storage_init 已完成
+     * 选页/迁移/载入），方向为 store → RAM 镜像；旧 Page 63/59 直读废弃。*/
+    DacValueBuf[0] = param_get_dac_zero();
+    DacValueBuf[1] = param_get_dac_full();
+    SpanLoValue    = param_get_value_4ma();
+    SpanHiValue    = param_get_value_20ma();
 
-    /* Span 默认值保护: 空 Flash 解析为 NaN 或异常值时恢复默认 */
-    if (BackupBuf[0] == 0xFFFFFFFF) SpanLoValue = 0.0f;
-    if (BackupBuf[1] == 0xFFFFFFFF) SpanHiValue = 100.0f;
+    /* Span 默认值保护: 异常值（含迁移缺失回落默认失败）时恢复默认 */
     if (SpanLoValue >= SpanHiValue) { SpanLoValue = 0.0f; SpanHiValue = 100.0f; }
 
-    ReadBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf);
     if (DacZeroValue < 100)
         DacZeroValue = 12100;
     if (!DacFullValue)
