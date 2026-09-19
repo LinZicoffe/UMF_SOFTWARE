@@ -8,7 +8,8 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - **Modbus RTU 从站**: USART2 作为 Modbus RTU 从站（地址 2），支持功能码 01/03/04/05/06/10
 - **4~20mA DAC 输出**: TIM1/TIM4 PWM 模拟输出，支持零点和满度校准
 - **OLED 显示**: SSD1306 128×64，SPI bit-bang 驱动，支持 S01/S02 页面切换、7×10 字体菜单，以及瞬时/累积流量按所选单位换算显示
-- **参数存储**: Flash 模拟 EEPROM，Page 54~63 分组存储仪表参数、量程范围和 DAC 校准值
+- **参数存储**: Page 61~63（0x0800F400~0x0800FFFF）三页轮转整页镜像存储（PPG1 页头 + 双 CRC16 + 16B BL 通信槽），提交任一时刻掉电至多损坏一页；首次升级自动从旧 Page 54~63 数据迁移（含页 8 BL 备份块补缺）
+- **IAP Bootloader 配套 (v2.4.0)**: App 基址迁至 0x08002400（VTOR 重定位），32B 固件头 @0x08002600，RAM 共享邮箱（暖复位 G3 启动计数/升级请求），Modbus 40127 触发进 BL、40128~40131 固件信息回读；IWDG 放宽至 ~1s 适配 Flash 整页提交
 - **瞬时流量滤波**: 2~10 点滑动窗口去最大值平均 + 一阶低通，窗口点数、低通时间常数和采样间隔可通过 RS-485/Modbus 修改并持久化
 - **菜单系统**: 5 层导航栈 + 6 种界面模式 (列表/数值/枚举/密码/只读/确认) + 两级密码门控 (操作员/工程师)
 - **英文菜单界面**: 纯英文菜单（v1.5.0 V7 起，中文双语支持已移除以释放 Flash；S44 Language 屏幕保留兼容）
@@ -30,23 +31,25 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 
 ### 工具链
 
-- **IDE**: IAR Embedded Workbench for ARM (EWARM V8.32)
-- **工程文件**: `EWARM/UMF.ewp`
-- **工作空间**: `EWARM/Project.eww`
+- **IDE**: IAR Embedded Workbench for ARM (EWARM，本仓库在 9.60.4 下开发验证)
+- **App 工程**: `EWARM/UMF.ewp`（工作空间 `EWARM/Project.eww`，含 Bootloader 双工程）
+- **Bootloader 工程**: `EWARM/UMF_Boot.ewp`（独立 ICF `EWARM/UMF_Boot.icf`，页 0~7）
 - **启动文件**: `EWARM/startup_stm32f103xb.s`
 
 ### 编译步骤
 
 1. 使用 IAR EWARM 打开 `EWARM/Project.eww`
-2. 选择 Release 或 Debug 配置
-3. Project → Make (F7)
-4. 下载程序到目标板
+2. App 工程：选择 UMF 配置，Project → Make (F7)；**构建自动生成 `EWARM/UMF_app.bin`**（post-build `ielftool --bin --fill 0xFF`，恒 53,248B，供 485 烧录上位机使用）
+3. Bootloader 工程（仅首次部署/BL 变更时）：Make 后用 SWD 烧录 `UMF_Boot.hex` 到页 0~7
+4. 下载 App 到目标板（SWD 或 485 在线升级，上位机见文末链接）
 
 ### 注意事项
 
 - 无 Makefile/CMakeLists.txt，仅通过 IAR IDE 构建
 - **新增 `.c` 文件必须手动添加到 `EWARM/UMF.ewp`** 中对应 `<group>` 节点
 - 编译器宏定义: `USE_HAL_DRIVER`, `STM32F103xB`
+- **Flash 分区 (v2.4.0)**：页 0~7 BL / 页 8 BL 备份 / 页 9~60 App (0x08002400 起，VTOR=0x2400) / 页 61~63 参数三页轮转——**SWD 下载 App 严禁整片擦除（会抹掉 BL 与参数区），必须按段/按范围擦除**
+- 首次刷 BL 前建议全片备份；现场切换与回滚步骤见 `BL更新日志.md`
 
 ## 文件结构
 
@@ -61,14 +64,19 @@ UMF_SOFTWARE/
 │       ├── tim.c                  # TIM1/TIM3/TIM4 配置 + 10ms 中断 + PWM 配置
 │       └── usart.c                # UART HAL 配置
 ├── BSP/                           # 板级支持包
-│   ├── bsp_usart.c/h             # USART1 BCD 协议 + USART2 Modbus RTU 从站
+│   ├── bsp_usart.c/h             # USART1 BCD 协议 + USART2 Modbus RTU 从站 (含 40127~40131 IAP 寄存器)
 │   ├── key.c/h                   # 事件驱动按键驱动 (消抖 + 组合键检测)
 │   ├── bsp_menu.c/h              # 菜单系统 (5层导航栈 + 6种模式 + 密码门控)
-│   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Flash 持久化, 含七点标定参数)
+│   ├── param_storage.c/h         # 参数存储 (RAM 缓存 + Page 61~63 三页轮转 + 旧数据迁移, 含七点标定参数)
+│   ├── boot_flag.c/h             # App 侧 BL 接口层 (.fw_header 固件头常量 + RAM 邮箱 + CRC32)
+│   ├── app_fw_version.h          # 固件版本标识 (APP_FW_VERSION/APP_BUILD_ID/测试构建开关)
 │   ├── cal_table.c/h             # 七点流量标定 (分段线性插值, Modbus 95~123)
-│   ├── eeprom.c/h                # Flash 模拟 EEPROM (磨损均衡日志结构, Page 54~63)
+│   ├── eeprom.c/h                # 旧 Flash 模拟 EEPROM (v2.4.0 起退役, 仅存档不参与编译)
 │   ├── mystring.c/h              # 字符串工具 (Int2String, insert_char, u32_to_str_pad)
 │   └── run_display.c/h           # 运行显示模块 (S01 主界面 + S02 辅助页)
+├── Boot/                          # Bootloader 固件 (v2.4.0, 零 HAL 零浮点, 独立工程 UMF_Boot.ewp)
+│   ├── Inc/ + Src/               # bl_* 11 模块 (Flash 白名单/XModem-CRC/固件头分层校验/邮箱/备份)
+│   └── legacy_param_read.c/h     # 旧参数页只读抽取器 (BL 侧备份与 App 迁移共用语义)
 ├── OLED/                          # OLED 显示驱动
 │   ├── ssd1306_conf.h            # afiskon 库硬件配置 (引脚/字体/SPI 模式)
 │   ├── ssd1306.c/h               # afiskon SSD1306 驱动 (bit-bang SPI 适配)
@@ -218,6 +226,10 @@ S03 主菜单 (5 项)
 | 40119~40120 | 标定点百分比 pct[4] | float | FC03/FC06 |
 | 40121~40122 | 标定点百分比 pct[5] | float | FC03/FC06 |
 | 40123~40124 | 标定点百分比 pct[6] | float | FC03/FC06 |
+| 40127 | IAP 升级触发 (写 0x5AA5 → 复位进 BL) | uint16 | FC06 写 (读回 0) |
+| 40128~40129 | 固件版本 app_ver (低字/高字) | uint32 | FC03 读 |
+| 40130 | IAP 标志镜像 (本次启动是否升级请求进入) | uint16 | FC03 读 |
+| 40131 | 参数状态 (bit0 迁移/bit1 部分/bit2 含默认值) | uint16 | FC03 读 |
 | 40125 | 滑动窗口点数 filter_window_count | uint16 | FC03/FC06/FC10 |
 | 40126 | UFL-1A 被动采样间隔 sample_interval_ms | uint16 (ms) | FC03/FC06/FC10 |
 
@@ -261,6 +273,18 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v2.4.0 (2026-09-18)
+
+**Bootloader（IAP 在线升级）全链路接入**——App 侧前置改造 A1~A6 + H6 竞态修复，A7 三方终审全 PASS，实机 k1→触发→k2 全链路闭环（52 块零重传 10.8s）。
+
+- **分区迁移**: App 基址 0x08000000 → **0x08002400**（ICF + VTOR=0x2400 + RAM 上界 0x20004BFF 避让 BL 邮箱）；新增 `.fw_header` 32B 固件头常量 @0x08002600（`BSP/boot_flag.c`）
+- **参数存储重写**: Page 54~63 分散追加日志 → **Page 61~63 三页轮转整页镜像**（PPG1 页头/双 CRC16/16B BL 通信槽/写守卫仅限参数页）；首次升级自动迁移旧数据（旧页直读 + 页 8 BL 备份块补缺，迁移状态经 40131 回读）；`eeprom.c` 退役
+- **Modbus 新增 IAP 寄存器**: 40127 写 0x5AA5 触发设备复位进 BL（回响应后软复位）；40128~129 固件版本、40130 升级请求镜像、40131 参数迁移状态
+- **看门狗适配**: IWDG 100ms → ~1s（Prescaler 64 + Reload 624），main() 入口先喂狗再放宽，覆盖 Flash 整页提交（页擦 20~40ms）与 BL 交接
+- **构建**: post-build 自动产出 `EWARM/UMF_app.bin`（ielftool --bin --fill 0xFF，恒 53,248B）；`app_fw_version.h` 集中管理版本/构建号/测试构建开关（APP_FORCE_METER_COEFF，默认关闭）
+- **配套上位机**: 485 烧录 + 一键触发升级（真仓 `D:\C#_text\WPF\UMF流量计`，分支 feat/rs485-firmware-upgrade，V1.6.x；仓库内 HostApplication 过期副本已移除）
+- 设计与过程全记录见 `BL更新日志.md`（D1~D7 冻结决策 + A1~A7）；协议寄存器明细见 `UMF_Modbus_Protocol.md`
 
 ### v2.3.3 (2026-09-17)
 
