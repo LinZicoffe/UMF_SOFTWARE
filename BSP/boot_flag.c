@@ -7,12 +7,22 @@
 #include <string.h>
 #include <stddef.h>
 
-/* 链接器符号：CSTACK 顶端（ICF 中 RAM 上界 0x20004BFF ⇒ 顶 ≤ 0x20004C00）*/
+/* 链接器符号：栈顶（RAM 上界 0x20004BFF ⇒ 顶 ≤ 0x20004C00）*/
+#if defined(__ICCARM__)
 extern const uint32_t CSTACK$$Limit;
-
-/* ===== .fw_header 32B 常量（ICF 固定放置 0x08002600，__root 防裁剪）===== */
+#define APP_STACK_TOP    ((uint32_t)&CSTACK$$Limit)
 #pragma location = ".fw_header"
-__root const app_fw_header_t g_app_fw_header = {
+#define FW_HEADER_ATTR   __root
+#elif defined(__GNUC__)
+extern uint32_t _estack;
+#define APP_STACK_TOP    ((uint32_t)&_estack)
+#define FW_HEADER_ATTR   __attribute__((section(".fw_header"), used))
+#else
+#error "Unsupported compiler"
+#endif
+
+/* ===== .fw_header 32B 常量（链接器固定放置 0x08002600，并防止裁剪）===== */
+FW_HEADER_ATTR const app_fw_header_t g_app_fw_header = {
     .magic      = BOOT_FW_HDR_MAGIC,
     .hw_id      = BOOT_FW_HDR_HW_ID,
     .bl_min_ver = BOOT_FW_HDR_BL_MIN_VER,
@@ -148,10 +158,10 @@ void boot_mailbox_request_upgrade(uint8_t uart_config)
 /* ===== 初始化与自检 ===== */
 void boot_flag_init(void)
 {
-    /* RAM 上界运行期断言：CSTACK 顶端不得越过 BL_RAM_LIMIT（0x20004C00）。
-     * CSTACK$$Limit 是链接器绝对符号（无存储），必须取地址才能得到其数值；
-     * 违反意味着 ICF 被改坏 / 邮箱区被栈侵占 —— 停在这里由看门狗复位兜底。*/
-    if ((uint32_t)&CSTACK$$Limit > BOOT_MAILBOX_BASE)
+    /* RAM 上界运行期断言：栈顶不得越过 BL_RAM_LIMIT（0x20004C00）。
+     * 链接器符号无存储，必须取地址才能得到其数值；违反意味着
+     * 链接配置被改坏 / 邮箱区被栈侵占 —— 停在这里由看门狗复位兜底。*/
+    if (APP_STACK_TOP > BOOT_MAILBOX_BASE)
     {
         for (;;) { }
     }

@@ -21,6 +21,9 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
+#include "key.h"
+#include "bsp_menu.h"
+
 volatile uint16_t Timer3Uart1TimeBase10ms;
 volatile uint8_t  DisplayTimeBase;
 volatile uint8_t  Timer3Uart2TimeBase10ms;

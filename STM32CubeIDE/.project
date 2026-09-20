@@ -32,6 +32,16 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>BSP</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/BSP</locationURI>
+		</link>
+		<link>
+			<name>OLED</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/OLED</locationURI>
+		</link>
+		<link>
 			<name>UMF.ioc</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/UMF.ioc</locationURI>

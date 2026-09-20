@@ -39,6 +39,12 @@ EWARM/**/settings/
 *.swp
 *~
 
+# STM32CubeIDE 构建产物与本机索引
+/STM32CubeIDE/Debug/
+/STM32CubeIDE/Release/
+/STM32CubeIDE/.settings/language.settings.xml
+/STM32CubeIDE/.settings/stm32cubeide.project.prefs
+
 # OS 生成文件
 Thumbs.db
 Desktop.ini
