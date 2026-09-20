@@ -59,47 +59,47 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, OLED_CLK_Pin|PowerLed_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : K_MOV_Pin */
   GPIO_InitStruct.Pin = K_MOV_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(K_MOV_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PAPin PAPin */
+  /*Configure GPIO pins : K_SUB_Pin K_ADD_Pin */
   GPIO_InitStruct.Pin = K_SUB_Pin|K_ADD_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : USART2_DE_Pin */
   GPIO_InitStruct.Pin = USART2_DE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(USART2_DE_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PAPin PAPin PAPin */
+  /*Configure GPIO pins : OLED_SDA_Pin OLED_RES_Pin OLED_DC_Pin */
   GPIO_InitStruct.Pin = OLED_SDA_Pin|OLED_RES_Pin|OLED_DC_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : OLED_CS_Pin */
   GPIO_InitStruct.Pin = OLED_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(OLED_CS_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : OLED_CLK_Pin */
   GPIO_InitStruct.Pin = OLED_CLK_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(OLED_CLK_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PtPin */
+  /*Configure GPIO pin : PowerLed_Pin */
   GPIO_InitStruct.Pin = PowerLed_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;

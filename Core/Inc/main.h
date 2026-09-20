@@ -23,8 +23,7 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
@@ -34,57 +33,57 @@ extern "C"
 /* USER CODE BEGIN Includes */
 #include "bsp_usart.h"
 
-    /* USER CODE END Includes */
+/* USER CODE END Includes */
 
-    /* Exported types ------------------------------------------------------------*/
-    /* USER CODE BEGIN ET */
+/* Exported types ------------------------------------------------------------*/
+/* USER CODE BEGIN ET */
     typedef union
     {
         uint8_t str[4];
         float   num;
     } SpanTypeDef;
-    /* USER CODE END ET */
+/* USER CODE END ET */
 
-    /* Exported constants --------------------------------------------------------*/
-    /* USER CODE BEGIN EC */
+/* Exported constants --------------------------------------------------------*/
+/* USER CODE BEGIN EC */
 
-    /* USER CODE END EC */
+/* USER CODE END EC */
 
-    /* Exported macro ------------------------------------------------------------*/
-    /* USER CODE BEGIN EM */
+/* Exported macro ------------------------------------------------------------*/
+/* USER CODE BEGIN EM */
 
-    /* USER CODE END EM */
+/* USER CODE END EM */
 
-    /* Exported functions prototypes ---------------------------------------------*/
-    void Error_Handler(void);
+/* Exported functions prototypes ---------------------------------------------*/
+void Error_Handler(void);
 
-    /* USER CODE BEGIN EFP */
+/* USER CODE BEGIN EFP */
     extern void Time_Delay(uint32_t nCount);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define K_MOV_Pin           GPIO_PIN_15
-#define K_MOV_GPIO_Port     GPIOC
-#define K_SUB_Pin           GPIO_PIN_0
-#define K_SUB_GPIO_Port     GPIOA
-#define USART2_DE_Pin       GPIO_PIN_1
+#define K_MOV_Pin GPIO_PIN_15
+#define K_MOV_GPIO_Port GPIOC
+#define K_SUB_Pin GPIO_PIN_0
+#define K_SUB_GPIO_Port GPIOA
+#define USART2_DE_Pin GPIO_PIN_1
 #define USART2_DE_GPIO_Port GPIOA
-#define OLED_SDA_Pin        GPIO_PIN_4
-#define OLED_SDA_GPIO_Port  GPIOA
-#define OLED_RES_Pin        GPIO_PIN_5
-#define OLED_RES_GPIO_Port  GPIOA
-#define OLED_DC_Pin         GPIO_PIN_6
-#define OLED_DC_GPIO_Port   GPIOA
-#define OLED_CS_Pin         GPIO_PIN_7
-#define OLED_CS_GPIO_Port   GPIOA
-#define OLED_CLK_Pin        GPIO_PIN_0
-#define OLED_CLK_GPIO_Port  GPIOB
-#define K_ADD_Pin           GPIO_PIN_11
-#define K_ADD_GPIO_Port     GPIOA
-#define PowerLed_Pin        GPIO_PIN_5
-#define PowerLed_GPIO_Port  GPIOB
+#define OLED_SDA_Pin GPIO_PIN_4
+#define OLED_SDA_GPIO_Port GPIOA
+#define OLED_RES_Pin GPIO_PIN_5
+#define OLED_RES_GPIO_Port GPIOA
+#define OLED_DC_Pin GPIO_PIN_6
+#define OLED_DC_GPIO_Port GPIOA
+#define OLED_CS_Pin GPIO_PIN_7
+#define OLED_CS_GPIO_Port GPIOA
+#define OLED_CLK_Pin GPIO_PIN_0
+#define OLED_CLK_GPIO_Port GPIOB
+#define K_ADD_Pin GPIO_PIN_11
+#define K_ADD_GPIO_Port GPIOA
+#define PowerLed_Pin GPIO_PIN_5
+#define PowerLed_GPIO_Port GPIOB
 
-    /* USER CODE BEGIN Private defines */
+/* USER CODE BEGIN Private defines */
 
     /* DAC 零点/满度已迁入统一参数存储（param_storage 3 页轮转，A3/A4 改造）；
      * 旧 DAC_FLASH_PAGE_ADDR (Page 59) 位于新 App 链接区内，直存会擦除代码，
@@ -124,7 +123,7 @@ extern "C"
 
     extern uint8_t  DisplayEnabled;
 
-    /* USER CODE END Private defines */
+/* USER CODE END Private defines */
 
 #ifdef __cplusplus
 }
