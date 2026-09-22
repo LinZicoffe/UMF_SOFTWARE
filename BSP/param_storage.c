@@ -143,6 +143,7 @@
 #define D_DAC_FULL         0x090u
 #define D_SPAN_4MA         0x092u
 #define D_SPAN_20MA        0x096u
+#define D_FORWARD_TOTAL    0x09Au
 
 /* ===== 枚举字符串 ===== */
 static const char * const s_std_cond_str[STD_COND_COUNT] = {
@@ -440,6 +441,8 @@ static void page_image_build(uint16_t seq)
         memcpy(&s_page_img[D_SPAN_4MA], &v, 4u);
         v = float_to_u32(s_params.value_20ma);
         memcpy(&s_page_img[D_SPAN_20MA], &v, 4u);
+        v = float_to_u32(s_params.forward_total);
+        memcpy(&s_page_img[D_FORWARD_TOTAL], &v, 4u);
     }
 
     /* --- BL 通信槽 0x100~0x10F（每次提交都从 RAM 缓存重写, §7.2 v3.1）--- */
@@ -551,6 +554,8 @@ static void page_image_decode(void)
     memcpy(&s_params.dac_full, &s_page_img[D_DAC_FULL], 2u);
     s_params.value_4ma  = dec_f(D_SPAN_4MA, DEF_VALUE_4MA, VALUE_4MA_MIN, VALUE_4MA_MAX);
     s_params.value_20ma = dec_f(D_SPAN_20MA, DEF_VALUE_20MA, VALUE_20MA_MIN, VALUE_20MA_MAX);
+    s_params.forward_total = dec_f(D_FORWARD_TOTAL, DEF_FORWARD_TOTAL,
+                                   FORWARD_TOTAL_MIN, FORWARD_TOTAL_MAX);
 }
 
 /* 看门狗喂狗（提交期间 Flash 擦写可达数十 ms，且 IWDG 可能带 BL 残余计数在跑）*/
@@ -676,7 +681,7 @@ HAL_StatusTypeDef param_storage_init(void)
     HAL_StatusTypeDef st;
 
     s_param_status = 0u;
-    /* 先装默认值再解码：非持久化字段（密码/累计总量）与 NaN 回落字段
+    /* 先装默认值再解码：非持久化字段（密码/反向累计总量）与 NaN 回落字段
      * 均依赖此预置（审查 A4：memset 会把 pwd_engineer 清 0 → 鉴权绕过）*/
     param_load_defaults();
 
@@ -1210,13 +1215,14 @@ HAL_StatusTypeDef param_set_preset_total(float val)
     return param_commit();
 }
 
-/* ===== Phase 3 累计总量 setter (频繁变化，不持久化，断电后重置) ===== */
+/* ===== Phase 3 累计总量 setter ===== */
 HAL_StatusTypeDef param_set_forward_total(float val)
 {
     s_params.forward_total = clamp_f(val, FORWARD_TOTAL_MIN, FORWARD_TOTAL_MAX);
-    return HAL_OK;
+    return param_commit();
 }
 
+/* 反向累计总量频繁变化，当前仍不持久化，断电后重置。 */
 HAL_StatusTypeDef param_set_reverse_total(float val)
 {
     s_params.reverse_total = clamp_f(val, REVERSE_TOTAL_MIN, REVERSE_TOTAL_MAX);
