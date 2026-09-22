@@ -22,30 +22,35 @@
 #define FLOW_FILTER_MAX_N     10  /* 固定数组容量, 避免动态分配 */
 #define FLOW_FILTER_DEFAULT_TAU 1.0f
 #define FLOW_FILTER_DEFAULT_INTERVAL_MS 500U
-static float    s_flt_window[FLOW_FILTER_MAX_N];
-static uint8_t  s_flt_write_index;
-static uint8_t  s_flt_count;
-static uint8_t  s_flt_window_size;
-static float    s_flt_result;
-static uint8_t  s_flt_valid;
-static float    s_flt_time_constant;
-static uint16_t s_flt_sample_interval_ms;
-
+static float    s_flt_window[FLOW_FILTER_MAX_N];        // 滤波器滑动窗口样本
+static uint8_t  s_flt_write_index;                      // 滤波器滑动窗口写入索引
+static uint8_t  s_flt_count;                            // 滤波器滑动窗口有效样本数
+static uint8_t  s_flt_window_size;                      // 滤波器滑动窗口样本数
+static float    s_flt_result;                           // 滤波器输出结果
+static uint8_t  s_flt_valid;                            // 滤波器输出结果有效标志
+static float    s_flt_time_constant;                    // 滤波器时间常数 (秒)
+static uint16_t s_flt_sample_interval_ms;               // 滤波器采样间隔 (毫秒)
+/*
+    @brief: 滤波器配置同步
+*/
 static void flow_filter_sync_config(void)
 {
     uint8_t window_size = (uint8_t)param_get_filter_window_count();
     float time_constant = param_get_filter_time();
     uint16_t sample_interval_ms = param_get_sample_interval_ms();
-
+    // 滤波器窗口样本数小于最小值或大于最大值时, 使用默认值
     if ((window_size < FLOW_FILTER_MIN_N) || (window_size > FLOW_FILTER_MAX_N)) {
         window_size = FLOW_FILTER_DEFAULT_N;
     }
+    // 滤波器时间常数为 0 时, 使用默认值
     if (time_constant <= 0.0f) {
         time_constant = FLOW_FILTER_DEFAULT_TAU;
     }
+    // 滤波器采样间隔为 0 时, 使用默认值
     if (sample_interval_ms == 0u) {
         sample_interval_ms = FLOW_FILTER_DEFAULT_INTERVAL_MS;
     }
+    // 如果配置发生变化, 则重置滤波器状态
     if ((window_size != s_flt_window_size) ||
         (time_constant != s_flt_time_constant) ||
         (sample_interval_ms != s_flt_sample_interval_ms)) {
@@ -57,7 +62,10 @@ static void flow_filter_sync_config(void)
         s_flt_valid = 0;
     }
 }
-
+/*
+    @brief: 滤波器输入样本
+    @param: sample 输入样本
+*/
 static void flow_filter_feed(float sample)
 {
     float sum;
@@ -68,12 +76,13 @@ static void flow_filter_feed(float sample)
     uint8_t i;
     uint8_t window_size;
 
+    // 同步滤波器配置
     flow_filter_sync_config();
     window_size = s_flt_window_size;
 
     s_flt_window[s_flt_write_index] = sample;
     s_flt_write_index = (uint8_t)((s_flt_write_index + 1U) % window_size);
-
+    // 计算滑动窗口平均值, 去掉最大值
     if (s_flt_count < window_size) {
         s_flt_count++;
     }
@@ -85,38 +94,39 @@ static void flow_filter_feed(float sample)
         for (i = 0; i < window_size; i++) {
             sum += s_flt_window[i];
             if (s_flt_window[i] > max) {
+                // 找到最大值
                 max = s_flt_window[i];
             }
         }
-
+        // 去掉最大值后计算平均值
         window_result = (sum - max) / (float)(window_size - 1U);
     }
 
     /* 一阶低通: y[n] = y[n-1] + α(x[n] - y[n-1]), α = dt / (τ + dt) */
     dt = (float)s_flt_sample_interval_ms / 1000.0f;
     alpha = dt / (s_flt_time_constant + dt);
-    if (!s_flt_valid) {
+    if (!s_flt_valid) {// 第一次输入样本时, 直接使用滑动窗口结果作为滤波器输出
         s_flt_result = window_result;
         s_flt_valid = 1;
-    } else {
+    } else {// 后续输入样本时, 使用一阶低通滤波器更新输出
         s_flt_result += alpha * (window_result - s_flt_result);
     }
 }
 
 /* ── 常量定义 ─────────────────────────────────────── */
-#define PREAMBLE             0XFE
-#define STARTCMD             0X11
-#define EOFbyte              0x16
-#define FLWSetReadCmd        0x5c
-#define FLWSetActiveReadPra  0x00
-#define FLWSetPassiveReadPra 0x01
-#define FLWStartReadCmd      0x5b
-#define FLWStartReadLongPra  0xcb
-#define FLWStartReadShortPra 0xfd
-#define FLWClearCmd          0x5a
-#define FLWClearCmdPra       0xfd
-#define FLWRstCmd            0x5d
-#define FLWRstCmdPra         0xcb
+#define PREAMBLE             0XFE           // 帧头
+#define STARTCMD             0X11           // 开始命令
+#define EOFbyte              0x16           // 结束字节
+#define FLWSetReadCmd        0x5c           // 设置读取命令
+#define FLWSetActiveReadPra  0x00           // 主动读取参数
+#define FLWSetPassiveReadPra 0x01           // 被动读取参数
+#define FLWStartReadCmd      0x5b           // 开始读取命令
+#define FLWStartReadLongPra  0xcb           // 长帧读取参数
+#define FLWStartReadShortPra 0xfd           // 短帧读取参数
+#define FLWClearCmd          0x5a           // 累积清零命令
+#define FLWClearCmdPra       0xfd           // 累积清零命令参数
+#define FLWRstCmd            0x5d           // 流量模组复位命令
+#define FLWRstCmdPra         0xcb           // 流量模组复位命令参数
 /* Private variables ---------------------------------------------------------*/
 Uart_RecTypeDef  Uart1ReceiveType;
 Uart_RecTypeDef  Uart2ReceiveType;
@@ -163,41 +173,41 @@ static const uint32_t s_baud_table[BAUD_RATE_COUNT] = {
 
 /* 模拟参数 — static 内部变量 */
 static uint16_t s_sim_switch = 0;
-static Uart_SendfloatTypeDef s_sim_flow_rate;
-static Uart_SendfloatTypeDef s_sim_temperature;
-static Uart_SendfloatTypeDef s_sim_cumulative;
-static unsigned char s_sim_flow_sum_buf[20];
+static Uart_SendfloatTypeDef s_sim_flow_rate;       // 流量计瞬时流量
+static Uart_SendfloatTypeDef s_sim_temperature;     // 流量计温度
+static Uart_SendfloatTypeDef s_sim_cumulative;      // 流量计累积流量
+static unsigned char s_sim_flow_sum_buf[20];        // 流量计累积流量字符串
 /* 运行参数 — FC06 分次写入缓冲 */
-static Uart_SendfloatTypeDef s_meter_coeff_buf;
-static Uart_SendfloatTypeDef s_medium_coeff_buf;
-static Uart_SendfloatTypeDef s_small_signal_buf;
-/* 扩展参数 — FC06 分次写入缓冲 (float 参数) */
-static Uart_SendfloatTypeDef s_filter_time_buf;
-static Uart_SendfloatTypeDef s_damping_time_buf;
-static Uart_SendfloatTypeDef s_freq_output_buf;
-static Uart_SendfloatTypeDef s_density_buf;
-static Uart_SendfloatTypeDef s_pipe_dia_buf;
-static Uart_SendfloatTypeDef s_gas_press_buf;
-static Uart_SendfloatTypeDef s_gas_temp_buf;
-static Uart_SendfloatTypeDef s_reynolds_buf;
-static Uart_SendfloatTypeDef s_total_factor_buf;
-static Uart_SendfloatTypeDef s_preset_total_buf;
+static Uart_SendfloatTypeDef s_meter_coeff_buf;     // 流量计系数    
+static Uart_SendfloatTypeDef s_medium_coeff_buf;    // 介质系数
+static Uart_SendfloatTypeDef s_small_signal_buf;    // 小信号补偿
+/* 扩展参数 — FC06 分次写入缓冲 (float 参数) */         
+static Uart_SendfloatTypeDef s_filter_time_buf;     // 滤波时间常数
+static Uart_SendfloatTypeDef s_damping_time_buf;    // 阀门阻尼时间常数
+static Uart_SendfloatTypeDef s_freq_output_buf;     // 频率输出系数
+static Uart_SendfloatTypeDef s_density_buf;         // 介质密度
+static Uart_SendfloatTypeDef s_pipe_dia_buf;        // 管道内径
+static Uart_SendfloatTypeDef s_gas_press_buf;       // 气体压力
+static Uart_SendfloatTypeDef s_gas_temp_buf;        // 气体温度
+static Uart_SendfloatTypeDef s_reynolds_buf;        // 雷诺数
+static Uart_SendfloatTypeDef s_total_factor_buf;    // 累积流量系数
+static Uart_SendfloatTypeDef s_preset_total_buf;    // 预设累积流量
 /* 标定参数 — FC06 分次写入缓冲 */
 static Uart_SendfloatTypeDef s_cal_k_buf[7];
 static Uart_SendfloatTypeDef s_cal_pct_buf[7];
-#define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
-#define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
-#define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
-#define FlowRateAddress                 0x0000 // 流量计瞬时流量地址
-#define CumulativeFlowAddress           0x0002 // 累积流量
-#define FlowMeterPressAddress           0x0005
-#define FlowMeterTempAddress            0x000c
-#define SetValueFlowAddress             0xA0A0 // 控制阀流量设定数值
-#define ValveConOpenAddress             0xA0A1 // 阀开地址
-#define ValveConCloseAddress            0xA0A2 // 阀关地址
-#define ValveConCommand                 0x7410 // 阀控制命令
-uint8_t  ModuleState;                          // module state
-uint32_t ModuleRecTimes;
+#define FlowMeterReadDataCommand        0x03        // 读取1或者多字节寄存器数据
+#define FlowMeterWriteSingleDataCommand 0x06        // 写1字寄存器数据
+#define FlowMeterWriteMultiDataCommand  0x10        // 写多字寄存器数据
+#define FlowRateAddress                 0x0000      // 流量计瞬时流量地址
+#define CumulativeFlowAddress           0x0002      // 累积流量
+#define FlowMeterPressAddress           0x0005      // 流量计压力地址
+#define FlowMeterTempAddress            0x000c      // 流量计温度地址
+#define SetValueFlowAddress             0xA0A0      // 控制阀流量设定数值
+#define ValveConOpenAddress             0xA0A1      // 阀开地址
+#define ValveConCloseAddress            0xA0A2      // 阀关地址
+#define ValveConCommand                 0x7410      // 阀控制命令
+uint8_t  ModuleState;                               // 模组状态
+uint32_t ModuleRecTimes;                            // 模组接收次数
 /* Private function prototypes -----------------------------------------------*/
 void            Uart1_Communication(void);
 void            Uart2_Communication(void);
@@ -212,7 +222,7 @@ void            Modbus_Function_10(void);
 uint8_t         GetCheckSum(uint8_t *ptr, uint8_t len);
 uint16_t        SWAPWORD(uint16_t word);
 float           raw2ieee(uint8_t *raw);
-static uint8_t  BCD2DEC(uint8_t bcd);
+static uint8_t  BCD2DEC(uint8_t bcd);                                                                   
 static float    BCDTOInt(uint32_t bcd);
 static uint64_t BCD_TO_LongInt(uint64_t bcd);
 static void     sim_format_cumulative(float value);
