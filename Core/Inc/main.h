@@ -32,6 +32,7 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp_usart.h"
+#include "eeprom.h"
 
 /* USER CODE END Includes */
 
@@ -85,9 +86,10 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
-    /* DAC 零点/满度已迁入统一参数存储（param_storage 3 页轮转，A3/A4 改造）；
-     * 旧 DAC_FLASH_PAGE_ADDR (Page 59) 位于新 App 链接区内，直存会擦除代码，
-     * 严禁恢复。持久化一律走 param_set_dac_values()。 */
+/* DAC 零点/满度 Flash 存储页
+ * STM32F103C8 仅 64KB (Page 0~63)，原 ADDR_FLASH_PAGE_64(0x08010000) 越界。
+ * 迁移至 Page 59 (0x0800EC00)，与代码段安全隔离。 */
+#define DAC_FLASH_PAGE_ADDR     ADDR_FLASH_PAGE_59
 
 #define DacValueStartMinAddress 20 // MODBUS:03function code DAC
 #define DacValueStartMaxAddress 21

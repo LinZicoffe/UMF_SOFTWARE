@@ -118,10 +118,6 @@ typedef struct {
     float    total_factor;   /* 0.001~99.999, 默认 1.000 */
     float    preset_total;   /* 0.0~9999999.0, 默认 0.0 */
 
-    /* --- DAC 零点/满度 (K_DAC, 原 Page 59 独立页迁入统一存储, A3) --- */
-    uint16_t dac_zero;       /* 原始 DAC 值, 默认 12100 */
-    uint16_t dac_full;       /* 原始 DAC 值, 默认 60000 */
-
     /* --- Phase 3: 累计总量 --- */
     float    forward_total;  /* 0.0~9999999.0, 默认 0.0 */
     float    reverse_total;  /* 0.0~9999999.0, 默认 0.0 */
@@ -255,22 +251,6 @@ float    param_get_cal_pct(uint8_t index);    /* index 0~6 */
 HAL_StatusTypeDef param_set_cal_enabled(uint8_t val);
 HAL_StatusTypeDef param_set_cal_k(uint8_t index, float val);
 HAL_StatusTypeDef param_set_cal_pct(uint8_t index, float val);
-
-/* ===== DAC 零点/满度 (K_DAC, A3: 原 Page 59 直存改造) ===== */
-uint16_t         param_get_dac_zero(void);
-uint16_t         param_get_dac_full(void);
-HAL_StatusTypeDef param_set_dac_values(uint16_t zero, uint16_t full); /* 一次提交 */
-
-/* ===== Span 量程 (K_SPAN, A3: 原 Page 63 直存改造) ===== */
-/* 注意: param_set_value_4ma/20ma 仅改 RAM 缓存（启动同步用）；
- * 需要落盘时使用本接口一次提交两条。*/
-HAL_StatusTypeDef param_set_span_values(float lo, float hi);
-
-/* ===== 迁移/存储状态 (Modbus 40131 PARAM_STATUS 回显) ===== */
-#define PARAM_STATUS_MIGRATED  0x01u  /* bit0: 新格式直接载入（或迁移完整）*/
-#define PARAM_STATUS_PARTIAL   0x02u  /* bit1: 部分迁移（存在缺失字段）*/
-#define PARAM_STATUS_DEFAULTS  0x04u  /* bit2: 含默认值字段 */
-uint8_t param_get_status(void);
 
 /* ===== 枚举字符串 (菜单渲染用) ===== */
 const char *param_get_std_cond_str(uint8_t idx);

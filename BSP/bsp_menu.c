@@ -350,13 +350,23 @@ static void save_param_val(screen_t scr, float val)
     case SCR_PRESET_TOTAL: param_set_preset_total(val);  break;
     case SCR_SET_TOTAL:    param_set_forward_total(val); break;
     case SCR_DAC_ZERO:     DacZeroValue = (uint16_t)val;
-                           param_set_dac_values(DacZeroValue, DacFullValue); break;
+                           WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf); break;
     case SCR_DAC_FULL:     DacFullValue = (uint16_t)val;
-                           param_set_dac_values(DacZeroValue, DacFullValue); break;
-    case SCR_SPAN_ZERO:    SpanLoValue = val;
-                           param_set_span_values(SpanLoValue, SpanHiValue); break;
-    case SCR_SPAN_FULL:    SpanHiValue = val;
-                           param_set_span_values(SpanLoValue, SpanHiValue); break;
+                           WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf); break;
+    case SCR_SPAN_ZERO:    param_set_value_4ma(val);    SpanLoValue = val;
+                           { uint32_t bk[2];
+                             bk[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) | ((uint32_t)SpanValueBuf[0].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[0].str[2] << 8)  | ((uint32_t)SpanValueBuf[0].str[3]);
+                             bk[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) | ((uint32_t)SpanValueBuf[1].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[1].str[2] << 8)  | ((uint32_t)SpanValueBuf[1].str[3]);
+                             WriteBufferFlash(2, ADDR_FLASH_PAGE_63, bk); } break;
+    case SCR_SPAN_FULL:    param_set_value_20ma(val);   SpanHiValue = val;
+                           { uint32_t bk[2];
+                             bk[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) | ((uint32_t)SpanValueBuf[0].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[0].str[2] << 8)  | ((uint32_t)SpanValueBuf[0].str[3]);
+                             bk[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) | ((uint32_t)SpanValueBuf[1].str[1] << 16) |
+                                      ((uint32_t)SpanValueBuf[1].str[2] << 8)  | ((uint32_t)SpanValueBuf[1].str[3]);
+                             WriteBufferFlash(2, ADDR_FLASH_PAGE_63, bk); } break;
     case SCR_COMM_ADDR:    param_set_modbus_addr((uint16_t)val);
                            bsp_usart_set_modbus_addr((uint16_t)val); break;
     default: break;
@@ -1148,11 +1158,16 @@ static void handle_confirm(key_event_t evt)
                 /* 参数缓存/Flash 已恢复默认值，同步更新当前运行中的通信配置。 */
                 bsp_usart_set_modbus_addr(param_get_modbus_addr());
                 bsp_usart2_apply_uart_config(param_get_uart_config());
-                /* DAC/Span 默认值已随统一存储复位，同步 RAM 镜像 */
-                DacZeroValue = param_get_dac_zero();
-                DacFullValue = param_get_dac_full();
-                SpanLoValue  = param_get_value_4ma();
-                SpanHiValue  = param_get_value_20ma();
+                /* 同步复位 DAC/Span 到默认值 */
+                DacZeroValue = 12100;
+                DacFullValue = 60000;
+                WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf);
+                SpanLoValue = 0.0f;
+                SpanHiValue = 100.0f;
+                { uint32_t bk[2]; union { float f; uint32_t u; } cvt;
+                  cvt.f = 0.0f;   bk[0] = cvt.u;
+                  cvt.f = 100.0f; bk[1] = cvt.u;
+                  WriteBufferFlash(2, ADDR_FLASH_PAGE_63, bk); }
             }
         }
         nav_pop();

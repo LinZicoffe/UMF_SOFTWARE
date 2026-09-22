@@ -10,7 +10,6 @@
 /* Private includes ----------------------------------------------------------*/
 #include "bsp_usart.h"
 #include "param_storage.h"
-#include "boot_flag.h"     /* 固件头 app_ver / 邮箱升级请求 / IAP 回显 */
 #include "mystring.h"
 
 #include "tim.h"
@@ -151,10 +150,6 @@ static uint16_t s_uart1_sample_interval_ticks;
 /* UART 配置切换 — 延迟应用机制 (确保 Modbus 响应在旧配置下发送完成) */
 static volatile uint8_t  s_baud_rate_pending;     /* 非0表示有待应用的 UART 配置变更 */
 static          uint8_t  s_uart_cfg_pending;      /* 待应用的 packed uart_config */
-
-/* IAP 升级请求 — 延迟复位机制 (40127 写 0x5AA5 后，待 FC06 响应发送完成
- * 再置邮箱并复位进 BL，确保上位机收到完整响应) */
-static volatile uint8_t  s_iap_reset_pending;
 
 /* 波特率索引 → 实际频率查找表 */
 static const uint32_t s_baud_table[BAUD_RATE_COUNT] = {
@@ -1024,18 +1019,6 @@ void Modbus_Function_6(void)
         case CalEnableAddr:
             param_set_cal_enabled((uint8_t)(((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5]));
             break;
-
-        /* ---- IAP 升级请求 (40127): 写 0x5AA5 → 响应发送完成后置邮箱并复位进 BL ----
-         * 非 0x5AA5 值忽略（只回显响应，不触发复位）*/
-        case IapBootRequestReg:
-        {
-            uint16_t v = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
-            if (v == 0x5AA5u)
-            {
-                s_iap_reset_pending = 1u;
-            }
-            break;
-        }
     }
 
     /* 七点标定: k[0..6] 和 pct[0..6] (float, 分次写入, 范围判断) */
@@ -1411,36 +1394,6 @@ void Modbus_Function_3(void)
             Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
         }
     }
-    /* IAP / 固件信息区域 (PDU 126~130 = 4x 40127~40131, §5.3) */
-    if ((startaddress >= IapBootRequestReg) && (startaddress + MbBufferLen - 1 <= ParamStatusReg))
-    {
-        uint16_t j;
-        for (j = 0; j < MbBufferLen; j++)
-        {
-            uint16_t reg_val = 0;
-            switch (startaddress + j)
-            {
-                case IapBootRequestReg:
-                    reg_val = 0u;    /* 写触发寄存器，读回固定 0 */
-                    break;
-                case IapVersionLoReg:
-                    reg_val = (uint16_t)(g_app_fw_header.app_ver & 0xFFFFu);
-                    break;
-                case IapVersionHiReg:
-                    reg_val = (uint16_t)((g_app_fw_header.app_ver >> 16) & 0xFFFFu);
-                    break;
-                case IapFlagMirrorReg:
-                    reg_val = boot_flag_iap_mirror();
-                    break;
-                case ParamStatusReg:
-                    reg_val = (uint16_t)param_get_status();
-                    break;
-                default: break;
-            }
-            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val >> 8);
-            Uart2SendDataType.TxBuffer[i++] = (uint8_t)(reg_val & 0xFF);
-        }
-    }
     crcresult_3                                               = getCRC16(Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
     Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size]     = crcresult_3 & 0xff;
     Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size + 1] = (crcresult_3 >> 8) & 0xff;
@@ -1490,6 +1443,7 @@ void Modbus_Function_4(void)
 /*对应MODBUS 0x10命令函数*/
 void Modbus_Function_10(void)
 {
+    uint32_t BackupBuf[2];
     uint8_t  i;
     uint16_t startaddress = 0;
     uint16_t MbBufferLen;
@@ -1518,7 +1472,7 @@ void Modbus_Function_10(void)
                 {
                     DacValue = DacFullValue;
                 }
-                param_set_dac_values(DacValueBuf[0], DacValueBuf[1]);
+                WriteBufferFlash_16(2, DAC_FLASH_PAGE_ADDR, DacValueBuf);
             }
         }
         if ((startaddress >= SpanValueStartMinAddress) && (startaddress <= SpanValueStartMaxAddress))
@@ -1532,8 +1486,14 @@ void Modbus_Function_10(void)
                 SpanValueBuf[(startaddress - SpanValueStartMinAddress) / 2 + i].str[3] = Uart2RxBuffer[7 + 2 * i + 2];
                 SpanValueBuf[(startaddress - SpanValueStartMinAddress) / 2 + i].str[2] = Uart2RxBuffer[7 + 2 * i + 3];
             }
-            /* 统一存储持久化 Span（一次提交整页，替代旧 Page 63 直写）*/
-            param_set_span_values(SpanLoValue, SpanHiValue);
+            BackupBuf[0] = ((uint32_t)SpanValueBuf[0].str[0] << 24) + ((uint32_t)SpanValueBuf[0].str[1] << 16) + ((uint32_t)SpanValueBuf[0].str[2] << 8) +
+                           SpanValueBuf[0].str[3];
+            BackupBuf[1] = ((uint32_t)SpanValueBuf[1].str[0] << 24) + ((uint32_t)SpanValueBuf[1].str[1] << 16) + ((uint32_t)SpanValueBuf[1].str[2] << 8) +
+                           SpanValueBuf[1].str[3];
+            WriteBufferFlash(2, ADDR_FLASH_PAGE_63, BackupBuf);
+            /* 同步到 param_storage RAM 缓存 */
+            param_set_value_4ma(SpanLoValue);
+            param_set_value_20ma(SpanHiValue);
         }
         /* 运行参数区域 (寄存器 22~29) */
         if ((startaddress >= FlowUnitAddress) && (startaddress <= SmallSignalAddress + 1))
@@ -1880,17 +1840,6 @@ void bsp_usart2_apply_uart_config(uint8_t uart_config)
  */
 void bsp_usart2_check_baud_rate_pending(void)
 {
-    /* IAP 升级请求 (40127=0x5AA5) 优先处理：确认响应已发送完成后，
-     * 写 RAM 邮箱 cmd=UPGRADE（携带当前 uart_config）并复位进 BL。
-     * BL 复位后按邮箱优先级 1 采用同参数守候 XModem。*/
-    if (s_iap_reset_pending)
-    {
-        if (huart2.gState != HAL_UART_STATE_READY) return;
-        s_iap_reset_pending = 0;
-        boot_mailbox_request_upgrade(param_get_uart_config());
-        NVIC_SystemReset();
-    }
-
     if (!s_baud_rate_pending) return;
 
     /* 等待 DMA 发送完成 (gState == READY 表示空闲) */

@@ -130,14 +130,6 @@ extern uint64_t Cumulativeflow;  // Modbus 40041, UFL-1A BCD 原始计数值, �
 #define FilterWindowCountAddr 124  /* 去极值滑动窗口点数 (uint16, 2~10, R/W) */
 #define SampleIntervalAddr    125  /* UFL-1A 被动采样间隔 (uint16, ms, 100~60000, R/W) */
 
-/* IAP / 固件信息寄存器 — 第六批 (Bootloader 接口, PDU 126~130 = 4x 40127~40131)
- * 契约见 UMF_Bootloader_Upgrade_Plan.md §5.3 与 boot_flag.h */
-#define IapBootRequestReg     126  /* FC06 写 0x5AA5 → 置 RAM 邮箱 + 复位进 BL */
-#define IapVersionLoReg       127  /* FC03 固件版本低 16 位 (固件头 app_ver) */
-#define IapVersionHiReg       128  /* FC03 固件版本高 16 位 */
-#define IapFlagMirrorReg      129  /* FC03 启动期邮箱 cmd 回显 (0/1) */
-#define ParamStatusReg        130  /* FC03 PARAM_STATUS: bit0 迁移 bit1 部分 bit2 默认值 */
-
 /* 扩展参数区范围 */
 #define ExtParamStartAddr      60
 #define ExtParamEndAddr       125
