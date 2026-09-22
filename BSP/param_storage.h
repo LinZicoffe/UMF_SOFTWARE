@@ -123,8 +123,8 @@ typedef struct {
     uint16_t dac_full;       /* 原始 DAC 值, 默认 60000 */
 
     /* --- Phase 3: 累计总量 --- */
-    float    forward_total;  /* 0.0~9999999.0, 默认 0.0 */
-    float    reverse_total;  /* 0.0~9999999.0, 默认 0.0 */
+    float    forward_total;  /* 0.0~9999999.0, 默认 0.0, Flash 持久化 */
+    float    reverse_total;  /* 0.0~9999999.0, 默认 0.0, 当前仅 RAM */
 
     /* --- Phase 4: 系统 --- */
     uint16_t modbus_addr;    /* 1~247, 默认 2 */
@@ -229,7 +229,7 @@ HAL_StatusTypeDef param_set_reynolds_k(float val);
 HAL_StatusTypeDef param_set_total_factor(float val);
 HAL_StatusTypeDef param_set_preset_total(float val);
 
-/* ===== Phase 3 累计总量 setter ===== */
+/* ===== Phase 3 累计总量 setter（正向持久化，反向仅 RAM）===== */
 HAL_StatusTypeDef param_set_forward_total(float val);
 HAL_StatusTypeDef param_set_reverse_total(float val);
 
