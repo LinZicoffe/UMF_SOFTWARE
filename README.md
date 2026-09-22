@@ -281,6 +281,7 @@ S03 主菜单 (5 项)
 - **分区迁移**: App 基址 0x08000000 → **0x08002400**（ICF + VTOR=0x2400 + RAM 上界 0x20004BFF 避让 BL 邮箱）；新增 `.fw_header` 32B 固件头常量 @0x08002600（`BSP/boot_flag.c`）
 - **参数存储重写**: Page 54~63 分散追加日志 → **Page 61~63 三页轮转整页镜像**（PPG1 页头/双 CRC16/16B BL 通信槽/写守卫仅限参数页）；首次升级自动迁移旧数据（旧页直读 + 页 8 BL 备份块补缺，迁移状态经 40131 回读）；`eeprom.c` 退役
 - **Modbus 新增 IAP 寄存器**: 40127 写 0x5AA5 触发设备复位进 BL（回响应后软复位）；40128~129 固件版本、40130 升级请求镜像、40131 参数迁移状态
+- **Modbus 异常响应修复**: FC03 读取不存在、跨空洞或跨处理区的寄存器时返回 `0x83 0x02`；读取数量为 0 或超过设备单帧上限 62 时返回 `0x83 0x03`；预留的 FC04 按相同规则返回标准异常帧
 - **看门狗适配**: IWDG 100ms → ~1s（Prescaler 64 + Reload 624），main() 入口先喂狗再放宽，覆盖 Flash 整页提交（页擦 20~40ms）与 BL 交接
 - **构建**: post-build 自动产出 `EWARM/UMF_app.bin`（ielftool --bin --fill 0xFF，恒 53,248B）；`app_fw_version.h` 集中管理版本/构建号/测试构建开关（APP_FORCE_METER_COEFF，默认关闭）
 - **配套上位机**: 485 烧录 + 一键触发升级（真仓 `D:\C#_text\WPF\UMF流量计`，分支 feat/rs485-firmware-upgrade，V1.6.x；仓库内 HostApplication 过期副本已移除）

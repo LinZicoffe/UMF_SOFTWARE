@@ -22,6 +22,9 @@
 #define FLOW_FILTER_MAX_N     10  /* 固定数组容量, 避免动态分配 */
 #define FLOW_FILTER_DEFAULT_TAU 1.0f
 #define FLOW_FILTER_DEFAULT_INTERVAL_MS 500U
+#define MODBUS_MAX_READ_REGISTERS        62U
+#define MODBUS_EXCEPTION_ILLEGAL_ADDRESS 0x02U
+#define MODBUS_EXCEPTION_ILLEGAL_VALUE   0x03U
 static float    s_flt_window[FLOW_FILTER_MAX_N];
 static uint8_t  s_flt_write_index;
 static uint8_t  s_flt_count;
@@ -572,6 +575,65 @@ uint16_t getCRC16(uint8_t *ptr, uint8_t len)
     }
     return (crc);
 }
+
+static void modbus_send_exception(uint8_t function_code, uint8_t exception_code)
+{
+    uint16_t crc;
+
+    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
+    Uart2SendDataType.TxBuffer[1] = function_code | 0x80U;
+    Uart2SendDataType.TxBuffer[2] = exception_code;
+    crc = getCRC16(Uart2SendDataType.TxBuffer, 3);
+    Uart2SendDataType.TxBuffer[3] = (uint8_t)(crc & 0xFFU);
+    Uart2SendDataType.TxBuffer[4] = (uint8_t)(crc >> 8);
+    Uart2SendDataType.TX_Size = 5;
+
+    HAL_GPIO_WritePin(GPIOA, USART2_DE_Pin, GPIO_PIN_SET);
+    Time_Delay(20);
+    HAL_UART_Transmit_DMA(&huart2, Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
+    Uart2SendDataType.TX_Size = 0;
+}
+
+static uint8_t modbus_fc03_range_is_valid(uint16_t startaddress, uint16_t count)
+{
+    uint32_t endaddress = (uint32_t)startaddress + count - 1U;
+
+    if ((startaddress <= InputBufferStartMaxAddress) &&
+        (endaddress <= InputBufferStartMaxAddress)) {
+        return 1U;
+    }
+    if ((startaddress >= DacValueStartMinAddress) &&
+        (endaddress <= DacValueStartMaxAddress)) {
+        return 1U;
+    }
+    if ((startaddress >= FlowUnitAddress) &&
+        (endaddress <= SmallSignalAddress + 1U)) {
+        return 1U;
+    }
+    if ((startaddress >= SpanValueStartMinAddress) &&
+        (startaddress <= SpanValueStartMaxAddress) &&
+        (endaddress <= SpanValueStartMaxAddress + 1U)) {
+        return 1U;
+    }
+    if ((startaddress == CumulativeflowAddress) && (count == 4U)) {
+        return 1U;
+    }
+    if ((startaddress == SimSwitchAddress) && (count == 1U)) {
+        return 1U;
+    }
+    if ((startaddress >= SimFlowRateAddress) &&
+        (endaddress <= SimCumulativeAddress + 1U)) {
+        return 1U;
+    }
+    if ((startaddress >= ExtParamStartAddr) && (endaddress <= ExtParamEndAddr)) {
+        return 1U;
+    }
+    if ((startaddress >= IapBootRequestReg) && (endaddress <= ParamStatusReg)) {
+        return 1U;
+    }
+
+    return 0U;
+}
 /**
  * @Author: liyongtai
  * @description:uart2 处理收发DP数据,收DP数据与PLC同步，DP数据变化串口2接收，发送定时20ms
@@ -1090,8 +1152,19 @@ void Modbus_Function_3(void)
     uint16_t crcresult_3;
     startaddress                  = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
     MbBufferLen                   = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
-    /* Modbus 缓冲区溢出防护: TX_Size = 2*Len + 3 + 2(CRC) <= UART_TX_LEN(150) */
-    if (MbBufferLen > 62) MbBufferLen = 62;
+    /* TX_Size = 2*Len + 3 + 2(CRC) <= UART_TX_LEN(150) */
+    if ((MbBufferLen == 0U) || (MbBufferLen > MODBUS_MAX_READ_REGISTERS))
+    {
+        modbus_send_exception(0x03U, MODBUS_EXCEPTION_ILLEGAL_VALUE);
+        Uart2RxCounter = 0;
+        return;
+    }
+    if (!modbus_fc03_range_is_valid(startaddress, MbBufferLen))
+    {
+        modbus_send_exception(0x03U, MODBUS_EXCEPTION_ILLEGAL_ADDRESS);
+        Uart2RxCounter = 0;
+        return;
+    }
     Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
     Uart2SendDataType.TxBuffer[1] = 0x03;
     Uart2SendDataType.TxBuffer[2] = 2 * MbBufferLen;
@@ -1454,38 +1527,18 @@ void Modbus_Function_3(void)
 /*对应MODBUS 04命令函数,对应输入寄存号*/
 void Modbus_Function_4(void)
 {
-    uint8_t  temp;
-    uint16_t tempdress = 0;
-    // uint8_t  i         = 3;
-    uint16_t crcresult_4;
-    tempdress                     = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
-    Uart2SendDataType.TxBuffer[0] = Uart2RxBuffer[0];
-    Uart2SendDataType.TxBuffer[1] = 0x04;
-    temp                          = Uart2RxBuffer[5];
-    if (temp > 62) temp = 62;   /* 缓冲区溢出防护 */
-    Uart2SendDataType.TxBuffer[2] = 2 * temp;
-    Uart2SendDataType.TX_Size     = 2 * temp + 3;
+    uint16_t count = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
 
-    if (tempdress == 19)
-    { /*
-       for (j = 0; j < temp; j++) //
-       显示数据以连续形式放数据,存放的数据为标度度变换的数据
-       {
-         Uart2SendDataType.TxBuffer[i] = DataBuffer[j] >> 8 &
-       0xff; i++; Uart2SendDataType.TxBuffer[i] =
-       DataBuffer[j] & 0xff; i++;
-       }
-   */
+    if ((count == 0U) || (count > MODBUS_MAX_READ_REGISTERS))
+    {
+        modbus_send_exception(0x04U, MODBUS_EXCEPTION_ILLEGAL_VALUE);
     }
-    crcresult_4                                               = getCRC16(Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
-    Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size]     = crcresult_4 & 0xff;
-    Uart2SendDataType.TxBuffer[Uart2SendDataType.TX_Size + 1] = (crcresult_4 >> 8) & 0xff;
-    Uart2SendDataType.TX_Size                                 = Uart2SendDataType.TX_Size + 2;
-    HAL_GPIO_WritePin(GPIOA, USART2_DE_Pin, GPIO_PIN_SET);
-    Time_Delay(20);
-    HAL_UART_Transmit_DMA(&huart2, Uart2SendDataType.TxBuffer, Uart2SendDataType.TX_Size);
-    Uart2SendDataType.TX_Size = 0;
-    Uart2RxCounter            = 0;
+    else
+    {
+        /* FC04 在当前协议中预留，尚未定义输入寄存器。 */
+        modbus_send_exception(0x04U, MODBUS_EXCEPTION_ILLEGAL_ADDRESS);
+    }
+    Uart2RxCounter = 0;
 }
 /*对应MODBUS 0x10命令函数*/
 void Modbus_Function_10(void)
