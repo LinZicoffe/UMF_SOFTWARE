@@ -361,6 +361,7 @@ static void save_param_val(screen_t scr, float val)
                            bsp_usart_set_modbus_addr((uint16_t)val); break;
     default: break;
     }
+    (void)param_flush();   /* 保存动作语义: ENTER = 已落盘 */
 }
 
 static uint8_t load_enum_idx(screen_t scr)
@@ -383,10 +384,13 @@ static void save_enum_idx(screen_t scr, uint8_t idx)
     case SCR_FLOW_UNIT:   param_set_flow_unit(idx);   break;
     case SCR_TOTAL_UNIT:  param_set_total_unit(idx);  break;
     case SCR_PULSE_EQUIV: param_set_pulse_equiv(idx); break;
-    case SCR_BAUD_RATE:   param_set_baud_rate(idx); bsp_usart2_apply_uart_config(param_get_uart_config()); break;
+    case SCR_BAUD_RATE:   param_set_baud_rate(idx);
+                          (void)param_flush();   /* 先落盘再切硬件，掉电后软硬件波特率保持一致 */
+                          bsp_usart2_apply_uart_config(param_get_uart_config()); break;
     case SCR_LANGUAGE:    param_set_language(idx);    break;
     default: break;
     }
+    (void)param_flush();   /* 保存动作语义: ENTER = 已落盘 */
 }
 
 static float load_readonly_val(screen_t scr)
@@ -1154,6 +1158,7 @@ static void handle_confirm(key_event_t evt)
                 SpanLoValue  = param_get_value_4ma();
                 SpanHiValue  = param_get_value_20ma();
             }
+            (void)param_flush();   /* 清零/出厂复位一次落盘 */
         }
         nav_pop();
         if (s_nav_depth < 0) { menu_exit(); return; }
