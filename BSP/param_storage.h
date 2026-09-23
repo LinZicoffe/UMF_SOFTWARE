@@ -266,6 +266,11 @@ HAL_StatusTypeDef param_set_dac_values(uint16_t zero, uint16_t full); /* 一次�
  * 需要落盘时使用本接口一次提交两条。*/
 HAL_StatusTypeDef param_set_span_values(float lo, float hi);
 
+/* ===== 延迟批量落盘 =====
+ * setter 只改 RAM 并置脏；param_flush() 在安全点（RS-485 响应发完后）整页提交。
+ * 一次 flush 覆盖此前所有修改，避免 FC10 标定块 15 连擦 + 响应超时。*/
+HAL_StatusTypeDef param_flush(void);   /* 无脏数据时立即返回 HAL_OK */
+
 /* ===== 迁移/存储状态 (Modbus 40131 PARAM_STATUS 回显) ===== */
 #define PARAM_STATUS_MIGRATED  0x01u  /* bit0: 新格式直接载入（或迁移完整）*/
 #define PARAM_STATUS_PARTIAL   0x02u  /* bit1: 部分迁移（存在缺失字段）*/

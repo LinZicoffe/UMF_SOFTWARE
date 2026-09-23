@@ -1885,8 +1885,10 @@ void bsp_usart2_apply_uart_config(uint8_t uart_config)
 }
 
 /**
- * @brief   检查并应用延迟的 UART 配置变更
- * @note    在 Uart2_Communication() 入口调用，确保 Modbus 响应已在旧配置下发送完成
+ * @brief   延迟动作安全点：参数落盘 + 应用延迟的 UART 配置变更
+ * @note    在 Uart2_Communication() 入口调用，确保 Modbus 响应已在旧配置下发送完成。
+ *          gState == READY 表示上一帧响应 DMA/TC 结束（DE 已拉低），此时
+ *          param_flush() 擦页冻结 CPU 不会截断 RS-485 应答。
  */
 void bsp_usart2_check_baud_rate_pending(void)
 {
@@ -1897,11 +1899,18 @@ void bsp_usart2_check_baud_rate_pending(void)
     {
         if (huart2.gState != HAL_UART_STATE_READY) return;
         s_iap_reset_pending = 0;
+        (void)param_flush();          /* 复位进 BL 前先落盘，防止参数丢失 */
         boot_mailbox_request_upgrade(param_get_uart_config());
         NVIC_SystemReset();
     }
 
-    if (!s_baud_rate_pending) return;
+    if (!s_baud_rate_pending)
+    {
+        /* 无波特率变更: 响应发完后统一延迟落盘（gState==READY 表示空闲）*/
+        if (huart2.gState == HAL_UART_STATE_READY)
+            (void)param_flush();
+        return;
+    }
 
     /* 等待 DMA 发送完成 (gState == READY 表示空闲) */
     if (huart2.gState != HAL_UART_STATE_READY) return;
@@ -1909,6 +1918,7 @@ void bsp_usart2_check_baud_rate_pending(void)
     uint8_t cfg = s_uart_cfg_pending;
     s_baud_rate_pending = 0;
 
+    (void)param_flush();              /* 先落盘再切硬件，避免掉电后软硬件波特率不一致 */
     bsp_usart2_apply_uart_config(cfg);
 }
 
