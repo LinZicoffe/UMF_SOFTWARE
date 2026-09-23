@@ -674,16 +674,25 @@ void Modbus_Function_1(void)
         sendbytelength = MbBufferLen / 8 + 1;
     else
         sendbytelength = MbBufferLen / 8;
+    /* 缓冲区溢出防护: 响应 = 头(3) + data + CRC(2) = sendbytelength + 5 <= UART_TX_LEN(150)。
+     * 数量非法或响应超长则静默不应答（与 CRC 错误同策略），防止 TxBuffer[TX_Size] 越界写。*/
+    if ((MbBufferLen == 0) || ((uint32_t)sendbytelength + 5u > UART_TX_LEN))
+    {
+        Uart2RxCounter = 0;
+        return;
+    }
     if ((startaddress + MbBufferLen) < (BitBufLength * 16) &&
         (quotient + 1) < BitBufLength)
     {
         /* 从 BitControlBuf[quotient] 的第 remainder 位开始，连续提取 sendbytelength 字节
-         * 每次合并两个相邻寄存器得到 16 位窗口，低字节先发送 (Modbus 线圈顺序) */
+         * 每次合并两个相邻寄存器得到 16 位窗口，低字节先发送 (Modbus 线圈顺序)。
+         * 高半字超出 BitBufLength 时补 0，防 BitControlBuf[BitBufLength] 越界读。*/
         uint8_t bpos = 3;
         for (i = 0; i < sendbytelength; )
         {
+            uint16_t hi = (quotient + 1u < BitBufLength) ? SWAPWORD(BitControlBuf[quotient + 1]) : 0u;
             uint16_t w = (uint16_t)(((uint32_t)SWAPWORD(BitControlBuf[quotient]) >> remainder) |
-                                    ((uint32_t)SWAPWORD(BitControlBuf[quotient + 1]) << (16 - remainder)));
+                                    ((uint32_t)hi << (16 - remainder)));
             Uart2SendDataType.TxBuffer[bpos++] = (uint8_t)(w & 0xFF);
             i++;
             if (i >= sendbytelength) break;
@@ -1506,7 +1515,14 @@ void Modbus_Function_10(void)
     uint16_t crcresult_10;
     startaddress = ((uint16_t)Uart2RxBuffer[2] << 8) + Uart2RxBuffer[3];
     MbBufferLen  = ((uint16_t)Uart2RxBuffer[4] << 8) + Uart2RxBuffer[5];
-    if (Uart2RxBuffer[6] == Uart2RxBuffer[5] * 2)
+    /* FC10 帧 = addr(1)+fc(1)+start(2)+count(2)+bytecnt(1)+data(2N)+crc(2) = 9+2N 字节。
+     * 旧判据只比对 count 低字节 (Uart2RxBuffer[5]*2)，高字节非 0 时 MbBufferLen 虚高，
+     * data 索引 7+2i 越界读 Uart2RxBuffer[UART_RX_LEN] 并驱动垃圾 param_set_*。
+     * 判据: 数量非 0；字节数字段 == 2N（全宽）；整帧长度 == 9+2N（CRC 已按整帧校验）。
+     * Uart2RxCounter ≤ UART_RX_LEN(150) 由此隐含 N ≤ 70，最大读索引 2N+6 = 146。*/
+    if ((MbBufferLen != 0u) &&
+        ((uint32_t)Uart2RxBuffer[6] == 2u * MbBufferLen) &&
+        ((uint32_t)Uart2RxCounter == 9u + 2u * MbBufferLen))
     {
 
         if ((startaddress >= DacValueStartMinAddress) && (startaddress <= DacValueStartMaxAddress))
