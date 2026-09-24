@@ -31,22 +31,30 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 
 ### 工具链
 
-- **IDE**: IAR Embedded Workbench for ARM (EWARM，本仓库在 9.60.4 下开发验证)
+双工具链并行（v2.4.1 起），App 产物同规格；Bootloader 仅 IAR 构建。
+
+**IAR EWARM**（主工具链，本仓库在 9.60.4 下开发验证）
+
 - **App 工程**: `EWARM/UMF.ewp`（工作空间 `EWARM/Project.eww`，含 Bootloader 双工程）
 - **Bootloader 工程**: `EWARM/UMF_Boot.ewp`（独立 ICF `EWARM/UMF_Boot.icf`，页 0~7）
 - **启动文件**: `EWARM/startup_stm32f103xb.s`
 
+**STM32CubeIDE**（v2.4.1 起，arm-none-eabi-gcc，仅覆盖 App）
+
+- **工程**: `STM32CubeIDE/`（`.project`/`.cproject`，启动文件 `Application/User/Startup/startup_stm32f103c8tx.s`）
+- **链接脚本**: `STM32CubeIDE/STM32F103C8TX_FLASH.ld`（FLASH 52KB @0x08002400、RAM 19KB，与 IAR ICF 分区一致）
+
 ### 编译步骤
 
-1. 使用 IAR EWARM 打开 `EWARM/Project.eww`
-2. App 工程：选择 UMF 配置，Project → Make (F7)；**构建自动生成 `EWARM/UMF_app.bin`**（post-build `ielftool --bin --fill 0xFF`，恒 53,248B，供 485 烧录上位机使用）
-3. Bootloader 工程（仅首次部署/BL 变更时）：Make 后用 SWD 烧录 `UMF_Boot.hex` 到页 0~7
+1. **IAR 构建 App**：打开 `EWARM/Project.eww`，选择 UMF 配置，Project → Make (F7)；**构建自动生成 `EWARM/UMF_app.bin`**（post-build `ielftool --bin --fill 0xFF`，恒 53,248B，供 485 烧录上位机使用）
+2. **STM32CubeIDE 构建 App**（可替代 IAR）：导入 `STM32CubeIDE/` 工程，Build (Release)；post-build `arm-none-eabi-objcopy -O binary --gap-fill 0xFF --pad-to 0x0800F400` 生成同规格升级包 `UMF_app.bin`（输出于构建目录）
+3. **Bootloader 工程**（仅首次部署/BL 变更时）：IAR Make `UMF_Boot.ewp` 后用 SWD 烧录 `UMF_Boot.hex` 到页 0~7
 4. 下载 App 到目标板（SWD 或 485 在线升级，上位机见文末链接）
 
 ### 注意事项
 
-- 无 Makefile/CMakeLists.txt，仅通过 IAR IDE 构建
-- **新增 `.c` 文件必须手动添加到 `EWARM/UMF.ewp`** 中对应 `<group>` 节点
+- 无 Makefile/CMakeLists.txt，仅通过 IAR IDE 或 STM32CubeIDE 构建
+- **新增 `.c` 文件登记**: IAR 必须手动添加到 `EWARM/UMF.ewp` 中对应 `<group>` 节点；CubeIDE 中 BSP/OLED 为整目录链接（自动编译新文件），Core/Drivers 为逐文件链接，新文件需在 `STM32CubeIDE/.project` 中登记
 - 编译器宏定义: `USE_HAL_DRIVER`, `STM32F103xB`
 - **Flash 分区 (v2.4.0)**：页 0~7 BL / 页 8 BL 备份 / 页 9~60 App (0x08002400 起，VTOR=0x2400) / 页 61~63 参数三页轮转——**SWD 下载 App 严禁整片擦除（会抹掉 BL 与参数区），必须按段/按范围擦除**
 - 首次刷 BL 前建议全片备份；现场切换与回滚步骤见 `BL更新日志.md`
@@ -90,6 +98,10 @@ UMF_SOFTWARE/
 │   ├── UMF.ewp                   # 工程配置
 │   ├── Project.eww               # 工作空间
 │   └── startup_stm32f103xb.s     # 启动文件
+├── STM32CubeIDE/                  # STM32CubeIDE 工程 (v2.4.1, 仅 App)
+│   ├── .project/.cproject        # 工程配置 (post-build 产出 UMF_app.bin)
+│   ├── STM32F103C8TX_FLASH.ld    # 链接脚本 (FLASH 52KB @0x08002400, RAM 19KB)
+│   └── Application/User/         # GNU 工具链运行时 (启动文件/syscalls/sysmem)
 ├── UMF_HMI_Screen_Design.md      # UMF HMI 界面设计规格书 (S03~S43)
 ├── CMF_HMI_Screen_Design_REF.md  # CMF 科里奥利 HMI 参考设计文档
 ├── CLAUDE.md                      # AI 开发辅助文档
@@ -253,11 +265,17 @@ S03 主菜单 (5 项)
 
 ## 资源预算
 
+> 用量数值来自 2026-09-23 IAR 构建 map (`EWARM/UMF/List/UMF.map`)，分区按 v2.4.0 划分。
+
 | 资源 | 总量 | 已用 | 剩余 |
 |------|------|------|------|
-| Flash (代码区) | 54KB (Page 0~53) | ~34KB | ~20KB |
-| Flash (EEPROM) | 10KB (Page 54~63) | 参数存储 | — |
-| RAM | 20KB | ~7KB | ~13KB |
+| Flash (Bootloader) | 8KB (Page 0~7, 0x08000000~0x08001FFF) | BL 固件 | — |
+| Flash (BL 备份) | 1KB (Page 8) | 旧参数备份块 | — |
+| Flash (App 区) | 52KB (Page 9~60, 0x08002400~0x0800F3FF) | ~49.8KB (ro code 40,017B + ro data 9,739B) | **~3.4KB** |
+| Flash (参数区) | 3KB (Page 61~63) | 三页轮转镜像 | — |
+| RAM (App) | 19KB (0x20000000~0x20004BFF) | ~8KB (rw data 6,078B + CSTACK 2,048B) | ~11KB |
+
+> **注意**: App Flash 余量仅约 3.4KB，新增功能前必须先规划 Flash 预算（历史教训见版本日志 V4/V7）。
 
 ## 调试指南
 
@@ -273,6 +291,22 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### v2.4.1 (2026-09-24)
+
+**STM32CubeIDE 构建支持 + Flash 磨损治理 + Modbus 帧健壮性修复**——App 基址/Flash 分区/寄存器映射均不变，可直接替换升级。
+
+- **新增 STM32CubeIDE 工程** (`STM32CubeIDE/`，仅 App): arm-none-eabi-gcc 并行构建，链接分区与 IAR ICF 一致（FLASH 52KB @0x08002400、RAM 19KB）；post-build `arm-none-eabi-objcopy -O binary --gap-fill 0xFF --pad-to 0x0800F400` 产出升级包 `UMF_app.bin`（与 IAR `ielftool` 产物同规格）；`.gitignore` 排除 CubeIDE 构建产物与本机索引
+- **Flash 磨损治理** (`param_storage`，延迟批量落盘):
+  - **setter 变更检测**: 钳位后与当前值比对（float 位级比较），值未变直接返回，不走整页擦写——消除每次上电回写刚加载值、Modbus/菜单重复写同值的无谓擦除
+  - **延迟批量落盘**: setter 只改 RAM 并置脏标记，`param_flush()` 在 RS-485 响应发完（DE 已拉低）后整页提交一次；FC10 标定块 15 次 setter 从 15 连擦（约 0.75s 冻结 → 上位机超时重试的磨损放大环）降为 1 次擦写；落盘前判脏，失败保留脏标记可重试
+  - **强制 flush 点**: IAP 复位进 BL 前、波特率切换前；菜单 ENTER 保存后立即落盘（"保存 = 已落盘"），波特率保存先落盘再切硬件，避免掉电后软硬件波特率不一致
+  - **取舍**: 参数持久化窗口后移约 1~40ms，此窗口内掉电会丢失本次修改
+- **累计总量持久化修复**: `forward_total` 正向累积真正写入 Flash（此前未落盘，掉电丢失）；`reverse_total` 暂仍仅 RAM
+- **Modbus FC01/FC10 帧长校验** (`bsp_usart`，防越界读写与垃圾提交):
+  - FC01 读线圈: 请求数量为 0 或响应超长时静默不应答，防 `TxBuffer` 越界写；16 位窗口合并的高半字超出 `BitControlBuf` 时补 0，防越界读
+  - FC10 写多寄存器: 帧校验从只比对数量低字节改为全宽判据（数量非 0 && 字节数 == 2N && 整帧长度 == 9+2N），修复数量高字节非 0 时数据索引越界读、垃圾值驱动 `param_set_*` 提交
+- **资源预算表重写**: 按 v2.4.0 分区与最新构建 map 更新（App Flash 余量仅约 3.4KB）
 
 ### v2.4.0 (2026-09-18)
 
