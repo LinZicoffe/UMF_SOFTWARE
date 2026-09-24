@@ -76,13 +76,13 @@ int bl_info_slot_uart_config(uint8_t *uart_config_out);
 
 typedef struct
 {
-    uint32_t magic;
-    uint32_t magic_inv;
-    uint32_t seq;
-    uint32_t cmd;
-    uint32_t uart_config;             /* 低 8 位有效 */
-    uint32_t boot_attempt;            /* G3 启动计数 */
-    uint32_t last_verified_build_id;  /* D3：层 3 跳过依据 */
+    uint32_t magic;                     /* 固定 0xA5A5A5A5，读时按 u32 小端数值比较 */
+    uint32_t magic_inv;                 /* 固定 ~0xA5A5A5A5，读时按 u32 小端数值比较 */
+    uint32_t seq;                       /* 读写序号，读时按 u32 小端数值比较（回绕）*/
+    uint32_t cmd;                       /* BL_MAILBOX_CMD_* */
+    uint32_t uart_config;               /* 低 8 位有效 */
+    uint32_t boot_attempt;              /* G3 启动计数 */
+    uint32_t last_verified_build_id;    /* D3：层 3 跳过依据 */
     uint32_t crc32;
 } bl_mailbox_t;
 

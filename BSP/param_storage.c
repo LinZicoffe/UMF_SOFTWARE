@@ -166,6 +166,7 @@ static const char * const s_baud_rate_str[BAUD_RATE_COUNT] = {
 /* ===== 内部 RAM 缓存 — static ===== */
 static param_basic_t s_params;
 static uint8_t       s_param_status;      /* PARAM_STATUS_* */
+static uint8_t       s_param_dirty;       /* 1 = RAM 已改，待 param_flush() 落盘 */
 
 /* 页镜像暂存（提交编码 / 读取解码共用；模块单线程顺序使用）*/
 static uint8_t s_page_img[PG_COMMIT_BYTES];
@@ -1034,6 +1035,17 @@ HAL_StatusTypeDef param_storage_get_basic(const param_basic_t **pp_out)
     return HAL_OK;
 }
 
+/* 有脏数据时才整页提交；一次 flush 覆盖此前所有 setter 修改（批量）。
+ * 只能主循环调用（含 HAL_FLASH 擦写，禁入 ISR）。*/
+HAL_StatusTypeDef param_flush(void)
+{
+    HAL_StatusTypeDef st;
+    if (!s_param_dirty) return HAL_OK;
+    st = param_commit();
+    if (st == HAL_OK) s_param_dirty = 0u;
+    return st;
+}
+
 uint8_t param_get_status(void)
 {
     return s_param_status;
@@ -1090,52 +1102,78 @@ uint16_t param_get_dac_zero(void) { return s_params.dac_zero; }
 uint16_t param_get_dac_full(void) { return s_params.dac_full; }
 
 /* ===== Phase 1 setter ===== */
+/* 变更检测: 钳位后与当前值一致则不触发 Flash 擦写。
+ * float 经 float_to_u32 位级比较（NaN/±0 与 memcmp 同口径）。*/
 HAL_StatusTypeDef param_set_std_cond(uint8_t idx)
 {
-    s_params.std_cond = clamp_u8(idx, 0, (uint8_t)(STD_COND_COUNT - 1));
-    return param_commit();
+    uint8_t new_v = clamp_u8(idx, 0, (uint8_t)(STD_COND_COUNT - 1));
+    if (new_v == s_params.std_cond) return HAL_OK;
+    s_params.std_cond = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_flow_unit(uint8_t idx)
 {
-    s_params.flow_unit = clamp_u8(idx, 0, (uint8_t)(FLOW_UNIT_COUNT - 1));
-    return param_commit();
+    uint8_t new_v = clamp_u8(idx, 0, (uint8_t)(FLOW_UNIT_COUNT - 1));
+    if (new_v == s_params.flow_unit) return HAL_OK;
+    s_params.flow_unit = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_total_unit(uint8_t idx)
 {
-    s_params.total_unit = clamp_u8(idx, 0, (uint8_t)(TOTAL_UNIT_COUNT - 1));
-    return param_commit();
+    uint8_t new_v = clamp_u8(idx, 0, (uint8_t)(TOTAL_UNIT_COUNT - 1));
+    if (new_v == s_params.total_unit) return HAL_OK;
+    s_params.total_unit = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_meter_coeff(float val)
 {
-    s_params.meter_coeff = clamp_f(val, METER_COEFF_MIN, METER_COEFF_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, METER_COEFF_MIN, METER_COEFF_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.meter_coeff)) return HAL_OK;
+    s_params.meter_coeff = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_medium_coeff(float val)
 {
-    s_params.medium_coeff = clamp_f(val, MEDIUM_COEFF_MIN, MEDIUM_COEFF_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, MEDIUM_COEFF_MIN, MEDIUM_COEFF_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.medium_coeff)) return HAL_OK;
+    s_params.medium_coeff = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_small_signal(float val)
 {
-    s_params.small_signal = clamp_f(val, SMALL_SIGNAL_MIN, SMALL_SIGNAL_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, SMALL_SIGNAL_MIN, SMALL_SIGNAL_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.small_signal)) return HAL_OK;
+    s_params.small_signal = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_filter_time(float val)
 {
-    s_params.filter_time = clamp_f(val, FILTER_TIME_MIN, FILTER_TIME_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, FILTER_TIME_MIN, FILTER_TIME_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.filter_time)) return HAL_OK;
+    s_params.filter_time = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_damping_time(float val)
 {
-    s_params.damping_time = clamp_f(val, DAMPING_TIME_MIN, DAMPING_TIME_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, DAMPING_TIME_MIN, DAMPING_TIME_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.damping_time)) return HAL_OK;
+    s_params.damping_time = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 2 输出 setter ===== */
@@ -1154,72 +1192,107 @@ HAL_StatusTypeDef param_set_value_20ma(float val)
 
 HAL_StatusTypeDef param_set_span_values(float lo, float hi)
 {
-    s_params.value_4ma = clamp_f(lo, VALUE_4MA_MIN, VALUE_4MA_MAX);
-    s_params.value_20ma = clamp_f(hi, VALUE_20MA_MIN, VALUE_20MA_MAX);
-    return param_commit();
+    float new_lo = clamp_f(lo, VALUE_4MA_MIN, VALUE_4MA_MAX);
+    float new_hi = clamp_f(hi, VALUE_20MA_MIN, VALUE_20MA_MAX);
+    if ((float_to_u32(new_lo) == float_to_u32(s_params.value_4ma)) &&
+        (float_to_u32(new_hi) == float_to_u32(s_params.value_20ma))) return HAL_OK;
+    s_params.value_4ma = new_lo;
+    s_params.value_20ma = new_hi;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_freq_output(float val)
 {
-    s_params.freq_output = clamp_f(val, FREQ_OUTPUT_MIN, FREQ_OUTPUT_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, FREQ_OUTPUT_MIN, FREQ_OUTPUT_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.freq_output)) return HAL_OK;
+    s_params.freq_output = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_pulse_equiv(uint8_t idx)
 {
-    s_params.pulse_equiv = clamp_u8(idx, 0, (uint8_t)(PULSE_EQUIV_COUNT - 1));
-    return param_commit();
+    uint8_t new_v = clamp_u8(idx, 0, (uint8_t)(PULSE_EQUIV_COUNT - 1));
+    if (new_v == s_params.pulse_equiv) return HAL_OK;
+    s_params.pulse_equiv = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 2 介质/工况 setter ===== */
 HAL_StatusTypeDef param_set_medium_density(float val)
 {
-    s_params.medium_density = clamp_f(val, MEDIUM_DENSITY_MIN, MEDIUM_DENSITY_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, MEDIUM_DENSITY_MIN, MEDIUM_DENSITY_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.medium_density)) return HAL_OK;
+    s_params.medium_density = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_pipe_diameter(float val)
 {
-    s_params.pipe_diameter = clamp_f(val, PIPE_DIAMETER_MIN, PIPE_DIAMETER_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, PIPE_DIAMETER_MIN, PIPE_DIAMETER_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.pipe_diameter)) return HAL_OK;
+    s_params.pipe_diameter = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_gas_ref_press(float val)
 {
-    s_params.gas_ref_press = clamp_f(val, GAS_REF_PRESS_MIN, GAS_REF_PRESS_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, GAS_REF_PRESS_MIN, GAS_REF_PRESS_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.gas_ref_press)) return HAL_OK;
+    s_params.gas_ref_press = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_gas_ref_temp(float val)
 {
-    s_params.gas_ref_temp = clamp_f(val, GAS_REF_TEMP_MIN, GAS_REF_TEMP_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, GAS_REF_TEMP_MIN, GAS_REF_TEMP_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.gas_ref_temp)) return HAL_OK;
+    s_params.gas_ref_temp = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_reynolds_k(float val)
 {
-    s_params.reynolds_k = clamp_f(val, REYNOLDS_K_MIN, REYNOLDS_K_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, REYNOLDS_K_MIN, REYNOLDS_K_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.reynolds_k)) return HAL_OK;
+    s_params.reynolds_k = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 2 累积器 setter ===== */
 HAL_StatusTypeDef param_set_total_factor(float val)
 {
-    s_params.total_factor = clamp_f(val, TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, TOTAL_FACTOR_MIN, TOTAL_FACTOR_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.total_factor)) return HAL_OK;
+    s_params.total_factor = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_preset_total(float val)
 {
-    s_params.preset_total = clamp_f(val, PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.preset_total)) return HAL_OK;
+    s_params.preset_total = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 3 累计总量 setter ===== */
 HAL_StatusTypeDef param_set_forward_total(float val)
 {
-    s_params.forward_total = clamp_f(val, FORWARD_TOTAL_MIN, FORWARD_TOTAL_MAX);
-    return param_commit();
+    float new_v = clamp_f(val, FORWARD_TOTAL_MIN, FORWARD_TOTAL_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.forward_total)) return HAL_OK;
+    s_params.forward_total = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* 反向累计总量频繁变化，当前仍不持久化，断电后重置。 */
@@ -1232,23 +1305,31 @@ HAL_StatusTypeDef param_set_reverse_total(float val)
 /* ===== DAC setter (一次提交两条) ===== */
 HAL_StatusTypeDef param_set_dac_values(uint16_t zero, uint16_t full)
 {
+    if ((zero == s_params.dac_zero) && (full == s_params.dac_full)) return HAL_OK;
     s_params.dac_zero = zero;
     s_params.dac_full = full;
-    return param_commit();
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 4 系统 setter ===== */
 HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr)
 {
-    s_params.modbus_addr = clamp_u16(addr, MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
-    return param_commit();
+    uint16_t new_v = clamp_u16(addr, MODBUS_ADDR_MIN, MODBUS_ADDR_MAX);
+    if (new_v == s_params.modbus_addr) return HAL_OK;
+    s_params.modbus_addr = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_baud_rate(uint8_t idx)
 {
-    uint8_t cfg = s_params.uart_config;
-    s_params.uart_config = (cfg & 0x38u) | (uint8_t)clamp_u8(idx, 0, (uint8_t)(BAUD_RATE_COUNT - 1));
-    return param_commit();
+    uint8_t new_cfg = (s_params.uart_config & 0x38u) |
+                      (uint8_t)clamp_u8(idx, 0, (uint8_t)(BAUD_RATE_COUNT - 1));
+    if (new_cfg == s_params.uart_config) return HAL_OK;
+    s_params.uart_config = new_cfg;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_uart_config(uint8_t cfg)
@@ -1260,34 +1341,48 @@ HAL_StatusTypeDef param_set_uart_config(uint8_t cfg)
     if (parity >= PARITY_COUNT)  return HAL_ERROR;
     if (stop >= STOPBITS_COUNT)  return HAL_ERROR;
     if (cfg & 0xC0u)            return HAL_ERROR;
+    if (cfg == s_params.uart_config) return HAL_OK;
     s_params.uart_config = cfg;
-    return param_commit();
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_language(uint8_t idx)
 {
-    s_params.language = clamp_u8(idx, 0, (uint8_t)(LANG_COUNT - 1));
-    return param_commit();
+    uint8_t new_v = clamp_u8(idx, 0, (uint8_t)(LANG_COUNT - 1));
+    if (new_v == s_params.language) return HAL_OK;
+    s_params.language = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 5 OLED 自愈 setter ===== */
 HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val)
 {
-    s_params.oled_recovery_interval = clamp_u16(val, OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
-    return param_commit();
+    uint16_t new_v = clamp_u16(val, OLED_RECOVERY_MIN, OLED_RECOVERY_MAX);
+    if (new_v == s_params.oled_recovery_interval) return HAL_OK;
+    s_params.oled_recovery_interval = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== 瞬时流量滤波 setter ===== */
 HAL_StatusTypeDef param_set_filter_window_count(uint16_t val)
 {
-    s_params.filter_window_count = clamp_u16(val, FILTER_WINDOW_COUNT_MIN, FILTER_WINDOW_COUNT_MAX);
-    return param_commit();
+    uint16_t new_v = clamp_u16(val, FILTER_WINDOW_COUNT_MIN, FILTER_WINDOW_COUNT_MAX);
+    if (new_v == s_params.filter_window_count) return HAL_OK;
+    s_params.filter_window_count = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_sample_interval_ms(uint16_t val)
 {
-    s_params.sample_interval_ms = clamp_u16(val, SAMPLE_INTERVAL_MIN_MS, SAMPLE_INTERVAL_MAX_MS);
-    return param_commit();
+    uint16_t new_v = clamp_u16(val, SAMPLE_INTERVAL_MIN_MS, SAMPLE_INTERVAL_MAX_MS);
+    if (new_v == s_params.sample_interval_ms) return HAL_OK;
+    s_params.sample_interval_ms = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== Phase 6 标定 getter ===== */
@@ -1298,22 +1393,33 @@ float    param_get_cal_pct(uint8_t index)     { return (index < CAL_POINT_COUNT)
 /* ===== Phase 6 标定 setter ===== */
 HAL_StatusTypeDef param_set_cal_enabled(uint8_t val)
 {
-    s_params.cal_enabled = (val) ? 1 : 0;
-    return param_commit();
+    uint8_t new_v = (uint8_t)((val) ? 1 : 0);
+    if (new_v == s_params.cal_enabled) return HAL_OK;
+    s_params.cal_enabled = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_cal_k(uint8_t index, float val)
 {
+    float new_v;
     if (index >= CAL_POINT_COUNT) return HAL_ERROR;
-    s_params.cal_k[index] = clamp_f(val, CAL_K_MIN, CAL_K_MAX);
-    return param_commit();
+    new_v = clamp_f(val, CAL_K_MIN, CAL_K_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.cal_k[index])) return HAL_OK;
+    s_params.cal_k[index] = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef param_set_cal_pct(uint8_t index, float val)
 {
+    float new_v;
     if (index >= CAL_POINT_COUNT) return HAL_ERROR;
-    s_params.cal_pct[index] = clamp_f(val, CAL_PCT_MIN, CAL_PCT_MAX);
-    return param_commit();
+    new_v = clamp_f(val, CAL_PCT_MIN, CAL_PCT_MAX);
+    if (float_to_u32(new_v) == float_to_u32(s_params.cal_pct[index])) return HAL_OK;
+    s_params.cal_pct[index] = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
 }
 
 /* ===== 枚举字符串 ===== */
@@ -1345,5 +1451,6 @@ const char * const *param_get_baud_rate_strings(void)   { return s_baud_rate_str
 HAL_StatusTypeDef param_storage_reset_defaults(void)
 {
     param_load_defaults();
-    return param_commit();
+    s_param_dirty = 1u;   /* 全量默认值覆盖：置脏走统一 flush，失败可重试 */
+    return param_flush();
 }
