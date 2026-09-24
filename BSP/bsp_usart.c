@@ -2134,8 +2134,10 @@ const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf)
         source_buf = real_buf;
     }
 
-    if (((source_unit == 0) && (target_unit == TOTAL_UNIT_L)) ||
-        ((source_unit == 1) && (target_unit == TOTAL_UNIT_M3)))
+    /* 原始显示串可能尚未由有效帧填充，此时从累计计数生成显示值。 */
+    if (source_buf[0] != '\0' &&
+        (((source_unit == 0) && (target_unit == TOTAL_UNIT_L)) ||
+         ((source_unit == 1) && (target_unit == TOTAL_UNIT_M3))))
         return source_buf;
 
     milli_value = convert_total_to_milli_unit(
