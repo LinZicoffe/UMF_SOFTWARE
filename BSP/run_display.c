@@ -32,20 +32,14 @@ static void render_page_main(const run_display_input_t *p_in)
     char buf[24];
     float rate;
     uint8_t len, x_start;
-    float press, temp;
+    float temp;
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* Zone A: 状态栏 (y=0, Font_7x10)
-     * 三段内容使用动态坐标紧凑排列，通信状态缩写为 OK/ER，
-     * 确保压力和温度取钳位上限时仍不超出 128px 屏宽。 */
-    press = p_in->p_pressure->num;
-    if (press > 9999.9f)  press = 9999.9f;
-    if (press < -999.9f)  press = -999.9f;
-    ftoa(press, 1, buf, sizeof(buf));
-    strcat(buf, "KPa ");
+     * 左侧显示当前瞬时流量单位，温度紧随其后，通信状态右对齐。 */
     ssd1306_SetCursor(0, 0);
-    ssd1306_WriteString(buf, Font_7x10, White);
-    x_start = (uint8_t)(strlen(buf) * 7 + 1);
+    ssd1306_WriteString((char *)p_in->p_flow_unit_str, Font_7x10, White);
+    x_start = (uint8_t)(strlen(p_in->p_flow_unit_str) * 7 + 8);
 
     /* 温度 + 6x8 度符号位图（字母和数字均为 7x10 字体） */
     temp = p_in->p_temperature->num;

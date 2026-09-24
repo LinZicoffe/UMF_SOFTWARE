@@ -317,7 +317,7 @@
 ```
      0         32         64         96        127
   0  +---------+---------+---------+---------+
-     |12.3KPa 25.1°C              OK|         |  Zone A: Font_7x10, y=0
+     |L/min  25.1°C              OK|         |  Zone A: Font_7x10, y=0
  10  +---------+---------+---------+---------+
      |                                        |
      |                 123.4                  |  Zone B: Font_11x18, y=22
@@ -331,8 +331,8 @@
 **Zone A 数据映射**：
 | x | 内容 | 数据源 | 格式 |
 |---|------|--------|------|
-| 0 | 压力 | `FlowPressure.num` | `xxx.xKPa`，按内容动态占宽 |
-| 动态 | 温度 | `effective_temperature()` | `xx.x°C`，紧随压力 |
+| 0 | 瞬时流量单位 | `param_get_flow_unit_str()` | `m3/h` / `L/h` / `L/min` / `kg/h` |
+| 动态 | 温度 | `effective_temperature()` | `xx.x°C`，紧随单位 |
 | 114 | 通信状态 | `ModuleState` | `OK`/`ER` |
 
 **Zone B 数据映射**：
@@ -340,7 +340,7 @@
 |------|--------|------|
 | 瞬时流量 | `effective_flow_rate()` 经 40023 换算后的值 | 4 位有效数字，自适应 0~3 位小数并居中 |
 
-> 传感器和 Modbus 40001 的基准单位固定为 L/h。OLED 根据 Flow Unit 换算为 m³/h、L/h、L/min 或 kg/h；kg/h 使用当前介质密度。S01 仅显示换算后的数值，单位名称在 S02 显示。
+> 传感器和 Modbus 40001 的基准单位固定为 L/h。OLED 根据 Flow Unit 换算为 m³/h、L/h、L/min 或 kg/h；kg/h 使用当前介质密度。S01 状态栏和 S02 均显示当前瞬时流量单位。
 
 **Zone C 数据映射**：
 | x | 内容 | 数据源 | 格式 |

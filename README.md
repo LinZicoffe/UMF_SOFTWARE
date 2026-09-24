@@ -133,7 +133,7 @@ UFL-1A 模组 ──USART1 (DMA+IDLE)──→ BCD 解码 ──→ 流量/温�
 
 | 页面 | 内容 | 切换方式 |
 |------|------|----------|
-| **S01 主界面** | 压力/温度/通信状态(状态栏) + 瞬时流量(大字) + 累积流量 | K_DOWN/K_UP |
+| **S01 主界面** | 当前瞬时流量单位/温度/通信状态(状态栏) + 瞬时流量(大字) + 累积流量 | K_DOWN/K_UP |
 | **S02 辅助页** | 流量/流速/温度/压力/DAC电流/频率/通信状态/累积量 | K_DOWN/K_UP |
 
 ### 菜单系统
@@ -296,6 +296,7 @@ S03 主菜单 (5 项)
 
 **STM32CubeIDE 构建支持 + Flash 磨损治理 + Modbus 帧健壮性修复**——App 基址/Flash 分区/寄存器映射均不变，可直接替换升级。
 
+- **OLED 累积量显示修复**: 原始单位与所选单位相同、但原始显示串尚未填充时，根据累计计数生成数字，避免主界面只显示 `TOT` 和单位。
 - **新增 STM32CubeIDE 工程** (`STM32CubeIDE/`，仅 App): arm-none-eabi-gcc 并行构建，链接分区与 IAR ICF 一致（FLASH 52KB @0x08002400、RAM 19KB）；post-build `arm-none-eabi-objcopy -O binary --gap-fill 0xFF --pad-to 0x0800F400` 产出升级包 `UMF_app.bin`（与 IAR `ielftool` 产物同规格）；`.gitignore` 排除 CubeIDE 构建产物与本机索引
 - **Flash 磨损治理** (`param_storage`，延迟批量落盘):
   - **setter 变更检测**: 钳位后与当前值比对（float 位级比较），值未变直接返回，不走整页擦写——消除每次上电回写刚加载值、Modbus/菜单重复写同值的无谓擦除
