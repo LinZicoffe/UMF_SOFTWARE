@@ -69,3 +69,4 @@ HostApplication/**/.vs/
 HostApplication/**/*.user
 HostApplication/**/*.suo
 HostApplication/**/packages/
+.claude/skills/

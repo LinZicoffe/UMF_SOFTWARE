@@ -244,19 +244,20 @@ static int handle_packet(uint16_t dlen, bl_proto_result_t *result)
 
 bl_proto_result_t bl_proto_session(void)
 {
-    uint32_t win_start;
-    uint32_t last_c;
-    uint32_t pkt_tmo = packet_timeout_ms();
-    uint8_t  expected_blk = 1u;
-    uint8_t  nak_count = 0u;
-    int      first_byte = -1;
-    uint32_t i;
+    uint32_t win_start;                             /* 会话建立窗口起点 */
+    uint32_t last_c;                                /* 上次发 'C' 的时间戳 */
+    uint32_t pkt_tmo = packet_timeout_ms();         /* 单包超时（§4.6）*/
+    uint8_t  expected_blk = 1u;                     /* 下一个期望包号（XModem 1~255 回绕）*/
+    uint8_t  nak_count = 0u;                        /* 连续 NAK 计数（§4.6）*/
+    int      first_byte = -1;                       /* 进入接收循环前已读的首字节（SOH/STX）*/
+    uint32_t i;                                     /* 用于擦除位图清零循环 */
 
-    s_total = 0u;
-    s_meta_ok = 0u;
-    s_hdr_checked = 0u;
-    s_meta_size = 0u;
-    s_meta_crc = 0u;
+    s_total = 0u;                                   /* 已写入字节数（含填充，D1 口径）*/
+    s_meta_ok = 0u;                                 /* 元数据包已接收且校验通过（D6）*/
+    s_hdr_checked = 0u;                             /* 静态头字段已校验 */
+    s_meta_size = 0u;                               /* 元数据包声明的 img_size */
+    s_meta_crc = 0u;                                /* 元数据包声明的 crc32 */
+    // 清零擦除位图
     for (i = 0u; i < ERASE_BITMAP_BYTES; i++)
     {
         s_erased[i] = 0u;
@@ -268,11 +269,12 @@ bl_proto_result_t bl_proto_session(void)
     for (;;)
     {
         int c;
-
+        // 窗口耗尽：15s 内未收到任何包（调用方决定回跳）
         if (bl_time_elapsed_ms(win_start) >= PROTO_ESTABLISH_MS)
         {
             return BL_PROTO_IDLE_TIMEOUT;
         }
+        // 每 1s 发 'C'（§4.6）提醒工具发包
         if (bl_time_elapsed_ms(last_c) >= PROTO_C_PERIOD_MS)
         {
             bl_usart_putc(XM_C);
@@ -294,15 +296,16 @@ bl_proto_result_t bl_proto_session(void)
     /* ---- 接收循环 ---- */
     for (;;)
     {
-        uint8_t  hdr2[2];
-        uint8_t  crc_b[2];
-        uint16_t crc_recv;
-        uint16_t dlen;
-        int      c = first_byte;
-        first_byte = -1;
-
+        uint8_t  hdr2[2];                           /* 包号 + 反码 */
+        uint8_t  crc_b[2];                          /* CRC16 高低字节 */
+        uint16_t crc_recv;                          /* 接收的 CRC16 */
+        uint16_t dlen;                              /* 数据长度（128B 或 1024B）*/
+        int      c = first_byte;                    /* 进入循环前已读的首字节（SOH/STX）*/
+        first_byte = -1;                            /* 仅在循环首轮使用，后续循环每次都从 USART 读新字节 */
+        // 期望包号（XModem 1~255 回绕）与连续 NAK 计数（§4.6）在每轮循环末尾更新
         if (c < 0)
         {
+            // 进入循环前未读到首字节（SOH/STX），则阻塞等待一个字节（每字节独立超时）
             c = bl_usart_getc(pkt_tmo);
             if (c < 0)
             {
