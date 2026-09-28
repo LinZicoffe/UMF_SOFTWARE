@@ -1,7 +1,6 @@
 #include "lcd.h"
 #include "lcd_init.h"
 #include "lcdfont.h"
-#include "delay.h"
 
 
 /******************************************************************************
@@ -516,7 +515,7 @@ void LCD_ShowFloatNum1(u16 x,u16 y,float num,u8 len,u16 fc,u16 bc,u8 sizey)
 	u8 t,temp,sizex;
 	u16 num1;
 	sizex=sizey/2;
-	num1=num*100;
+	num1=(u16)(num*100);
 	for(t=0;t<len;t++)
 	{
 		temp=(num1/mypow(10,len-t-1))%10;

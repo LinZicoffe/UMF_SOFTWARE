@@ -1,17 +1,4 @@
 #include "lcd_init.h"
-#include "delay.h"
-
-void LCD_GPIO_Init(void)
-{
-	GPIO_InitTypeDef  GPIO_InitStructure;
- 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	 //使能A端口时钟
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0|GPIO_Pin_1|GPIO_Pin_2|GPIO_Pin_3|GPIO_Pin_4|GPIO_Pin_5;	 
- 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; 		 //推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;//速度50MHz
- 	GPIO_Init(GPIOA, &GPIO_InitStructure);	  //初始化GPIOA
- 	GPIO_SetBits(GPIOA,GPIO_Pin_0|GPIO_Pin_1|GPIO_Pin_2|GPIO_Pin_3|GPIO_Pin_4|GPIO_Pin_5);
-}
-
 
 /******************************************************************************
       函数说明：LCD串行数据写入函数
@@ -24,16 +11,16 @@ void LCD_Writ_Bus(u8 dat)
 	LCD_CS_Clr();
 	for(i=0;i<8;i++)
 	{			  
-		LCD_SCLK_Clr();
+		LCD_SCL_Clr();
 		if(dat&0x80)
 		{
-		   LCD_MOSI_Set();
+		   LCD_SDA_Set();
 		}
 		else
 		{
-		   LCD_MOSI_Clr();
+		   LCD_SDA_Clr();
 		}
-		LCD_SCLK_Set();
+		LCD_SCL_Set();
 		dat<<=1;
 	}	
   LCD_CS_Set();	
@@ -128,20 +115,17 @@ void LCD_Address_Set(u16 x1,u16 y1,u16 x2,u16 y2)
 
 void LCD_Init(void)
 {
-	LCD_GPIO_Init();//初始化GPIO
 	
 	LCD_RES_Clr();//复位
-	delay_ms(100);
+	HAL_Delay(100);
 	LCD_RES_Set();
-	delay_ms(100);
+	HAL_Delay(100);
 	
-	LCD_BLK_Set();//打开背光
-  delay_ms(100);
 	
 	
 	//************* Start Initial Sequence **********//
 	LCD_WR_REG(0x11); //Sleep out 
-	delay_ms(120);              //Delay 120ms 
+	HAL_Delay(120);              //Delay 120ms
 
    
 	LCD_WR_REG(0xB2);     

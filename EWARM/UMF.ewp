@@ -237,6 +237,7 @@
                     <name>CCDefines</name>
                     <state>USE_HAL_DRIVER</state>
                     <state>STM32F103xB</state>
+                    <state>LCD_SMOKE_TEST</state>
                 </option>
                 <option>
                     <name>CCPreprocFile</name>
@@ -364,6 +365,7 @@
                     <state>$PROJ_DIR$/../Drivers/CMSIS/Include</state>
                     <state>$PROJ_DIR$/../BSP</state>
                     <state>$PROJ_DIR$/../OLED</state>
+                    <state>$PROJ_DIR$/../newOLED</state>
                 </option>
                 <option>
                     <name>CCStdIncCheck</name>
@@ -1160,6 +1162,15 @@
             </file>
             <file>
                 <name>$PROJ_DIR$\..\OLED\ssd1306_fonts.c</name>
+            </file>
+        </group>
+        <group>
+            <name>newOLED</name>
+            <file>
+                <name>$PROJ_DIR$\..\newOLED\lcd.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\newOLED\lcd_init.c</name>
             </file>
         </group>
         <group>
