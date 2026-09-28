@@ -27,7 +27,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* 临时屏幕验屏；正式业务运行前注释掉此宏。 */
-#define LCD_SMOKE_TEST
+// #define LCD_SMOKE_TEST
 
 #include "bmp.h"
 #include "key.h"
