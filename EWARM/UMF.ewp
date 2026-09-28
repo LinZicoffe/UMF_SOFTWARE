@@ -1136,6 +1136,9 @@
                 <name>$PROJ_DIR$\..\BSP\run_display.c</name>
             </file>
             <file>
+                <name>$PROJ_DIR$\..\BSP\display.c</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\..\BSP\param_storage.c</name>
             </file>
             <file>

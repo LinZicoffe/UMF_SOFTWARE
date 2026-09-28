@@ -5,6 +5,7 @@
  */
 #ifndef SSD1306_CONF_H
 #define SSD1306_CONF_H
+#include "display_config.h"
 
 /* 使用 SPI 模式 */
 #define SSD1306_USE_SPI
@@ -29,9 +30,11 @@
  *   推过 64KB Flash 边界, 读取返回 0xFF -> 字符渲染为实心白方块.
  * 解决方案: 临时禁用 Font_16x26, run_display.c 已有 #elif Font_11x18 fallback. */
 #define SSD1306_INCLUDE_FONT_6x8       /* 状态栏 + 辅助页 ≈1.1KB */
+#if !DISPLAY_ST7789
 #define SSD1306_INCLUDE_FONT_7x10      /* 主界面状态栏 + 累积量 ≈1.9KB */
 #define SSD1306_INCLUDE_FONT_11x18     /* 瞬时流量大字 ≈3.4KB */
 /* #define SSD1306_INCLUDE_FONT_16x26 */  /* 暂时禁用 ≈5KB - Flash 越界根因 */
+#endif
 
 /* bit-bang SPI 自定义标志 — ssd1306.c 中用条件编译选择 bit-bang 路径 */
 #define SSD1306_BITBANG_SPI

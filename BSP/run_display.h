@@ -41,5 +41,6 @@ void              run_display_set_page(run_page_t page);
 run_page_t        run_display_get_page(void);
 void              run_display_next_page(void);
 void              run_display_prev_page(void);
+void              run_display_invalidate(void);
 
 #endif /* RUN_DISPLAY_H */

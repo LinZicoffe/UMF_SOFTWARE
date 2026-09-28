@@ -7,7 +7,7 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - **超声波流量采集**: 通过 USART1 与 UFL-1A 超声波流量模组通信（自定义 BCD 协议），解析瞬时流量、温度、压力、累积流量
 - **Modbus RTU 从站**: USART2 作为 Modbus RTU 从站（地址 2），支持功能码 01/03/04/05/06/10
 - **4~20mA DAC 输出**: TIM1/TIM4 PWM 模拟输出，支持零点和满度校准
-- **OLED 显示**: SSD1306 128×64，SPI bit-bang 驱动，支持 S01/S02 页面切换、7×10 字体菜单，以及瞬时/累积流量按所选单位换算显示
+- **双屏显示**: 编译宏选择 SSD1306 128×64 或 ST7789 240×240；两种屏幕共用数据与菜单操作，彩屏使用黑底彩色重点信息
 - **参数存储**: Page 61~63（0x0800F400~0x0800FFFF）三页轮转整页镜像存储（PPG1 页头 + 双 CRC16 + 16B BL 通信槽），提交任一时刻掉电至多损坏一页；首次升级自动从旧 Page 54~63 数据迁移（含页 8 BL 备份块补缺）
 - **IAP Bootloader 配套 (v2.4.0)**: App 基址迁至 0x08002400（VTOR 重定位），32B 固件头 @0x08002600，RAM 共享邮箱（暖复位 G3 启动计数/升级请求），Modbus 40127 触发进 BL、40128~40131 固件信息回读；IWDG 放宽至 ~1s 适配 Flash 整页提交
 - **瞬时流量滤波**: 2~10 点滑动窗口去最大值平均 + 一阶低通，窗口点数、低通时间常数和采样间隔可通过 RS-485/Modbus 修改并持久化
@@ -21,6 +21,7 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 |------|------|
 | MCU | STM32F103C8T6 (ARM Cortex-M3, 72MHz, **64KB Flash, 20KB RAM**) |
 | OLED | SSD1306 128×64, SPI bit-bang (PB0=CLK, PA4=SDA, PA5=RES, PA6=DC, PA7=CS) |
+| 彩屏 | ST7789 240×240，沿用 PB0/PA4~PA7 五线软件 SPI 接线 |
 | 流量模组 | UFL-1A (USART1, PA9/PA10, 自定义 BCD 协议) |
 | Modbus | RS-485 (USART2, PA2/PA3, PA1=DE) |
 | DAC 输出 | PWM (TIM1_CH1=PA8 高字节, TIM4_CH1=PB6 低字节) |
@@ -56,6 +57,7 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - 无 Makefile/CMakeLists.txt，仅通过 IAR IDE 或 STM32CubeIDE 构建
 - **新增 `.c` 文件登记**: IAR 必须手动添加到 `EWARM/UMF.ewp` 中对应 `<group>` 节点；CubeIDE 中 BSP/OLED 为整目录链接（自动编译新文件），Core/Drivers 为逐文件链接，新文件需在 `STM32CubeIDE/.project` 中登记
 - 编译器宏定义: `USE_HAL_DRIVER`, `STM32F103xB`
+- **屏幕选择**: `BSP/display_config.h` 的 `DISPLAY_ST7789` 设为 `1` 构建 ST7789 固件，设为 `0` 构建 SSD1306 固件；切换后重新构建 App。两者不能在同一固件中运行时切换。
 - **Flash 分区 (v2.4.0)**：页 0~7 BL / 页 8 BL 备份 / 页 9~60 App (0x08002400 起，VTOR=0x2400) / 页 61~63 参数三页轮转——**SWD 下载 App 严禁整片擦除（会抹掉 BL 与参数区），必须按段/按范围擦除**
 - 首次刷 BL 前建议全片备份；现场切换与回滚步骤见 `BL更新日志.md`
 
@@ -291,6 +293,12 @@ S03 主菜单 (5 项)
 5. **DAC 输出异常** — 校准 DA-ZERO 和 DA-FULL
 
 ## 版本日志
+
+### 双屏适配 (2026-09-28)
+
+- 业务显示统一经 `OLED_*` 接口调用；SSD1306 保留 128×64 布局，ST7789 的运行页与六类菜单界面按 240×240 重新排版。
+- ST7789 使用黑底和彩色重点信息，运行页只重绘变化的数据区域；完整页面切换及菜单重绘会清屏。两款屏幕均沿用现有按键、通信与 DAC 逻辑。
+- IAR 两种宏设置均已编译通过；实屏显示、刷新时间及通信影响仍需在目标硬件上验证。
 
 ### v2.4.1 (2026-09-24)
 
