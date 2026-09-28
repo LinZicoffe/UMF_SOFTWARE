@@ -186,7 +186,7 @@ int main(void)
             }
         }
 
-        /* OLED 抗干扰自愈: 周期性重发 SSD1306 配置命令
+        /* 屏幕抗干扰自愈: 周期性重发控制器配置命令，不触发整屏重绘。
          * 间隔由 param_get_oled_recovery_interval() 控制 (单位 100ms, 即 10×10ms)
          * 0 = 禁用; 默认 50 = 5 秒
          * 仅在菜单未激活时执行, 避免重初始化打断菜单交互 */
@@ -198,9 +198,6 @@ int main(void)
             {
                 OledRecoveryTimeBase = 0;
                 OLED_Recovery();
-#if DISPLAY_ST7789
-                run_display_invalidate();
-#endif
             }
         }
 
