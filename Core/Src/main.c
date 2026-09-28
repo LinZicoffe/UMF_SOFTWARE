@@ -228,6 +228,7 @@ int main(void)
                     .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
                     .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
                 };
+                
                 run_display_render(&input);
             }
             ssd1306_UpdateScreen();
