@@ -9,6 +9,7 @@ EWARM/UMF/.ninja_deps
 EWARM/UMF/.ninja_log
 EWARM/UMF/.UMF_build_cache
 EWARM/UMF/BrowseInfo/
+EWARM/UMF_Boot/BrowseInfo/
 EWARM/**/settings/
 *.dep
 *.dt7
@@ -44,6 +45,7 @@ EWARM/**/settings/
 /STM32CubeIDE/Release/
 /STM32CubeIDE/.settings/language.settings.xml
 /STM32CubeIDE/.settings/stm32cubeide.project.prefs
+/STM32CubeIDE/UMF.launch
 
 # OS 生成文件
 Thumbs.db
