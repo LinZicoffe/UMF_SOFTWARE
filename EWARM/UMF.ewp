@@ -237,7 +237,6 @@
                     <name>CCDefines</name>
                     <state>USE_HAL_DRIVER</state>
                     <state>STM32F103xB</state>
-                    <state>LCD_SMOKE_TEST</state>
                 </option>
                 <option>
                     <name>CCPreprocFile</name>
