@@ -26,6 +26,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+/* 临时屏幕验屏；正式业务运行前注释掉此宏。 */
+// #define LCD_SMOKE_TEST
+
 #include "bmp.h"
 #include "key.h"
 #include "bsp_menu.h"
@@ -36,6 +39,9 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "cal_table.h"
+#ifdef LCD_SMOKE_TEST
+#include "lcd_init.h"
+#endif
 
 /* USER CODE END Includes */
 
@@ -156,12 +162,33 @@ int main(void)
     EnableUart_IT_IDLE(&huart1, &Uart1ReceiveType);
     EnableUart_IT_IDLE(&huart2, &Uart2ReceiveType);
     FlowPassiveReadCmdEnable = 1;
+#ifdef LCD_SMOKE_TEST
+    IWDG->KR = 0xAAAAu;
+    LCD_Init();
+#else
     run_display_init(NULL);  /* NULL = 使用默认配置 (200ms 刷新) */
+#endif
     MX_IWDG_Init();
     /* §5.4 启动序列收尾：参数迁移已确认完成（param_storage_init 返回），
      * 清除邮箱 cmd 并清零 G3 计数。此后发生的复位（看门狗/断电）由 BL
      * 按 App 有效性与 G3 重新判定，不会误入升级模式。*/
     boot_mailbox_clear();
+#ifdef LCD_SMOKE_TEST
+    /* 清除上电后未初始化的显存；分段写入以免软件 SPI 阻塞看门狗。 */
+    for (uint16_t y = 0; y < LCD_H; y += 8)
+    {
+        LCD_Fill(0, y, LCD_W, y + 8, BLACK);
+        HAL_IWDG_Refresh(&hiwdg);
+    }
+    /* 色块和文字用于验屏。 */
+    LCD_Fill(0, 0, 48, 48, RED);
+    HAL_IWDG_Refresh(&hiwdg);
+    LCD_Fill(48, 0, 96, 48, GREEN);
+    HAL_IWDG_Refresh(&hiwdg);
+    LCD_Fill(96, 0, 144, 48, BLUE);
+    HAL_IWDG_Refresh(&hiwdg);
+    LCD_ShowString(8, 64, (const u8 *)"LCD OK", WHITE, BLACK, 16, 0);
+#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -171,6 +198,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+#ifdef LCD_SMOKE_TEST
+        HAL_IWDG_Refresh(&hiwdg);
+        Uart2_Communication();
+        HAL_Delay(1);
+#else
 
         /* 按键事件 + 菜单处理 */
         {
@@ -228,6 +260,7 @@ int main(void)
                     .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
                     .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
                 };
+                
                 run_display_render(&input);
             }
             ssd1306_UpdateScreen();
@@ -274,6 +307,7 @@ int main(void)
         /* PWM 输出 — 在 DAC 换算之后，确保使用最新 DacValue */
         PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
         PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
+#endif
     }
   /* USER CODE END 3 */
 }
