@@ -607,6 +607,35 @@ static void render_list_selection(nav_frame_t *f, const list_item_t *items,
     }
 }
 
+static void render_coeff_digit(const nav_frame_t *f, uint8_t i)
+{
+    uint16_t x = (uint16_t)(57U + i * 22U + (i >= 2U ? 18U : 0U));
+    char digit[2];
+    OLED_FillRectangle(x - 2U, 62, x + 19U, 91,
+                       i == f->cursor ? OLED_BLUE : OLED_BLACK);
+    digit[0] = (char)('0' + f->coeff_digits[i]);
+    digit[1] = '\0';
+    OLED_DrawText(x, 65, digit, OLED_FONT_MEDIUM, OLED_YELLOW,
+                  i == f->cursor ? OLED_BLUE : OLED_BLACK);
+    if (i == 2U)
+        OLED_DrawText(100, 65, ".", OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+}
+
+static void render_numeric_value(const nav_frame_t *f, float old_value)
+{
+    const num_desc_t *desc = &c_num_desc[f->screen_id];
+    char buf[32];
+    uint16_t width, x;
+    if (f->edit_val == old_value) return;
+    ftoa(old_value, desc->decimals, buf, sizeof(buf));
+    width = OLED_TextWidth(buf, OLED_FONT_MEDIUM);
+    x = width < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - width) / 2U) : 0U;
+    OLED_FillRectangle(x, 65, x + width - 1U,
+                       65U + OLED_FontHeight(OLED_FONT_MEDIUM) - 1U, OLED_BLACK);
+    ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
+    lcd_center(65, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
+}
+
 static void render_numeric(nav_frame_t *f)
 {
     const num_desc_t *desc = &c_num_desc[f->screen_id];
@@ -616,15 +645,7 @@ static void render_numeric(nav_frame_t *f)
     get_numeric_range(f->screen_id, &min_val, &max_val);
     lcd_title(f->screen_id);
     if (is_coeff_screen(f->screen_id)) {
-        for (i = 0; i < COEFF_DIGIT_COUNT; i++) {
-            uint16_t x = (uint16_t)(57U + i * 22U + (i >= 2U ? 18U : 0U));
-            buf[0] = (char)('0' + f->coeff_digits[i]);
-            buf[1] = '\0';
-            if (i == f->cursor) OLED_FillRectangle(x - 2U, 62, x + 19U, 91, OLED_BLUE);
-            OLED_DrawText(x, 65, buf, OLED_FONT_MEDIUM, OLED_YELLOW,
-                          i == f->cursor ? OLED_BLUE : OLED_BLACK);
-        }
-        OLED_DrawText(100, 65, ".", OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+        for (i = 0; i < COEFF_DIGIT_COUNT; i++) render_coeff_digit(f, i);
     } else {
         ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
         lcd_center(65, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
@@ -649,34 +670,76 @@ static void render_numeric(nav_frame_t *f)
     OLED_DrawText(8, 190, buf, OLED_FONT_SMALL, OLED_CYAN, OLED_BLACK);
 }
 
-static void render_enum(nav_frame_t *f)
+static void get_enum_data(screen_t screen, const char * const **opts,
+                          uint8_t *count)
 {
-    const char * const *opts = NULL;
-    uint8_t count = 0, i;
-    int8_t start;
-    switch (f->screen_id) {
-    case SCR_STD_COND: opts = param_get_std_cond_strings(); count = STD_COND_COUNT; break;
-    case SCR_FLOW_UNIT: opts = param_get_flow_unit_strings(); count = FLOW_UNIT_COUNT; break;
-    case SCR_TOTAL_UNIT: opts = param_get_total_unit_strings(); count = TOTAL_UNIT_COUNT; break;
-    case SCR_PULSE_EQUIV: opts = param_get_pulse_equiv_strings(); count = PULSE_EQUIV_COUNT; break;
-    case SCR_BAUD_RATE: opts = param_get_baud_rate_strings(); count = BAUD_RATE_COUNT; break;
-    case SCR_LANGUAGE: opts = s_language_str; count = LANG_COUNT; break;
+    *opts = NULL;
+    *count = 0U;
+    switch (screen) {
+    case SCR_STD_COND: *opts = param_get_std_cond_strings(); *count = STD_COND_COUNT; break;
+    case SCR_FLOW_UNIT: *opts = param_get_flow_unit_strings(); *count = FLOW_UNIT_COUNT; break;
+    case SCR_TOTAL_UNIT: *opts = param_get_total_unit_strings(); *count = TOTAL_UNIT_COUNT; break;
+    case SCR_PULSE_EQUIV: *opts = param_get_pulse_equiv_strings(); *count = PULSE_EQUIV_COUNT; break;
+    case SCR_BAUD_RATE: *opts = param_get_baud_rate_strings(); *count = BAUD_RATE_COUNT; break;
+    case SCR_LANGUAGE: *opts = s_language_str; *count = LANG_COUNT; break;
     default: break;
     }
-    lcd_title(f->screen_id);
-    if (!opts) return;
-    start = (int8_t)f->enum_val - 2;
+}
+
+static uint8_t enum_window_start(uint8_t selected, uint8_t count)
+{
+    int8_t start = (int8_t)selected - 2;
     if (start < 0) start = 0;
     if (start + 6 > (int8_t)count) start = (int8_t)count - 6;
-    if (start < 0) start = 0;
-    for (i = 0; i < 6U && start + i < count; i++) {
-        uint16_t y = (uint16_t)(38U + 32U * i);
-        uint8_t selected = (uint8_t)(start + i) == f->enum_val;
-        if (selected) OLED_FillRectangle(5, y - 4U, 234, y + 22U, OLED_BLUE);
-        OLED_DrawText(11, y, opts[start + i], OLED_FONT_SMALL,
-                      selected ? OLED_YELLOW : OLED_WHITE,
-                      selected ? OLED_BLUE : OLED_BLACK);
+    return (uint8_t)(start < 0 ? 0 : start);
+}
+
+static void render_enum_row(const nav_frame_t *f, const char * const *opts,
+                             uint8_t idx, uint8_t row)
+{
+    uint16_t y = (uint16_t)(38U + 32U * row);
+    uint8_t selected = idx == f->enum_val;
+    OLED_FillRectangle(5, y - 4U, 239, y + 22U, OLED_BLACK);
+    if (selected) OLED_FillRectangle(5, y - 4U, 234, y + 22U, OLED_BLUE);
+    OLED_DrawText(11, y, opts[idx], OLED_FONT_SMALL,
+                  selected ? OLED_YELLOW : OLED_WHITE,
+                  selected ? OLED_BLUE : OLED_BLACK);
+}
+
+static void render_enum_rows(const nav_frame_t *f, const char * const *opts,
+                              uint8_t count, uint8_t start)
+{
+    uint8_t i;
+    for (i = 0; i < 6U && start + i < count; i++)
+        render_enum_row(f, opts, (uint8_t)(start + i), i);
+}
+
+static void render_enum_selection(nav_frame_t *f, uint8_t old_value)
+{
+    const char * const *opts;
+    uint8_t count, old_start, new_start;
+    if (f->enum_val == old_value) return;
+    get_enum_data(f->screen_id, &opts, &count);
+    if (!opts) return;
+    old_start = enum_window_start(old_value, count);
+    new_start = enum_window_start(f->enum_val, count);
+    if (new_start != old_start) {
+        OLED_FillRectangle(5, 34, 239, 220, OLED_BLACK);
+        render_enum_rows(f, opts, count, new_start);
+    } else {
+        render_enum_row(f, opts, old_value, (uint8_t)(old_value - new_start));
+        render_enum_row(f, opts, f->enum_val, (uint8_t)(f->enum_val - new_start));
     }
+}
+
+static void render_enum(nav_frame_t *f)
+{
+    const char * const *opts;
+    uint8_t count;
+    get_enum_data(f->screen_id, &opts, &count);
+    lcd_title(f->screen_id);
+    if (!opts) return;
+    render_enum_rows(f, opts, count, enum_window_start(f->enum_val, count));
 }
 
 static void render_password_digit(const nav_frame_t *f, uint8_t i)
@@ -732,6 +795,18 @@ static void render_readonly(nav_frame_t *f)
     }
 }
 
+static void render_confirm_buttons(const nav_frame_t *f)
+{
+    OLED_FillRectangle(25, 166, 107, 201,
+                       f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
+    OLED_FillRectangle(130, 166, 212, 201,
+                       f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
+    OLED_DrawText(46, 176, "YES", OLED_FONT_SMALL, OLED_WHITE,
+                  f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
+    OLED_DrawText(155, 176, "NO", OLED_FONT_SMALL, OLED_WHITE,
+                  f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
+}
+
 static void render_confirm(nav_frame_t *f)
 {
     lcd_title(f->screen_id);
@@ -742,12 +817,7 @@ static void render_confirm(nav_frame_t *f)
         lcd_center(65, "All parameters", OLED_FONT_SMALL, OLED_WHITE);
         lcd_center(94, "will be DEFAULT", OLED_FONT_SMALL, OLED_RED);
     }
-    if (f->confirm_sel == 1U) OLED_FillRectangle(25, 166, 107, 201, OLED_BLUE);
-    else OLED_FillRectangle(130, 166, 212, 201, OLED_BLUE);
-    OLED_DrawText(46, 176, "YES", OLED_FONT_SMALL, OLED_WHITE,
-                  f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
-    OLED_DrawText(155, 176, "NO", OLED_FONT_SMALL, OLED_WHITE,
-                  f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
+    render_confirm_buttons(f);
 }
 
 static void render_current_frame_with_clear(uint8_t clear_background)
@@ -1230,6 +1300,10 @@ static void handle_numeric(key_event_t evt)
     const num_desc_t *desc = &c_num_desc[f->screen_id];
     float min_val;
     float max_val;
+#if DISPLAY_ST7789
+    uint8_t old_cursor = f->cursor;
+    float old_value = f->edit_val;
+#endif
 
     get_numeric_range(f->screen_id, &min_val, &max_val);
 
@@ -1238,14 +1312,27 @@ static void handle_numeric(key_event_t evt)
         case KEY_UP:
             f->coeff_digits[f->cursor] =
                 (uint8_t)((f->coeff_digits[f->cursor] + 1U) % 10U);
+#if DISPLAY_ST7789
+            render_coeff_digit(f, f->cursor);
+            return;
+#endif
             break;
         case KEY_DOWN:
             f->coeff_digits[f->cursor] =
                 (uint8_t)((f->coeff_digits[f->cursor] + 9U) % 10U);
+#if DISPLAY_ST7789
+            render_coeff_digit(f, f->cursor);
+            return;
+#endif
             break;
         case KEY_ENTER:
             if (f->cursor < (COEFF_DIGIT_COUNT - 1U)) {
                 f->cursor++;
+#if DISPLAY_ST7789
+                render_coeff_digit(f, old_cursor);
+                render_coeff_digit(f, f->cursor);
+                return;
+#endif
             } else {
                 float val = coeff_value_from_digits(f);
                 if (val < min_val) val = min_val;
@@ -1270,10 +1357,18 @@ static void handle_numeric(key_event_t evt)
     case KEY_UP:
         f->edit_val += desc->step;
         if (f->edit_val > max_val) f->edit_val = max_val;
+#if DISPLAY_ST7789
+        render_numeric_value(f, old_value);
+        return;
+#endif
         break;
     case KEY_DOWN:
         f->edit_val -= desc->step;
         if (f->edit_val < min_val) f->edit_val = min_val;
+#if DISPLAY_ST7789
+        render_numeric_value(f, old_value);
+        return;
+#endif
         break;
     case KEY_ENTER:
         save_param_val(f->screen_id, f->edit_val);
@@ -1295,6 +1390,9 @@ static void handle_enum(key_event_t evt)
 {
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
     uint8_t max_val = 0;
+#if DISPLAY_ST7789
+    uint8_t old_value = f->enum_val;
+#endif
 
     /* 获取枚举最大值 */
     switch (f->screen_id) {
@@ -1310,9 +1408,17 @@ static void handle_enum(key_event_t evt)
     switch (evt) {
     case KEY_UP:
         if (f->enum_val > 0) f->enum_val--;
+#if DISPLAY_ST7789
+        render_enum_selection(f, old_value);
+        return;
+#endif
         break;
     case KEY_DOWN:
         if (f->enum_val < max_val) f->enum_val++;
+#if DISPLAY_ST7789
+        render_enum_selection(f, old_value);
+        return;
+#endif
         break;
     case KEY_ENTER:
         save_enum_idx(f->screen_id, f->enum_val);
@@ -1435,6 +1541,10 @@ static void handle_confirm(key_event_t evt)
     case KEY_UP:
     case KEY_DOWN:
         f->confirm_sel = f->confirm_sel ? 0 : 1;
+#if DISPLAY_ST7789
+        render_confirm_buttons(f);
+        return;
+#endif
         break;
     case KEY_ENTER:
         if (f->confirm_sel == 1) {
