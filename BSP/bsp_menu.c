@@ -545,12 +545,14 @@ static void erase_password_page(void)
     const char *range = "Range:000~999";
     uint16_t width = OLED_TextWidth(title, OLED_FONT_SMALL);
     uint16_t x = (uint16_t)((OLED_WIDTH - width) / 2U);
-    OLED_FillRectangle(x, 5, x + width - 1U, 20, OLED_BLACK);
+    OLED_FillRectangle(x, 5, x + width - 1U,
+                       5U + OLED_FontHeight(OLED_FONT_SMALL) - 1U, OLED_BLACK);
     OLED_FillRectangle(8, 27, 231, 28, OLED_BLACK);
     OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
     width = OLED_TextWidth(range, OLED_FONT_SMALL);
     x = (uint16_t)((OLED_WIDTH - width) / 2U);
-    OLED_FillRectangle(x, 180, x + width - 1U, 195, OLED_BLACK);
+    OLED_FillRectangle(x, 180, x + width - 1U,
+                       180U + OLED_FontHeight(OLED_FONT_SMALL) - 1U, OLED_BLACK);
 }
 
 static void render_list_row(const nav_frame_t *f, const list_item_t *items,

@@ -40,6 +40,11 @@ static uint8_t font_scale(oled_font_t font)
     return (uint8_t)(font + 2U);
 }
 
+static SSD1306_Font_t lcd_font_data(oled_font_t font)
+{
+    return font == OLED_FONT_SMALL ? Font_7x10 : Font_6x8;
+}
+
 static void stream_color(uint16_t color)
 {
     LCD_StreamWrite8((uint8_t)(color >> 8));
@@ -86,19 +91,23 @@ void OLED_Clear(uint16_t color)
     OLED_FillRectangle(0, 0, OLED_WIDTH - 1U, OLED_HEIGHT - 1U, color);
 }
 
-static void draw_char(uint16_t x, uint16_t y, char ch, uint8_t scale,
+static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
                       uint16_t fg, uint16_t bg)
 {
     uint8_t row, col, sy, sx;
+    uint8_t scale = font_scale(font);
+    SSD1306_Font_t glyph_font = lcd_font_data(font);
+    uint16_t width = (uint16_t)(glyph_font.width * scale);
+    uint16_t height = (uint16_t)(glyph_font.height * scale);
     uint16_t bits;
-    if (ch < 32 || ch > 126 || x + 6U * scale > OLED_WIDTH ||
-        y + 8U * scale > OLED_HEIGHT) return;
-    LCD_Address_Set(x, y, x + 6U * scale - 1U, y + 8U * scale - 1U);
+    if (ch < 32 || ch > 126 || x + width > OLED_WIDTH ||
+        y + height > OLED_HEIGHT) return;
+    LCD_Address_Set(x, y, x + width - 1U, y + height - 1U);
     LCD_StreamBegin();
-    for (row = 0; row < 8; row++) {
-        bits = Font_6x8.data[((uint8_t)ch - 32U) * 8U + row];
+    for (row = 0; row < glyph_font.height; row++) {
+        bits = glyph_font.data[((uint8_t)ch - 32U) * glyph_font.height + row];
         for (sy = 0; sy < scale; sy++) {
-            for (col = 0; col < 6; col++) {
+            for (col = 0; col < glyph_font.width; col++) {
                 uint16_t pixel = (bits & (0x8000U >> col)) ? fg : bg;
                 for (sx = 0; sx < scale; sx++) stream_color(pixel);
             }
@@ -111,22 +120,22 @@ void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
                    uint16_t foreground, uint16_t background)
 {
     uint8_t scale = font_scale(font);
-    uint16_t step = (uint16_t)(6U * scale);
+    uint16_t step = (uint16_t)(lcd_font_data(font).width * scale);
     if (!text) return;
     while (*text && x + step <= OLED_WIDTH) {
-        draw_char(x, y, *text++, scale, foreground, background);
+        draw_char(x, y, *text++, font, foreground, background);
         x += step;
     }
 }
 
 uint16_t OLED_TextWidth(const char *text, oled_font_t font)
 {
-    return text ? (uint16_t)(strlen(text) * 6U * font_scale(font)) : 0U;
+    return text ? (uint16_t)(strlen(text) * lcd_font_data(font).width * font_scale(font)) : 0U;
 }
 
 uint8_t OLED_FontHeight(oled_font_t font)
 {
-    return (uint8_t)(8U * font_scale(font));
+    return (uint8_t)(lcd_font_data(font).height * font_scale(font));
 }
 
 void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
