@@ -41,6 +41,9 @@ void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
 uint16_t OLED_TextWidth(const char *text, oled_font_t font);
 uint8_t OLED_FontHeight(oled_font_t font);
 void OLED_Present(void);
+#if DISPLAY_ST7789
+void OLED_SetDisplayEnabled(uint8_t enabled);
+#endif
 
 /* 与原页面的光标式绘制接口保持一致，供 128x64 排版使用。 */
 void OLED_SetCursor(uint16_t x, uint16_t y);

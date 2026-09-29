@@ -175,6 +175,9 @@ int main(void)
         {
             key_event_t evt = key_get_event();
             menu_status_t menu_st;
+#if DISPLAY_ST7789
+            uint8_t menu_was_active = menu_is_active();
+#endif
             if (menu_process(evt, &menu_st)) {
                 /* 菜单已激活并渲染 */
             }
@@ -184,6 +187,12 @@ int main(void)
             else if (evt == KEY_DOWN && !menu_is_active()) {
                 run_display_next_page();
             }
+#if DISPLAY_ST7789
+            if (menu_was_active && !menu_is_active()) {
+                DisplayTimeBase = 20;
+                OledRecoveryTimeBase = 0;
+            }
+#endif
         }
 
         /* 屏幕抗干扰自愈: 周期性重发控制器配置命令，不触发整屏重绘。

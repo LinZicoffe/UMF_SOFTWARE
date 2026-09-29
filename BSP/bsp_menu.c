@@ -233,6 +233,9 @@ static int8_t             s_nav_depth;           /* -1 = 不活跃 */
 static volatile uint16_t  s_idle_counter;        /* ISR 递增 */
 static menu_config_t      s_config;
 static access_level_t     s_access_level;
+#if DISPLAY_ST7789
+static screen_t           s_rendered_screen = SCR_COUNT;
+#endif
 
 /* ===== 栈操作 ===== */
 static void nav_push(menu_mode_t mode, screen_t scr)
@@ -532,31 +535,75 @@ static void lcd_center(uint16_t y, const char *text, oled_font_t font,
 
 static void lcd_title(screen_t screen)
 {
-    OLED_Clear(OLED_BLACK);
     lcd_center(5, get_screen_title(screen), OLED_FONT_SMALL, OLED_CYAN);
     OLED_FillRectangle(8, 27, 231, 28, OLED_CYAN);
+}
+
+static void erase_password_page(void)
+{
+    const char *title = get_screen_title(SCR_PASSWORD);
+    const char *range = "Range:000~999";
+    uint16_t width = OLED_TextWidth(title, OLED_FONT_SMALL);
+    uint16_t x = (uint16_t)((OLED_WIDTH - width) / 2U);
+    OLED_FillRectangle(x, 5, x + width - 1U, 20, OLED_BLACK);
+    OLED_FillRectangle(8, 27, 231, 28, OLED_BLACK);
+    OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
+    width = OLED_TextWidth(range, OLED_FONT_SMALL);
+    x = (uint16_t)((OLED_WIDTH - width) / 2U);
+    OLED_FillRectangle(x, 180, x + width - 1U, 195, OLED_BLACK);
+}
+
+static void render_list_row(const nav_frame_t *f, const list_item_t *items,
+                            uint8_t idx, uint8_t row)
+{
+    char label[19];
+    uint16_t y = (uint16_t)(38U + 32U * row);
+    uint8_t selected = idx == f->cursor;
+    OLED_FillRectangle(5, y - 4U, 234, y + 22U,
+                       selected ? OLED_BLUE : OLED_BLACK);
+    strncpy(label, items[idx].label, sizeof(label) - 1U);
+    label[sizeof(label) - 1U] = '\0';
+    OLED_DrawText(11, y, label, OLED_FONT_SMALL,
+                  selected ? OLED_YELLOW : OLED_WHITE,
+                  selected ? OLED_BLUE : OLED_BLACK);
+}
+
+static void render_list_rows(const nav_frame_t *f, const list_item_t *items,
+                             uint8_t count)
+{
+    uint8_t i;
+    for (i = 0; i < 6U && f->scroll + i < count; i++)
+        render_list_row(f, items, (uint8_t)(f->scroll + i), i);
 }
 
 static void render_list(nav_frame_t *f)
 {
     const list_item_t *items;
-    uint8_t count, i;
-    char label[19];
+    uint8_t count;
     get_list_data(f->screen_id, &items, &count);
     lcd_title(f->screen_id);
     if (!items || count == 0U) return;
-    if (f->cursor >= 6U) f->scroll = (uint8_t)(f->cursor - 5U);
-    else f->scroll = 0U;
-    for (i = 0; i < 6U && f->scroll + i < count; i++) {
-        uint8_t idx = (uint8_t)(f->scroll + i);
-        uint16_t y = (uint16_t)(38U + 32U * i);
-        uint8_t selected = idx == f->cursor;
-        strncpy(label, items[idx].label, sizeof(label) - 1U);
-        label[sizeof(label) - 1U] = '\0';
-        if (selected) OLED_FillRectangle(5, y - 4U, 234, y + 22U, OLED_BLUE);
-        OLED_DrawText(11, y, label, OLED_FONT_SMALL,
-                      selected ? OLED_YELLOW : OLED_WHITE,
-                      selected ? OLED_BLUE : OLED_BLACK);
+    f->scroll = f->cursor >= 6U ? (uint8_t)(f->cursor - 5U) : 0U;
+    render_list_rows(f, items, count);
+}
+
+static void render_list_selection(nav_frame_t *f, const list_item_t *items,
+                                   uint8_t count, uint8_t old_cursor,
+                                   uint8_t old_scroll)
+{
+    uint8_t new_scroll;
+    if (f->cursor == old_cursor) return;
+    new_scroll = f->cursor >= 6U ? (uint8_t)(f->cursor - 5U) : 0U;
+    f->scroll = new_scroll;
+    if (new_scroll != old_scroll) {
+        /* 窗口移动时只重画列表区，标题保持不变。 */
+        OLED_FillRectangle(5, 34, 234, 220, OLED_BLACK);
+        render_list_rows(f, items, count);
+    } else {
+        render_list_row(f, items, old_cursor,
+                        (uint8_t)(old_cursor - new_scroll));
+        render_list_row(f, items, f->cursor,
+                        (uint8_t)(f->cursor - new_scroll));
     }
 }
 
@@ -632,24 +679,34 @@ static void render_enum(nav_frame_t *f)
     }
 }
 
-static void render_password(nav_frame_t *f)
+static void render_password_digit(const nav_frame_t *f, uint8_t i)
 {
     char digit[2];
+    uint16_t x = (uint16_t)(72U + 34U * i);
+    OLED_FillRectangle(x - 3U, 84, x + 26U, 122,
+                       f->cursor == i ? OLED_BLUE : OLED_BLACK);
+    digit[0] = (char)('0' + f->pwd_digits[i]);
+    digit[1] = '\0';
+    OLED_DrawText(x, 88, digit, OLED_FONT_LARGE, OLED_YELLOW,
+                  f->cursor == i ? OLED_BLUE : OLED_BLACK);
+}
+
+static void render_password_content(const nav_frame_t *f)
+{
     uint8_t i;
-    lcd_title(SCR_PASSWORD);
+    OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
     if (f->pwd_err_visible) {
         lcd_center(86, "Password", OLED_FONT_MEDIUM, OLED_RED);
         lcd_center(125, "Error!", OLED_FONT_MEDIUM, OLED_RED);
         return;
     }
-    for (i = 0; i < 3U; i++) {
-        uint16_t x = (uint16_t)(72U + 34U * i);
-        digit[0] = (char)('0' + f->pwd_digits[i]);
-        digit[1] = '\0';
-        if (f->cursor == i) OLED_FillRectangle(x - 3U, 84, x + 26U, 122, OLED_BLUE);
-        OLED_DrawText(x, 88, digit, OLED_FONT_LARGE, OLED_YELLOW,
-                      f->cursor == i ? OLED_BLUE : OLED_BLACK);
-    }
+    for (i = 0; i < 3U; i++) render_password_digit(f, i);
+}
+
+static void render_password(nav_frame_t *f)
+{
+    lcd_title(SCR_PASSWORD);
+    render_password_content(f);
     lcd_center(180, "Range:000~999", OLED_FONT_SMALL, OLED_WHITE);
 }
 
@@ -693,11 +750,15 @@ static void render_confirm(nav_frame_t *f)
                   f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
 }
 
-static void render_current_frame(void)
+static void render_current_frame_with_clear(uint8_t clear_background)
 {
     nav_frame_t *f;
     if (s_nav_depth < 0) return;
     f = &s_nav_stack[s_nav_depth];
+    /* 换页时先隐藏直写过程，待屏幕 GRAM 写完后再显示。 */
+    if (clear_background && s_rendered_screen != f->screen_id)
+        OLED_SetDisplayEnabled(0U);
+    if (clear_background) OLED_Clear(OLED_BLACK);
     switch (f->mode) {
     case MODE_LIST: render_list(f); break;
     case MODE_NUMERIC: render_numeric(f); break;
@@ -707,6 +768,15 @@ static void render_current_frame(void)
     case MODE_CONFIRM: render_confirm(f); break;
     }
     OLED_Present();
+    if (s_rendered_screen != f->screen_id) {
+        OLED_SetDisplayEnabled(1U);
+        s_rendered_screen = f->screen_id;
+    }
+}
+
+static void render_current_frame(void)
+{
+    render_current_frame_with_clear(1U);
 }
 
 #else
@@ -1105,6 +1175,10 @@ static void handle_list(key_event_t evt)
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
     const list_item_t *items;
     uint8_t count;
+#if DISPLAY_ST7789
+    uint8_t old_cursor = f->cursor;
+    uint8_t old_scroll = f->scroll;
+#endif
 
     get_list_data(f->screen_id, &items, &count);
     if (!items) return;
@@ -1112,9 +1186,17 @@ static void handle_list(key_event_t evt)
     switch (evt) {
     case KEY_UP:
         if (f->cursor > 0) f->cursor--;
+#if DISPLAY_ST7789
+        render_list_selection(f, items, count, old_cursor, old_scroll);
+        return;
+#endif
         break;
     case KEY_DOWN:
         if (f->cursor < (uint8_t)(count - 1)) f->cursor++;
+#if DISPLAY_ST7789
+        render_list_selection(f, items, count, old_cursor, old_scroll);
+        return;
+#endif
         break;
     case KEY_ENTER: {
         uint8_t target = items[f->cursor].target;
@@ -1251,6 +1333,9 @@ static void handle_enum(key_event_t evt)
 static void handle_password(key_event_t evt)
 {
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
+#if DISPLAY_ST7789
+    uint8_t old_cursor = f->cursor;
+#endif
 
     /* 错误倒计时中屏蔽按键 */
     if (f->pwd_err_visible) return;
@@ -1259,14 +1344,27 @@ static void handle_password(key_event_t evt)
     case KEY_UP:
         f->pwd_digits[f->cursor] =
             (uint8_t)((f->pwd_digits[f->cursor] + 1) % 10);
+#if DISPLAY_ST7789
+        render_password_digit(f, f->cursor);
+        return;
+#endif
         break;
     case KEY_DOWN:
         f->pwd_digits[f->cursor] =
             (uint8_t)((f->pwd_digits[f->cursor] + 9) % 10);
+#if DISPLAY_ST7789
+        render_password_digit(f, f->cursor);
+        return;
+#endif
         break;
     case KEY_ENTER:
         if (f->cursor < 2) {
             f->cursor++;
+#if DISPLAY_ST7789
+            render_password_digit(f, old_cursor);
+            render_password_digit(f, f->cursor);
+            return;
+#endif
         } else {
             /* 第 3 位: 验证密码 */
             uint16_t pwd = (uint16_t)(f->pwd_digits[0] * 100 +
@@ -1295,6 +1393,10 @@ static void handle_password(key_event_t evt)
                 f->pwd_err_visible = 1;
                 f->cursor = 0;
                 memset(f->pwd_digits, 0, sizeof(f->pwd_digits));
+#if DISPLAY_ST7789
+                render_password_content(f);
+                return;
+#endif
             }
         }
         break;
@@ -1372,6 +1474,9 @@ void menu_init(const menu_config_t *p_cfg)
 {
     s_nav_depth = -1;
     s_access_level = ACCESS_NONE;
+#if DISPLAY_ST7789
+    s_rendered_screen = SCR_COUNT;
+#endif
     s_config.idle_timeout_10ms = (p_cfg && p_cfg->idle_timeout_10ms) ? p_cfg->idle_timeout_10ms : 3000;
     s_idle_counter = 0;
 }
@@ -1381,10 +1486,18 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
     /* 1. 菜单未激活: KEY_ENTER 进入密码验证 */
     if (s_nav_depth < 0) {
         if (key_evt == KEY_ENTER) {
+#if DISPLAY_ST7789
+            OLED_SetDisplayEnabled(0U);
+            run_display_erase_visible_page();
+#endif
             nav_push(MODE_PASSWORD, SCR_PASSWORD);
             s_nav_stack[s_nav_depth].pwd_target = (uint8_t)SCR_MAIN_MENU;
             s_idle_counter = 0;
+#if DISPLAY_ST7789
+            render_current_frame_with_clear(0U);
+#else
             render_current_frame();
+#endif
         }
         if (p_out) { p_out->active = 0; p_out->screen_id = 0; p_out->mode = 0; }
         return (uint8_t)(s_nav_depth >= 0 ? 1 : 0);
@@ -1411,7 +1524,11 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
             f->pwd_err_visible &&
             (uint32_t)(HAL_GetTick() - f->pwd_err_start_ms) >= PASSWORD_ERROR_DISPLAY_MS) {
             f->pwd_err_visible = 0;
+#if DISPLAY_ST7789
+            render_password_content(f);
+#else
             render_current_frame();
+#endif
         }
     }
 
@@ -1457,9 +1574,17 @@ void menu_exit(void)
 {
     s_nav_depth = -1;
     s_access_level = ACCESS_NONE;
+#if DISPLAY_ST7789
+    OLED_SetDisplayEnabled(0U);
+    if (s_rendered_screen == SCR_PASSWORD) erase_password_page();
+    else OLED_Clear(OLED_BLACK);
+    run_display_prepare_after_menu();
+    s_rendered_screen = SCR_COUNT;
+#else
     OLED_Clear(OLED_BLACK);
     OLED_Present();
     run_display_invalidate();
+#endif
 }
 
 uint8_t menu_is_active(void)

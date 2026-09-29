@@ -37,6 +37,44 @@ static char s_temp_text[24];
 static char s_total_text[32];
 static char s_aux_text[8][32];
 static run_page_t s_drawn_page = RUN_PAGE_COUNT;
+static uint16_t s_flow_unit_width;
+static uint16_t s_total_unit_width;
+static uint8_t s_background_prepared;
+static uint8_t s_reveal_after_render;
+
+static void erase_text(uint16_t x, uint16_t y, uint16_t width, oled_font_t font)
+{
+    if (width == 0U) return;
+    OLED_FillRectangle(x, y, x + width - 1U,
+                       y + OLED_FontHeight(font) - 1U, OLED_BLACK);
+}
+
+static void erase_main_page(void)
+{
+    erase_text(8, 8, s_flow_unit_width, OLED_FONT_SMALL);
+    erase_text(8, 26, OLED_TextWidth(s_temp_text, OLED_FONT_SMALL), OLED_FONT_SMALL);
+    erase_text(190, 8, OLED_TextWidth(s_aux_text[0], OLED_FONT_SMALL), OLED_FONT_SMALL);
+    erase_text(8, 49, OLED_TextWidth("FLOW", OLED_FONT_MEDIUM), OLED_FONT_MEDIUM);
+    erase_text(s_rate_x, 91, OLED_TextWidth(s_rate_text, s_rate_font), s_rate_font);
+    erase_text(8, 153, OLED_TextWidth("TOTAL", OLED_FONT_MEDIUM), OLED_FONT_MEDIUM);
+    erase_text(8, 184, OLED_TextWidth(s_total_text, OLED_FONT_SMALL), OLED_FONT_SMALL);
+    erase_text(8, 213, s_total_unit_width, OLED_FONT_SMALL);
+}
+
+static void erase_aux_page(void)
+{
+    static const char * const labels[7] = {
+        "Flow", "Vel", "Temp", "Press", "Cur", "Freq", "Comm"
+    };
+    uint8_t i;
+    for (i = 0; i < 7U; i++) {
+        uint16_t y = (uint16_t)(5U + i * 28U);
+        erase_text(8, y, OLED_TextWidth(labels[i], OLED_FONT_SMALL), OLED_FONT_SMALL);
+        erase_text(80, y, OLED_TextWidth(s_aux_text[i], OLED_FONT_SMALL), OLED_FONT_SMALL);
+    }
+    erase_text(8, 202, OLED_TextWidth("TOTAL", OLED_FONT_SMALL), OLED_FONT_SMALL);
+    erase_text(8, 220, OLED_TextWidth(s_total_text, OLED_FONT_SMALL), OLED_FONT_SMALL);
+}
 
 static void draw_field(uint16_t x, uint16_t y, uint16_t width,
                        char *previous, const char *value, oled_font_t font,
@@ -56,7 +94,9 @@ static void render_page_main(const run_display_input_t *p_in)
     float temp = p_in->p_temperature->num;
     uint16_t x;
     if (s_display_dirty) {
-        OLED_Clear(OLED_BLACK);
+        if (!s_background_prepared) OLED_Clear(OLED_BLACK);
+        s_flow_unit_width = OLED_TextWidth(p_in->p_flow_unit_str, OLED_FONT_SMALL);
+        s_total_unit_width = OLED_TextWidth(p_in->p_total_unit_str, OLED_FONT_SMALL);
         OLED_DrawText(8, 8, p_in->p_flow_unit_str, OLED_FONT_SMALL,
                       OLED_CYAN, OLED_BLACK);
         OLED_DrawText(8, 49, "FLOW", OLED_FONT_MEDIUM,
@@ -113,7 +153,7 @@ static void render_page_aux(const run_display_input_t *p_in)
     };
     uint8_t i;
     if (s_display_dirty) {
-        OLED_Clear(OLED_BLACK);
+        if (!s_background_prepared) OLED_Clear(OLED_BLACK);
         for (i = 0; i < 7U; i++)
             OLED_DrawText(8, 5U + i * 28U, labels[i], OLED_FONT_SMALL,
                           OLED_CYAN, OLED_BLACK);
@@ -297,6 +337,9 @@ void run_display_init(const run_display_config_t *p_cfg)
     OLED_Present();
 #if DISPLAY_ST7789
     s_display_dirty = 1U;
+    s_drawn_page = RUN_PAGE_COUNT;
+    s_background_prepared = 0U;
+    s_reveal_after_render = 0U;
 #endif
 }
 
@@ -316,6 +359,11 @@ void run_display_render(const run_display_input_t *p_input)
 #if DISPLAY_ST7789
     s_display_dirty = 0U;
     s_drawn_page = s_current_page;
+    s_background_prepared = 0U;
+    if (s_reveal_after_render) {
+        OLED_SetDisplayEnabled(1U);
+        s_reveal_after_render = 0U;
+    }
 #endif
 }
 
@@ -343,5 +391,25 @@ void run_display_invalidate(void)
 {
 #if DISPLAY_ST7789
     s_display_dirty = 1U;
+#endif
+}
+
+void run_display_erase_visible_page(void)
+{
+#if DISPLAY_ST7789
+    if (s_drawn_page == RUN_PAGE_MAIN) erase_main_page();
+    else if (s_drawn_page == RUN_PAGE_AUX) erase_aux_page();
+    s_drawn_page = RUN_PAGE_COUNT;
+    s_display_dirty = 1U;
+#endif
+}
+
+void run_display_prepare_after_menu(void)
+{
+#if DISPLAY_ST7789
+    s_drawn_page = RUN_PAGE_COUNT;
+    s_display_dirty = 1U;
+    s_background_prepared = 1U;
+    s_reveal_after_render = 1U;
 #endif
 }

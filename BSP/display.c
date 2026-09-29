@@ -144,6 +144,11 @@ void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
 
 void OLED_Present(void) { }
 
+void OLED_SetDisplayEnabled(uint8_t enabled)
+{
+    LCD_WR_REG(enabled ? 0x29U : 0x28U);
+}
+
 void OLED_SetCursor(uint16_t x, uint16_t y)
 {
     s_cursor_x = x;
