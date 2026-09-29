@@ -46,6 +46,7 @@ EWARM/**/settings/
 /STM32CubeIDE/.settings/language.settings.xml
 /STM32CubeIDE/.settings/stm32cubeide.project.prefs
 /STM32CubeIDE/UMF.launch
+/artifacts/cubeide-debug-workspace/
 
 # OS 生成文件
 Thumbs.db

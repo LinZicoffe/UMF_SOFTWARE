@@ -1,3 +1,7 @@
+/* 旧 OLED 示例驱动未被业务使用；CubeIDE 会自动编译整个 OLED 目录。
+ * 仅在明确启用旧驱动时导出 OLED_*，避免与统一显示接口重名。 */
+#ifdef OLED_LEGACY_DRIVER
+
 #include "oled.h"
 #include "oledfont.h"
 
@@ -473,3 +477,5 @@ void OLED_Init(void)
     OLED_ColorTurn(0);//0:正常显示;1:反色显示
     OLED_DisplayTurn(0);//0:正常显示;1:屏幕翻转显示
 }
+
+#endif /* OLED_LEGACY_DRIVER */

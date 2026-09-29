@@ -13,8 +13,8 @@
  */
 #include "bsp_menu.h"
 #include "param_storage.h"
-#include "ssd1306.h"
-#include "ssd1306_fonts.h"
+#include "display.h"
+#include "run_display.h"
 #include "main.h"
 #include "ftoa.h"
 #include "mystring.h"
@@ -233,6 +233,9 @@ static int8_t             s_nav_depth;           /* -1 = 不活跃 */
 static volatile uint16_t  s_idle_counter;        /* ISR 递增 */
 static menu_config_t      s_config;
 static access_level_t     s_access_level;
+#if DISPLAY_ST7789
+static screen_t           s_rendered_screen = SCR_COUNT;
+#endif
 
 /* ===== 栈操作 ===== */
 static void nav_push(menu_mode_t mode, screen_t scr)
@@ -520,10 +523,340 @@ static void handle_confirm(key_event_t evt);
 /* 语言枚举字符串 - 保留单选项以兼容菜单 SCR_LANGUAGE 屏幕 */
 static const char * const s_language_str[LANG_COUNT] = { "English" };
 
+#if DISPLAY_ST7789
+
+static void lcd_center(uint16_t y, const char *text, oled_font_t font,
+                       uint16_t color)
+{
+    uint16_t width = OLED_TextWidth(text, font);
+    uint16_t x = width < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - width) / 2U) : 0U;
+    OLED_DrawText(x, y, text, font, color, OLED_BLACK);
+}
+
+static void lcd_title(screen_t screen)
+{
+    lcd_center(5, get_screen_title(screen), OLED_FONT_SMALL, OLED_CYAN);
+    OLED_FillRectangle(8, 27, 231, 28, OLED_CYAN);
+}
+
+static void erase_password_page(void)
+{
+    const char *title = get_screen_title(SCR_PASSWORD);
+    const char *range = "Range:000~999";
+    uint16_t width = OLED_TextWidth(title, OLED_FONT_SMALL);
+    uint16_t x = (uint16_t)((OLED_WIDTH - width) / 2U);
+    OLED_FillRectangle(x, 5, x + width - 1U,
+                       5U + OLED_FontHeight(OLED_FONT_SMALL) - 1U, OLED_BLACK);
+    OLED_FillRectangle(8, 27, 231, 28, OLED_BLACK);
+    OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
+    width = OLED_TextWidth(range, OLED_FONT_SMALL);
+    x = (uint16_t)((OLED_WIDTH - width) / 2U);
+    OLED_FillRectangle(x, 180, x + width - 1U,
+                       180U + OLED_FontHeight(OLED_FONT_SMALL) - 1U, OLED_BLACK);
+}
+
+static void render_list_row(const nav_frame_t *f, const list_item_t *items,
+                            uint8_t idx, uint8_t row)
+{
+    char label[19];
+    uint16_t y = (uint16_t)(38U + 32U * row);
+    uint8_t selected = idx == f->cursor;
+    OLED_FillRectangle(5, y - 4U, 234, y + 22U,
+                       selected ? OLED_BLUE : OLED_BLACK);
+    strncpy(label, items[idx].label, sizeof(label) - 1U);
+    label[sizeof(label) - 1U] = '\0';
+    OLED_DrawText(11, y, label, OLED_FONT_SMALL,
+                  selected ? OLED_YELLOW : OLED_WHITE,
+                  selected ? OLED_BLUE : OLED_BLACK);
+}
+
+static void render_list_rows(const nav_frame_t *f, const list_item_t *items,
+                             uint8_t count)
+{
+    uint8_t i;
+    for (i = 0; i < 6U && f->scroll + i < count; i++)
+        render_list_row(f, items, (uint8_t)(f->scroll + i), i);
+}
+
+static void render_list(nav_frame_t *f)
+{
+    const list_item_t *items;
+    uint8_t count;
+    get_list_data(f->screen_id, &items, &count);
+    lcd_title(f->screen_id);
+    if (!items || count == 0U) return;
+    f->scroll = f->cursor >= 6U ? (uint8_t)(f->cursor - 5U) : 0U;
+    render_list_rows(f, items, count);
+}
+
+static void render_list_selection(nav_frame_t *f, const list_item_t *items,
+                                   uint8_t count, uint8_t old_cursor,
+                                   uint8_t old_scroll)
+{
+    uint8_t new_scroll;
+    if (f->cursor == old_cursor) return;
+    new_scroll = f->cursor >= 6U ? (uint8_t)(f->cursor - 5U) : 0U;
+    f->scroll = new_scroll;
+    if (new_scroll != old_scroll) {
+        /* 窗口移动时只重画列表区，标题保持不变。 */
+        OLED_FillRectangle(5, 34, 234, 220, OLED_BLACK);
+        render_list_rows(f, items, count);
+    } else {
+        render_list_row(f, items, old_cursor,
+                        (uint8_t)(old_cursor - new_scroll));
+        render_list_row(f, items, f->cursor,
+                        (uint8_t)(f->cursor - new_scroll));
+    }
+}
+
+static void render_coeff_digit(const nav_frame_t *f, uint8_t i)
+{
+    uint16_t x = (uint16_t)(57U + i * 22U + (i >= 2U ? 18U : 0U));
+    char digit[2];
+    OLED_FillRectangle(x - 2U, 62, x + 19U, 91,
+                       i == f->cursor ? OLED_BLUE : OLED_BLACK);
+    digit[0] = (char)('0' + f->coeff_digits[i]);
+    digit[1] = '\0';
+    OLED_DrawText(x, 65, digit, OLED_FONT_MEDIUM, OLED_YELLOW,
+                  i == f->cursor ? OLED_BLUE : OLED_BLACK);
+    if (i == 2U)
+        OLED_DrawText(100, 65, ".", OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+}
+
+static void render_numeric_value(const nav_frame_t *f, float old_value)
+{
+    const num_desc_t *desc = &c_num_desc[f->screen_id];
+    char buf[32];
+    uint16_t width, x;
+    if (f->edit_val == old_value) return;
+    ftoa(old_value, desc->decimals, buf, sizeof(buf));
+    width = OLED_TextWidth(buf, OLED_FONT_MEDIUM);
+    x = width < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - width) / 2U) : 0U;
+    OLED_FillRectangle(x, 65, x + width - 1U,
+                       65U + OLED_FontHeight(OLED_FONT_MEDIUM) - 1U, OLED_BLACK);
+    ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
+    lcd_center(65, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
+}
+
+static void render_numeric(nav_frame_t *f)
+{
+    const num_desc_t *desc = &c_num_desc[f->screen_id];
+    float min_val, max_val;
+    char buf[32], tmp[16];
+    uint8_t i;
+    get_numeric_range(f->screen_id, &min_val, &max_val);
+    lcd_title(f->screen_id);
+    if (is_coeff_screen(f->screen_id)) {
+        for (i = 0; i < COEFF_DIGIT_COUNT; i++) render_coeff_digit(f, i);
+    } else {
+        ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
+        lcd_center(65, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
+    }
+    strcpy(buf, "Min:");
+    ftoa(min_val, desc->decimals, tmp, sizeof(tmp));
+    strcat(buf, tmp);
+    OLED_DrawText(8, 115, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
+    strcpy(buf, "Max:");
+    ftoa(max_val, desc->decimals, tmp, sizeof(tmp));
+    strcat(buf, tmp);
+    OLED_DrawText(8, 144, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
+    if (is_coeff_screen(f->screen_id)) {
+        strcpy(buf, "Enter:Next/Save");
+    } else {
+        strcpy(buf, "Step:");
+        ftoa(desc->step, desc->decimals, tmp, sizeof(tmp));
+        strcat(buf, tmp);
+        strcat(buf, " ");
+        strcat(buf, desc->unit);
+    }
+    OLED_DrawText(8, 190, buf, OLED_FONT_SMALL, OLED_CYAN, OLED_BLACK);
+}
+
+static void get_enum_data(screen_t screen, const char * const **opts,
+                          uint8_t *count)
+{
+    *opts = NULL;
+    *count = 0U;
+    switch (screen) {
+    case SCR_STD_COND: *opts = param_get_std_cond_strings(); *count = STD_COND_COUNT; break;
+    case SCR_FLOW_UNIT: *opts = param_get_flow_unit_strings(); *count = FLOW_UNIT_COUNT; break;
+    case SCR_TOTAL_UNIT: *opts = param_get_total_unit_strings(); *count = TOTAL_UNIT_COUNT; break;
+    case SCR_PULSE_EQUIV: *opts = param_get_pulse_equiv_strings(); *count = PULSE_EQUIV_COUNT; break;
+    case SCR_BAUD_RATE: *opts = param_get_baud_rate_strings(); *count = BAUD_RATE_COUNT; break;
+    case SCR_LANGUAGE: *opts = s_language_str; *count = LANG_COUNT; break;
+    default: break;
+    }
+}
+
+static uint8_t enum_window_start(uint8_t selected, uint8_t count)
+{
+    int8_t start = (int8_t)selected - 2;
+    if (start < 0) start = 0;
+    if (start + 6 > (int8_t)count) start = (int8_t)count - 6;
+    return (uint8_t)(start < 0 ? 0 : start);
+}
+
+static void render_enum_row(const nav_frame_t *f, const char * const *opts,
+                             uint8_t idx, uint8_t row)
+{
+    uint16_t y = (uint16_t)(38U + 32U * row);
+    uint8_t selected = idx == f->enum_val;
+    OLED_FillRectangle(5, y - 4U, 239, y + 22U, OLED_BLACK);
+    if (selected) OLED_FillRectangle(5, y - 4U, 234, y + 22U, OLED_BLUE);
+    OLED_DrawText(11, y, opts[idx], OLED_FONT_SMALL,
+                  selected ? OLED_YELLOW : OLED_WHITE,
+                  selected ? OLED_BLUE : OLED_BLACK);
+}
+
+static void render_enum_rows(const nav_frame_t *f, const char * const *opts,
+                              uint8_t count, uint8_t start)
+{
+    uint8_t i;
+    for (i = 0; i < 6U && start + i < count; i++)
+        render_enum_row(f, opts, (uint8_t)(start + i), i);
+}
+
+static void render_enum_selection(nav_frame_t *f, uint8_t old_value)
+{
+    const char * const *opts;
+    uint8_t count, old_start, new_start;
+    if (f->enum_val == old_value) return;
+    get_enum_data(f->screen_id, &opts, &count);
+    if (!opts) return;
+    old_start = enum_window_start(old_value, count);
+    new_start = enum_window_start(f->enum_val, count);
+    if (new_start != old_start) {
+        OLED_FillRectangle(5, 34, 239, 220, OLED_BLACK);
+        render_enum_rows(f, opts, count, new_start);
+    } else {
+        render_enum_row(f, opts, old_value, (uint8_t)(old_value - new_start));
+        render_enum_row(f, opts, f->enum_val, (uint8_t)(f->enum_val - new_start));
+    }
+}
+
+static void render_enum(nav_frame_t *f)
+{
+    const char * const *opts;
+    uint8_t count;
+    get_enum_data(f->screen_id, &opts, &count);
+    lcd_title(f->screen_id);
+    if (!opts) return;
+    render_enum_rows(f, opts, count, enum_window_start(f->enum_val, count));
+}
+
+static void render_password_digit(const nav_frame_t *f, uint8_t i)
+{
+    char digit[2];
+    uint16_t x = (uint16_t)(72U + 34U * i);
+    OLED_FillRectangle(x - 3U, 84, x + 26U, 122,
+                       f->cursor == i ? OLED_BLUE : OLED_BLACK);
+    digit[0] = (char)('0' + f->pwd_digits[i]);
+    digit[1] = '\0';
+    OLED_DrawText(x, 88, digit, OLED_FONT_LARGE, OLED_YELLOW,
+                  f->cursor == i ? OLED_BLUE : OLED_BLACK);
+}
+
+static void render_password_content(const nav_frame_t *f)
+{
+    uint8_t i;
+    OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
+    if (f->pwd_err_visible) {
+        lcd_center(86, "Password", OLED_FONT_MEDIUM, OLED_RED);
+        lcd_center(125, "Error!", OLED_FONT_MEDIUM, OLED_RED);
+        return;
+    }
+    for (i = 0; i < 3U; i++) render_password_digit(f, i);
+}
+
+static void render_password(nav_frame_t *f)
+{
+    lcd_title(SCR_PASSWORD);
+    render_password_content(f);
+    lcd_center(180, "Range:000~999", OLED_FONT_SMALL, OLED_WHITE);
+}
+
+static void render_readonly(nav_frame_t *f)
+{
+    char buf[32];
+    lcd_title(f->screen_id);
+    if (f->screen_id == SCR_DEVICE_INFO) {
+        strcpy(buf, "Addr:");
+        Int2String((int)param_get_modbus_addr(), buf + 5);
+        OLED_DrawText(8, 66, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
+        strcpy(buf, "Baud:");
+        strncat(buf, param_get_baud_rate_strings()[param_get_baud_rate()],
+                sizeof(buf) - 6U);
+        OLED_DrawText(8, 103, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
+        OLED_DrawText(8, 140, "FW:v1.0.0", OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
+    } else {
+        ftoa(load_readonly_val(f->screen_id), 1, buf, sizeof(buf));
+        lcd_center(80, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
+        lcd_center(118, param_get_total_unit_str(param_get_total_unit()),
+                   OLED_FONT_SMALL, OLED_WHITE);
+        lcd_center(184, "[Read Only]", OLED_FONT_SMALL, OLED_CYAN);
+    }
+}
+
+static void render_confirm_buttons(const nav_frame_t *f)
+{
+    OLED_FillRectangle(25, 166, 107, 201,
+                       f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
+    OLED_FillRectangle(130, 166, 212, 201,
+                       f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
+    OLED_DrawText(46, 176, "YES", OLED_FONT_SMALL, OLED_WHITE,
+                  f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
+    OLED_DrawText(155, 176, "NO", OLED_FONT_SMALL, OLED_WHITE,
+                  f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
+}
+
+static void render_confirm(nav_frame_t *f)
+{
+    lcd_title(f->screen_id);
+    if (f->screen_id == SCR_CLEAR_TOTALS) {
+        lcd_center(65, "All totals will", OLED_FONT_SMALL, OLED_WHITE);
+        lcd_center(94, "be reset to ZERO", OLED_FONT_SMALL, OLED_RED);
+    } else {
+        lcd_center(65, "All parameters", OLED_FONT_SMALL, OLED_WHITE);
+        lcd_center(94, "will be DEFAULT", OLED_FONT_SMALL, OLED_RED);
+    }
+    render_confirm_buttons(f);
+}
+
+static void render_current_frame_with_clear(uint8_t clear_background)
+{
+    nav_frame_t *f;
+    if (s_nav_depth < 0) return;
+    f = &s_nav_stack[s_nav_depth];
+    /* 换页时先隐藏直写过程，待屏幕 GRAM 写完后再显示。 */
+    if (clear_background && s_rendered_screen != f->screen_id)
+        OLED_SetDisplayEnabled(0U);
+    if (clear_background) OLED_Clear(OLED_BLACK);
+    switch (f->mode) {
+    case MODE_LIST: render_list(f); break;
+    case MODE_NUMERIC: render_numeric(f); break;
+    case MODE_ENUM: render_enum(f); break;
+    case MODE_PASSWORD: render_password(f); break;
+    case MODE_READONLY: render_readonly(f); break;
+    case MODE_CONFIRM: render_confirm(f); break;
+    }
+    OLED_Present();
+    if (s_rendered_screen != f->screen_id) {
+        OLED_SetDisplayEnabled(1U);
+        s_rendered_screen = f->screen_id;
+    }
+}
+
+static void render_current_frame(void)
+{
+    render_current_frame_with_clear(1U);
+}
+
+#else
+
 /* ===== 渲染: M1 列表 ===== */
 static void render_list(nav_frame_t *f)
 {
-    ssd1306_Fill(Black);
+    OLED_Clear(OLED_BLACK);
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
     const list_item_t *items;
@@ -547,15 +880,15 @@ static void render_list(nav_frame_t *f)
 #ifdef SSD1306_INCLUDE_FONT_7x10
         /* 1~4 级列表的新布局：7x10 黑底白字居中，标题不反色 */
         const char *title = get_screen_title(f->screen_id);
-        uint8_t title_x = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
-        ssd1306_SetCursor(title_x, 0);
-        ssd1306_WriteString((char *)title, Font_7x10, White);
+        uint8_t title_x = (uint8_t)((OLED_WIDTH - strlen(title) * 7U) / 2U);
+        OLED_SetCursor(title_x, 0);
+        OLED_WriteString((char *)title, OLED_FONT_MEDIUM, OLED_WHITE);
 #endif
     } else {
         /* 更深层列表保持原有 6x8 反色标题 */
-        ssd1306_FillRectangle(0, 0, 127, 7, White);
-        ssd1306_SetCursor(2, 0);
-        ssd1306_WriteString((char *)get_screen_title(f->screen_id), Font_6x8, Black);
+        OLED_FillRectangle(0, 0, 127, 7, OLED_WHITE);
+        OLED_SetCursor(2, 0);
+        OLED_WriteString((char *)get_screen_title(f->screen_id), OLED_FONT_SMALL, OLED_BLACK);
     }
 
     /* 滚动窗口 */
@@ -567,14 +900,14 @@ static void render_list(nav_frame_t *f)
     /* 列表项 */
     for (i = 0; i < visible_rows && (f->scroll + i) < count; i++) {
         uint8_t y = use_7x10_layout
-                  ? (uint8_t)(10 + i * 11)  /* Font_7x10 行高 10px + 1px */
-                  : (uint8_t)(8 + i * 9);   /* Font_6x8 行高 8px + 1px */
+                  ? (uint8_t)(10 + i * 11)  /* OLED_FONT_MEDIUM 行高 10px + 1px */
+                  : (uint8_t)(8 + i * 9);   /* OLED_FONT_SMALL 行高 8px + 1px */
         uint8_t idx = (uint8_t)(f->scroll + i);
         int is_sel = (idx == f->cursor);
 
         if (is_sel) {
-            ssd1306_FillRectangle(0, y, 127,
-                                  (uint8_t)(y + (use_7x10_layout ? 9 : 8)), White);
+            OLED_FillRectangle(0, y, 127,
+                                  (uint8_t)(y + (use_7x10_layout ? 9 : 8)), OLED_WHITE);
         }
         {
             const char *label = items[idx].label;
@@ -588,13 +921,13 @@ static void render_list(nav_frame_t *f)
             while (total < field_chars) buf[total++] = ' ';
             buf[total] = '\0';
         }
-        ssd1306_SetCursor(2, y);
+        OLED_SetCursor(2, y);
         if (use_7x10_layout) {
 #ifdef SSD1306_INCLUDE_FONT_7x10
-            ssd1306_WriteString(buf, Font_7x10, is_sel ? Black : White);
+            OLED_WriteString(buf, OLED_FONT_MEDIUM, is_sel ? OLED_BLACK : OLED_WHITE);
 #endif
         } else {
-            ssd1306_WriteString(buf, Font_6x8, is_sel ? Black : White);
+            OLED_WriteString(buf, OLED_FONT_SMALL, is_sel ? OLED_BLACK : OLED_WHITE);
         }
     }
 #else
@@ -615,13 +948,13 @@ static void render_numeric(nav_frame_t *f)
 
     get_numeric_range(f->screen_id, &min_val, &max_val);
 
-    ssd1306_Fill(Black);
+    OLED_Clear(OLED_BLACK);
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* 标题：黑底白字居中，不使用选中效果 */
-    x_start = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
-    ssd1306_SetCursor(x_start, 0);
-    ssd1306_WriteString((char *)title, Font_7x10, White);
+    x_start = (uint8_t)((OLED_WIDTH - strlen(title) * 7U) / 2U);
+    OLED_SetCursor(x_start, 0);
+    OLED_WriteString((char *)title, OLED_FONT_MEDIUM, OLED_WHITE);
 
     if (is_coeff_screen(f->screen_id)) {
         static const uint8_t c_digit_x[COEFF_DIGIT_COUNT] = { 43, 50, 64, 71, 78 };
@@ -632,37 +965,37 @@ static void render_numeric(nav_frame_t *f)
             buf[0] = (char)('0' + f->coeff_digits[i]);
             buf[1] = '\0';
             if (i == f->cursor) {
-                ssd1306_FillRectangle(c_digit_x[i], 14,
-                                      (uint8_t)(c_digit_x[i] + 6), 23, White);
-                ssd1306_SetCursor(c_digit_x[i], 14);
-                ssd1306_WriteString(buf, Font_7x10, Black);
+                OLED_FillRectangle(c_digit_x[i], 14,
+                                      (uint8_t)(c_digit_x[i] + 6), 23, OLED_WHITE);
+                OLED_SetCursor(c_digit_x[i], 14);
+                OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_BLACK);
             } else {
-                ssd1306_SetCursor(c_digit_x[i], 14);
-                ssd1306_WriteString(buf, Font_7x10, White);
+                OLED_SetCursor(c_digit_x[i], 14);
+                OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
             }
         }
-        ssd1306_SetCursor(57, 14);
-        ssd1306_WriteString(".", Font_7x10, White);
+        OLED_SetCursor(57, 14);
+        OLED_WriteString(".", OLED_FONT_MEDIUM, OLED_WHITE);
     } else {
         /* 普通数值页保持固定步长编辑 */
         ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
-        x_start = (uint8_t)((SSD1306_WIDTH - strlen(buf) * 7U) / 2U);
-        ssd1306_SetCursor(x_start, 14);
-        ssd1306_WriteString(buf, Font_7x10, White);
+        x_start = (uint8_t)((OLED_WIDTH - strlen(buf) * 7U) / 2U);
+        OLED_SetCursor(x_start, 14);
+        OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
     }
 
     /* Min/Max 拆成两行，避免 7x10 每行 18 字符的宽度限制 */
     strcpy(buf, "Min:");
     ftoa(min_val, desc->decimals, tmp, sizeof(tmp));
     strcat(buf, tmp);
-    ssd1306_SetCursor(0, 28);
-    ssd1306_WriteString(buf, Font_7x10, White);
+    OLED_SetCursor(0, 28);
+    OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
 
     strcpy(buf, "Max:");
     ftoa(max_val, desc->decimals, tmp, sizeof(tmp));
     strcat(buf, tmp);
-    ssd1306_SetCursor(0, 39);
-    ssd1306_WriteString(buf, Font_7x10, White);
+    OLED_SetCursor(0, 39);
+    OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
 
     if (is_coeff_screen(f->screen_id)) {
         strcpy(buf, "Enter:Next/Save");
@@ -674,8 +1007,8 @@ static void render_numeric(nav_frame_t *f)
         strcat(buf, " ");
         strcat(buf, desc->unit);
     }
-    ssd1306_SetCursor(0, 50);
-    ssd1306_WriteString(buf, Font_7x10, White);
+    OLED_SetCursor(0, 50);
+    OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
 #endif
 }
 
@@ -701,15 +1034,15 @@ static void render_enum(nav_frame_t *f)
     }
     if (!opts) return;
 
-    ssd1306_Fill(Black);
+    OLED_Clear(OLED_BLACK);
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* 标题：黑底白字居中，不反色 */
     {
         const char *title = get_screen_title(f->screen_id);
-        uint8_t title_x = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
-        ssd1306_SetCursor(title_x, 0);
-        ssd1306_WriteString((char *)title, Font_7x10, White);
+        uint8_t title_x = (uint8_t)((OLED_WIDTH - strlen(title) * 7U) / 2U);
+        OLED_SetCursor(title_x, 0);
+        OLED_WriteString((char *)title, OLED_FONT_MEDIUM, OLED_WHITE);
     }
 
     /* 选项列表：每屏 5 个，尽量使当前项居中 */
@@ -723,7 +1056,7 @@ static void render_enum(nav_frame_t *f)
         uint8_t y = (uint8_t)(10 + i * 11);
         int is_sel = ((uint8_t)(start + i) == f->enum_val);
         if (is_sel) {
-            ssd1306_FillRectangle(0, y, 127, (uint8_t)(y + 9), White);
+            OLED_FillRectangle(0, y, 127, (uint8_t)(y + 9), OLED_WHITE);
         }
         {
             const char *opt = opts[start + i];
@@ -731,8 +1064,8 @@ static void render_enum(nav_frame_t *f)
             buf[1] = '\0';
             (void)strncat(buf, opt, sizeof(buf) - 2);
         }
-        ssd1306_SetCursor(2, y);
-        ssd1306_WriteString(buf, Font_7x10, is_sel ? Black : White);
+        OLED_SetCursor(2, y);
+        OLED_WriteString(buf, OLED_FONT_MEDIUM, is_sel ? OLED_BLACK : OLED_WHITE);
     }
 #endif
 }
@@ -742,23 +1075,23 @@ static void render_password(nav_frame_t *f)
 {
     char buf[16];
 
-    ssd1306_Fill(Black);
+    OLED_Clear(OLED_BLACK);
 
     /* 错误倒计时中显示错误信息 */
     if (f->pwd_err_visible) {
 #ifdef SSD1306_INCLUDE_FONT_11x18
-        ssd1306_SetCursor(20, 12);  /* (128 - 8 x 11) / 2 */
-        ssd1306_WriteString("Password", Font_11x18, White);
-        ssd1306_SetCursor(31, 36);  /* (128 - 6 x 11) / 2 */
-        ssd1306_WriteString("Error!", Font_11x18, White);
+        OLED_SetCursor(20, 12);  /* (128 - 8 x 11) / 2 */
+        OLED_WriteString("Password", OLED_FONT_LARGE, OLED_WHITE);
+        OLED_SetCursor(31, 36);  /* (128 - 6 x 11) / 2 */
+        OLED_WriteString("Error!", OLED_FONT_LARGE, OLED_WHITE);
 #endif
         return;
     }
 
 #ifdef SSD1306_INCLUDE_FONT_11x18
     /* 标题 */
-    ssd1306_SetCursor(22, 0);
-    ssd1306_WriteString("Password", Font_11x18, White);
+    OLED_SetCursor(22, 0);
+    OLED_WriteString("Password", OLED_FONT_LARGE, OLED_WHITE);
 
     /* 3 位数字: 光标位反色 */
     {
@@ -769,12 +1102,12 @@ static void render_password(nav_frame_t *f)
             buf[1] = '\0';
             if (i == f->cursor) {
                 /* 编辑位反色 */
-                ssd1306_FillRectangle(x_start, 22, (uint8_t)(x_start + 10), 39, White);
-                ssd1306_SetCursor(x_start, 24);
-                ssd1306_WriteString(buf, Font_11x18, Black);
+                OLED_FillRectangle(x_start, 22, (uint8_t)(x_start + 10), 39, OLED_WHITE);
+                OLED_SetCursor(x_start, 24);
+                OLED_WriteString(buf, OLED_FONT_LARGE, OLED_BLACK);
             } else {
-                ssd1306_SetCursor(x_start, 24);
-                ssd1306_WriteString(buf, Font_11x18, White);
+                OLED_SetCursor(x_start, 24);
+                OLED_WriteString(buf, OLED_FONT_LARGE, OLED_WHITE);
             }
             x_start += 16;
         }
@@ -783,8 +1116,8 @@ static void render_password(nav_frame_t *f)
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* 密码页的单独例外：13 char x 7px = 91px，居中显示 */
-    ssd1306_SetCursor(18, 48);
-    ssd1306_WriteString("Range:000~999", Font_7x10, White);
+    OLED_SetCursor(18, 48);
+    OLED_WriteString("Range:000~999", OLED_FONT_MEDIUM, OLED_WHITE);
 #endif
 }
 
@@ -795,33 +1128,33 @@ static void render_readonly(nav_frame_t *f)
     float val = load_readonly_val(f->screen_id);
     const char *title = get_screen_title(f->screen_id);
 
-    ssd1306_Fill(Black);
+    OLED_Clear(OLED_BLACK);
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* 标题：黑底白字居中，不反色 */
     {
-        uint8_t title_x = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
-        ssd1306_SetCursor(title_x, 0);
-        ssd1306_WriteString((char *)title, Font_7x10, White);
+        uint8_t title_x = (uint8_t)((OLED_WIDTH - strlen(title) * 7U) / 2U);
+        OLED_SetCursor(title_x, 0);
+        OLED_WriteString((char *)title, OLED_FONT_MEDIUM, OLED_WHITE);
     }
 
     /* 设备信息特殊处理 */
     if (f->screen_id == SCR_DEVICE_INFO) {
         strcpy(buf, "Addr:");
         Int2String((int)param_get_modbus_addr(), buf + 5);
-        ssd1306_SetCursor(0, 18);
-        ssd1306_WriteString(buf, Font_7x10, White);
+        OLED_SetCursor(0, 18);
+        OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
 
         {
             const char * const *baud_strs = param_get_baud_rate_strings();
             strcpy(buf, "Baud:");
             (void)strncat(buf, baud_strs[param_get_baud_rate()], sizeof(buf) - 6);
-            ssd1306_SetCursor(0, 31);
-            ssd1306_WriteString(buf, Font_7x10, White);
+            OLED_SetCursor(0, 31);
+            OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
         }
 
-        ssd1306_SetCursor(0, 44);
-        ssd1306_WriteString("FW:v1.0.0", Font_7x10, White);
+        OLED_SetCursor(0, 44);
+        OLED_WriteString("FW:v1.0.0", OLED_FONT_MEDIUM, OLED_WHITE);
     } else {
         const char *unit_str = param_get_total_unit_str(param_get_total_unit());
         uint8_t x_start;
@@ -830,12 +1163,12 @@ static void render_readonly(nav_frame_t *f)
         ftoa(val, 1, buf, sizeof(buf));
         strcat(buf, " ");
         strcat(buf, unit_str);
-        x_start = (uint8_t)((SSD1306_WIDTH - strlen(buf) * 7U) / 2U);
-        ssd1306_SetCursor(x_start, 18);
-        ssd1306_WriteString(buf, Font_7x10, White);
+        x_start = (uint8_t)((OLED_WIDTH - strlen(buf) * 7U) / 2U);
+        OLED_SetCursor(x_start, 18);
+        OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
 
-        ssd1306_SetCursor(25, 42);
-        ssd1306_WriteString("[Read Only]", Font_7x10, White);
+        OLED_SetCursor(25, 42);
+        OLED_WriteString("[Read Only]", OLED_FONT_MEDIUM, OLED_WHITE);
     }
 #endif
 }
@@ -843,45 +1176,45 @@ static void render_readonly(nav_frame_t *f)
 /* ===== 渲染: M5 确认对话框 ===== */
 static void render_confirm(nav_frame_t *f)
 {
-    ssd1306_Fill(Black);
+    OLED_Clear(OLED_BLACK);
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* 标题：黑底白字居中，不反色 */
     {
         const char *title = get_screen_title(f->screen_id);
-        uint8_t title_x = (uint8_t)((SSD1306_WIDTH - strlen(title) * 7U) / 2U);
-        ssd1306_SetCursor(title_x, 0);
-        ssd1306_WriteString((char *)title, Font_7x10, White);
+        uint8_t title_x = (uint8_t)((OLED_WIDTH - strlen(title) * 7U) / 2U);
+        OLED_SetCursor(title_x, 0);
+        OLED_WriteString((char *)title, OLED_FONT_MEDIUM, OLED_WHITE);
     }
 
     /* 警告信息 */
     if (f->screen_id == SCR_CLEAR_TOTALS) {
-        ssd1306_SetCursor(8, 16);
-        ssd1306_WriteString("All totals will", Font_7x10, White);
-        ssd1306_SetCursor(8, 28);
-        ssd1306_WriteString("be reset to ZERO", Font_7x10, White);
+        OLED_SetCursor(8, 16);
+        OLED_WriteString("All totals will", OLED_FONT_MEDIUM, OLED_WHITE);
+        OLED_SetCursor(8, 28);
+        OLED_WriteString("be reset to ZERO", OLED_FONT_MEDIUM, OLED_WHITE);
     } else if (f->screen_id == SCR_FACTORY_RST) {
-        ssd1306_SetCursor(8, 16);
-        ssd1306_WriteString("All parameters", Font_7x10, White);
-        ssd1306_SetCursor(8, 28);
-        ssd1306_WriteString("will be DEFAULT", Font_7x10, White);
+        OLED_SetCursor(8, 16);
+        OLED_WriteString("All parameters", OLED_FONT_MEDIUM, OLED_WHITE);
+        OLED_SetCursor(8, 28);
+        OLED_WriteString("will be DEFAULT", OLED_FONT_MEDIUM, OLED_WHITE);
     }
 
     /* YES / NO 选项 */
     if (f->confirm_sel == 1) {
         /* YES 选中 */
-        ssd1306_FillRectangle(8, 48, 58, 57, White);
-        ssd1306_SetCursor(12, 48);
-        ssd1306_WriteString("YES", Font_7x10, Black);
-        ssd1306_SetCursor(72, 48);
-        ssd1306_WriteString("NO", Font_7x10, White);
+        OLED_FillRectangle(8, 48, 58, 57, OLED_WHITE);
+        OLED_SetCursor(12, 48);
+        OLED_WriteString("YES", OLED_FONT_MEDIUM, OLED_BLACK);
+        OLED_SetCursor(72, 48);
+        OLED_WriteString("NO", OLED_FONT_MEDIUM, OLED_WHITE);
     } else {
         /* NO 选中 (安全默认) */
-        ssd1306_SetCursor(12, 48);
-        ssd1306_WriteString("YES", Font_7x10, White);
-        ssd1306_FillRectangle(68, 48, 100, 57, White);
-        ssd1306_SetCursor(72, 48);
-        ssd1306_WriteString("NO", Font_7x10, Black);
+        OLED_SetCursor(12, 48);
+        OLED_WriteString("YES", OLED_FONT_MEDIUM, OLED_WHITE);
+        OLED_FillRectangle(68, 48, 100, 57, OLED_WHITE);
+        OLED_SetCursor(72, 48);
+        OLED_WriteString("NO", OLED_FONT_MEDIUM, OLED_BLACK);
     }
 #endif
 }
@@ -903,8 +1236,10 @@ static void render_current_frame(void)
     case MODE_CONFIRM:  render_confirm(f);  break;
     }
 
-    ssd1306_UpdateScreen();
+    OLED_Present();
 }
+
+#endif /* DISPLAY_ST7789 */
 
 /* ===== 处理: M1 列表 ===== */
 static void handle_list(key_event_t evt)
@@ -912,6 +1247,10 @@ static void handle_list(key_event_t evt)
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
     const list_item_t *items;
     uint8_t count;
+#if DISPLAY_ST7789
+    uint8_t old_cursor = f->cursor;
+    uint8_t old_scroll = f->scroll;
+#endif
 
     get_list_data(f->screen_id, &items, &count);
     if (!items) return;
@@ -919,9 +1258,17 @@ static void handle_list(key_event_t evt)
     switch (evt) {
     case KEY_UP:
         if (f->cursor > 0) f->cursor--;
+#if DISPLAY_ST7789
+        render_list_selection(f, items, count, old_cursor, old_scroll);
+        return;
+#endif
         break;
     case KEY_DOWN:
         if (f->cursor < (uint8_t)(count - 1)) f->cursor++;
+#if DISPLAY_ST7789
+        render_list_selection(f, items, count, old_cursor, old_scroll);
+        return;
+#endif
         break;
     case KEY_ENTER: {
         uint8_t target = items[f->cursor].target;
@@ -955,6 +1302,10 @@ static void handle_numeric(key_event_t evt)
     const num_desc_t *desc = &c_num_desc[f->screen_id];
     float min_val;
     float max_val;
+#if DISPLAY_ST7789
+    uint8_t old_cursor = f->cursor;
+    float old_value = f->edit_val;
+#endif
 
     get_numeric_range(f->screen_id, &min_val, &max_val);
 
@@ -963,14 +1314,27 @@ static void handle_numeric(key_event_t evt)
         case KEY_UP:
             f->coeff_digits[f->cursor] =
                 (uint8_t)((f->coeff_digits[f->cursor] + 1U) % 10U);
+#if DISPLAY_ST7789
+            render_coeff_digit(f, f->cursor);
+            return;
+#endif
             break;
         case KEY_DOWN:
             f->coeff_digits[f->cursor] =
                 (uint8_t)((f->coeff_digits[f->cursor] + 9U) % 10U);
+#if DISPLAY_ST7789
+            render_coeff_digit(f, f->cursor);
+            return;
+#endif
             break;
         case KEY_ENTER:
             if (f->cursor < (COEFF_DIGIT_COUNT - 1U)) {
                 f->cursor++;
+#if DISPLAY_ST7789
+                render_coeff_digit(f, old_cursor);
+                render_coeff_digit(f, f->cursor);
+                return;
+#endif
             } else {
                 float val = coeff_value_from_digits(f);
                 if (val < min_val) val = min_val;
@@ -995,10 +1359,18 @@ static void handle_numeric(key_event_t evt)
     case KEY_UP:
         f->edit_val += desc->step;
         if (f->edit_val > max_val) f->edit_val = max_val;
+#if DISPLAY_ST7789
+        render_numeric_value(f, old_value);
+        return;
+#endif
         break;
     case KEY_DOWN:
         f->edit_val -= desc->step;
         if (f->edit_val < min_val) f->edit_val = min_val;
+#if DISPLAY_ST7789
+        render_numeric_value(f, old_value);
+        return;
+#endif
         break;
     case KEY_ENTER:
         save_param_val(f->screen_id, f->edit_val);
@@ -1020,6 +1392,9 @@ static void handle_enum(key_event_t evt)
 {
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
     uint8_t max_val = 0;
+#if DISPLAY_ST7789
+    uint8_t old_value = f->enum_val;
+#endif
 
     /* 获取枚举最大值 */
     switch (f->screen_id) {
@@ -1035,9 +1410,17 @@ static void handle_enum(key_event_t evt)
     switch (evt) {
     case KEY_UP:
         if (f->enum_val > 0) f->enum_val--;
+#if DISPLAY_ST7789
+        render_enum_selection(f, old_value);
+        return;
+#endif
         break;
     case KEY_DOWN:
         if (f->enum_val < max_val) f->enum_val++;
+#if DISPLAY_ST7789
+        render_enum_selection(f, old_value);
+        return;
+#endif
         break;
     case KEY_ENTER:
         save_enum_idx(f->screen_id, f->enum_val);
@@ -1058,6 +1441,9 @@ static void handle_enum(key_event_t evt)
 static void handle_password(key_event_t evt)
 {
     nav_frame_t *f = &s_nav_stack[s_nav_depth];
+#if DISPLAY_ST7789
+    uint8_t old_cursor = f->cursor;
+#endif
 
     /* 错误倒计时中屏蔽按键 */
     if (f->pwd_err_visible) return;
@@ -1066,14 +1452,27 @@ static void handle_password(key_event_t evt)
     case KEY_UP:
         f->pwd_digits[f->cursor] =
             (uint8_t)((f->pwd_digits[f->cursor] + 1) % 10);
+#if DISPLAY_ST7789
+        render_password_digit(f, f->cursor);
+        return;
+#endif
         break;
     case KEY_DOWN:
         f->pwd_digits[f->cursor] =
             (uint8_t)((f->pwd_digits[f->cursor] + 9) % 10);
+#if DISPLAY_ST7789
+        render_password_digit(f, f->cursor);
+        return;
+#endif
         break;
     case KEY_ENTER:
         if (f->cursor < 2) {
             f->cursor++;
+#if DISPLAY_ST7789
+            render_password_digit(f, old_cursor);
+            render_password_digit(f, f->cursor);
+            return;
+#endif
         } else {
             /* 第 3 位: 验证密码 */
             uint16_t pwd = (uint16_t)(f->pwd_digits[0] * 100 +
@@ -1102,6 +1501,10 @@ static void handle_password(key_event_t evt)
                 f->pwd_err_visible = 1;
                 f->cursor = 0;
                 memset(f->pwd_digits, 0, sizeof(f->pwd_digits));
+#if DISPLAY_ST7789
+                render_password_content(f);
+                return;
+#endif
             }
         }
         break;
@@ -1140,6 +1543,10 @@ static void handle_confirm(key_event_t evt)
     case KEY_UP:
     case KEY_DOWN:
         f->confirm_sel = f->confirm_sel ? 0 : 1;
+#if DISPLAY_ST7789
+        render_confirm_buttons(f);
+        return;
+#endif
         break;
     case KEY_ENTER:
         if (f->confirm_sel == 1) {
@@ -1179,6 +1586,9 @@ void menu_init(const menu_config_t *p_cfg)
 {
     s_nav_depth = -1;
     s_access_level = ACCESS_NONE;
+#if DISPLAY_ST7789
+    s_rendered_screen = SCR_COUNT;
+#endif
     s_config.idle_timeout_10ms = (p_cfg && p_cfg->idle_timeout_10ms) ? p_cfg->idle_timeout_10ms : 3000;
     s_idle_counter = 0;
 }
@@ -1188,10 +1598,18 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
     /* 1. 菜单未激活: KEY_ENTER 进入密码验证 */
     if (s_nav_depth < 0) {
         if (key_evt == KEY_ENTER) {
+#if DISPLAY_ST7789
+            OLED_SetDisplayEnabled(0U);
+            run_display_erase_visible_page();
+#endif
             nav_push(MODE_PASSWORD, SCR_PASSWORD);
             s_nav_stack[s_nav_depth].pwd_target = (uint8_t)SCR_MAIN_MENU;
             s_idle_counter = 0;
+#if DISPLAY_ST7789
+            render_current_frame_with_clear(0U);
+#else
             render_current_frame();
+#endif
         }
         if (p_out) { p_out->active = 0; p_out->screen_id = 0; p_out->mode = 0; }
         return (uint8_t)(s_nav_depth >= 0 ? 1 : 0);
@@ -1218,7 +1636,11 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
             f->pwd_err_visible &&
             (uint32_t)(HAL_GetTick() - f->pwd_err_start_ms) >= PASSWORD_ERROR_DISPLAY_MS) {
             f->pwd_err_visible = 0;
+#if DISPLAY_ST7789
+            render_password_content(f);
+#else
             render_current_frame();
+#endif
         }
     }
 
@@ -1264,8 +1686,17 @@ void menu_exit(void)
 {
     s_nav_depth = -1;
     s_access_level = ACCESS_NONE;
-    ssd1306_Fill(Black);
-    ssd1306_UpdateScreen();
+#if DISPLAY_ST7789
+    OLED_SetDisplayEnabled(0U);
+    if (s_rendered_screen == SCR_PASSWORD) erase_password_page();
+    else OLED_Clear(OLED_BLACK);
+    run_display_prepare_after_menu();
+    s_rendered_screen = SCR_COUNT;
+#else
+    OLED_Clear(OLED_BLACK);
+    OLED_Present();
+    run_display_invalidate();
+#endif
 }
 
 uint8_t menu_is_active(void)
