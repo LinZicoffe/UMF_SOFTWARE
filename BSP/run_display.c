@@ -31,6 +31,8 @@ static float dac_to_mA(uint16_t dac_val, const uint16_t *p_dac_buf)
 #if DISPLAY_ST7789
 
 static char s_rate_text[24];
+static uint16_t s_rate_x;
+static oled_font_t s_rate_font;
 static char s_temp_text[24];
 static char s_total_text[32];
 static char s_aux_text[8][32];
@@ -78,11 +80,25 @@ static void render_page_main(const run_display_input_t *p_in)
     if (s_display_dirty || strcmp(s_rate_text, buf) != 0) {
         oled_font_t rate_font = OLED_TextWidth(buf, OLED_FONT_LARGE) <= 232U
                               ? OLED_FONT_LARGE : OLED_FONT_MEDIUM;
-        OLED_FillRectangle(8, 83, 239, 133, OLED_BLACK);
+        size_t i;
+        char glyph[2] = { 0, 0 };
         x = OLED_TextWidth(buf, rate_font);
         x = x < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - x) / 2U) : 0U;
-        OLED_DrawText(x, 91, buf, rate_font, OLED_WHITE, OLED_BLACK);
+        if (s_display_dirty || x != s_rate_x || rate_font != s_rate_font) {
+            OLED_FillRectangle(8, 83, 239, 133, OLED_BLACK);
+            OLED_DrawText(x, 91, buf, rate_font, OLED_WHITE, OLED_BLACK);
+        } else {
+            uint16_t glyph_width = OLED_TextWidth("0", rate_font);
+            for (i = 0; buf[i] != '\0'; i++) {
+                if (buf[i] == s_rate_text[i]) continue;
+                glyph[0] = buf[i];
+                OLED_DrawText(x + (uint16_t)i * glyph_width, 91, glyph,
+                              rate_font, OLED_WHITE, OLED_BLACK);
+            }
+        }
         strcpy(s_rate_text, buf);
+        s_rate_x = x;
+        s_rate_font = rate_font;
     }
     strcpy(buf, (const char *)p_in->p_flow_sum_buf);
     draw_field(8, 184, 232, s_total_text, buf, OLED_FONT_SMALL, OLED_YELLOW);
