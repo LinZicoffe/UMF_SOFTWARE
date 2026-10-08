@@ -42,7 +42,8 @@ uint16_t OLED_TextWidth(const char *text, oled_font_t font);
 uint8_t OLED_FontHeight(oled_font_t font);
 void OLED_Present(void);
 #if DISPLAY_ST7789
-void OLED_SetDisplayEnabled(uint8_t enabled);
+/* 按 8 行分段合成整页；回调会重复调用，只能绘制，不能推进业务状态。 */
+void OLED_RenderFrame(void (*render)(const void *context), const void *context);
 #endif
 
 /* 与原页面的光标式绘制接口保持一致，供 128x64 排版使用。 */
