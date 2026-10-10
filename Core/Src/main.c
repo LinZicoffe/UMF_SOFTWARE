@@ -73,6 +73,10 @@ void  Time_Delay(uint32_t nCount);
 void  FlashProtect(void);
 void  Data_Init(void);
 float ConvertFunc(float pv, float x0, float x1, float y0, float y1);
+static void app_key_menu_task(void);
+static void app_display_recovery_task(void);
+static void app_display_task(void);
+static void app_output_task(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -172,117 +176,21 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
         /* 按键事件 + 菜单处理 */
-        {
-            key_event_t evt = key_get_event();
-            menu_status_t menu_st;
-#if DISPLAY_ST7789
-            uint8_t menu_was_active = menu_is_active();
-#endif
-            if (menu_process(evt, &menu_st)) {
-                /* 菜单已激活并渲染 */
-            }
-            else if (evt == KEY_UP && !menu_is_active()) {
-                run_display_prev_page();
-            }
-            else if (evt == KEY_DOWN && !menu_is_active()) {
-                run_display_next_page();
-            }
-#if DISPLAY_ST7789
-            if (menu_was_active && !menu_is_active()) {
-                DisplayTimeBase = 20;
-                OledRecoveryTimeBase = 0;
-            }
-#endif
-        }
+        app_key_menu_task();
 
-        /* 屏幕抗干扰自愈: 周期性重发控制器配置命令，不触发整屏重绘。
-         * 间隔由 param_get_oled_recovery_interval() 控制 (单位 100ms, 即 10×10ms)
-         * 0 = 禁用; 默认 50 = 5 秒
-         * 仅在菜单未激活时执行, 避免重初始化打断菜单交互 */
-        {
-            uint16_t recovery_interval = param_get_oled_recovery_interval();
-            if (recovery_interval > 0 &&
-                OledRecoveryTimeBase >= (uint16_t)(recovery_interval * 10) &&
-                !menu_is_active())
-            {
-                OledRecoveryTimeBase = 0;
-                OLED_Recovery();
-            }
-        }
+        /* 屏幕抗干扰自愈 */
+        app_display_recovery_task();
 
         /* 运行显示刷新 (200ms) */
-        if ((DisplayTimeBase >= 20) && DisplayEnabled && !menu_is_active())
-        {
-            DisplayTimeBase = 0;
-            {
-                Uart_SendfloatTypeDef eff_rate;
-                Uart_SendfloatTypeDef eff_temp;
-                eff_rate.num = convert_flow_rate_from_lph(
-                    effective_flow_rate(),
-                    param_get_flow_unit(),
-                    param_get_medium_density());
-                eff_temp.num = effective_temperature();
-
-                const run_display_input_t input = {
-                    .p_flow_rate    = &eff_rate,
-                    .p_temperature  = &eff_temp,
-                    .p_pressure     = &FlowPressure,
-                    .p_cumulative   = &Cumulativeflow,
-                    .p_flow_sum_buf = effective_flow_sum_buf(strFlowSumBuf),
-                    .p_sum_unit     = &Sumunit,
-                    .p_module_state = &ModuleState,
-                    .p_dac_value    = &DacValue,
-                    .p_dac_buf      = DacValueBuf,
-                    .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
-                    .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
-                };
-                
-                run_display_render(&input);
-            }
-            OLED_Present();
-        }
+        app_display_task();
 
         /* 原有逻辑 */
         HAL_IWDG_Refresh(&hiwdg);
         Uart1_Communication();
         Uart2_Communication();
 
-        /* DAC 换算 (先计算，再输出 PWM) */
-        if ((!ForceDacOutFlag) && (!CalEnabledFlag))
-        {
-            /* Step 3: 仪表系数 + 介质系数 */
-            float corrected_flow = effective_flow_rate()
-                * param_get_meter_coeff()
-                * param_get_medium_coeff();
-
-            /* 七点标定修正 */
-            corrected_flow = cal_correct_flow(corrected_flow);
-
-            /* DAC 线性换算: corrected_flow → 4~20mA PWM */
-            {
-                float dac_raw = ConvertFunc(corrected_flow,
-                    param_get_value_4ma(), param_get_value_20ma(),
-                    (float)DacZeroValue, (float)DacFullValue);
-                /* Clamp: 防止负值或超限值导致 uint16_t 异常 */
-                if (dac_raw < (float)DacZeroValue) dac_raw = (float)DacZeroValue;
-                if (dac_raw > (float)DacFullValue)  dac_raw = (float)DacFullValue;
-                DacValue = (uint16_t)dac_raw;
-            }
-
-            /* Step 4: 小信号切除 — 流量低于 [量程下限 + 量程×N%] 时输出零点 */
-            {
-                float span = param_get_value_20ma() - param_get_value_4ma();
-                if (span > 0.0f) {
-                    float threshold = span * param_get_small_signal() / 100.0f;
-                    if (corrected_flow < (param_get_value_4ma() + threshold))
-                        DacValue = DacZeroValue;
-                }
-            }
-        }
-
-        /* PWM 输出 — 在 DAC 换算之后，确保使用最新 DacValue */
-        PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
-        PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
+        /* 输出处理 (先计算，再输出 PWM) */
+        app_output_task();
     }
   /* USER CODE END 3 */
 }
@@ -328,6 +236,128 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* 优先处理菜单按键，运行页面支持上下翻页 */
+static void app_key_menu_task(void)
+{
+    key_event_t evt = key_get_event();
+    menu_status_t menu_st;
+#if DISPLAY_ST7789
+    uint8_t menu_was_active = menu_is_active();
+#endif
+    if (menu_process(evt, &menu_st)) {
+        /* 菜单已激活并渲染 */
+    }
+    else if (evt == KEY_UP && !menu_is_active()) {
+        run_display_prev_page();
+    }
+    else if (evt == KEY_DOWN && !menu_is_active()) {
+        run_display_next_page();
+    }
+#if DISPLAY_ST7789
+    if (menu_was_active && !menu_is_active()) {
+        DisplayTimeBase = 20;
+        OledRecoveryTimeBase = 0;
+    }
+#endif
+}
+
+/* 屏幕抗干扰自愈: 周期性重发控制器配置命令，不触发整屏重绘。
+ * 间隔由 param_get_oled_recovery_interval() 控制 (单位 100ms, 即 10×10ms)
+ * 0 = 禁用; 默认 50 = 5 秒
+ * 仅在菜单未激活时执行, 避免重初始化打断菜单交互 */
+static void app_display_recovery_task(void)
+{
+    uint16_t recovery_interval = param_get_oled_recovery_interval();
+    if (recovery_interval > 0 &&
+        OledRecoveryTimeBase >= (uint16_t)(recovery_interval * 10) &&
+        !menu_is_active())
+    {
+        OledRecoveryTimeBase = 0;
+        OLED_Recovery();
+    }
+}
+
+/* 运行页面刷新：每 200ms 执行一次，菜单激活时暂停 */
+static void app_display_task(void)
+{
+    if ((DisplayTimeBase < 20) || !DisplayEnabled || menu_is_active())
+    {
+        return;
+    }
+
+    DisplayTimeBase = 0;
+
+    Uart_SendfloatTypeDef eff_rate;
+    Uart_SendfloatTypeDef eff_temp;
+    eff_rate.num = convert_flow_rate_from_lph(
+        effective_flow_rate(),
+        param_get_flow_unit(),
+        param_get_medium_density());
+    eff_temp.num = effective_temperature();
+
+    const run_display_input_t input = {
+        .p_flow_rate      = &eff_rate,
+        .p_temperature    = &eff_temp,
+        .p_pressure       = &FlowPressure,
+        .p_cumulative     = &Cumulativeflow,
+        .p_flow_sum_buf   = effective_flow_sum_buf(strFlowSumBuf),
+        .p_sum_unit       = &Sumunit,
+        .p_module_state   = &ModuleState,
+        .p_dac_value      = &DacValue,
+        .p_dac_buf        = DacValueBuf,
+        .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
+        .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
+    };
+
+    run_display_render(&input);
+    OLED_Present();
+}
+
+/* 输出处理：自动计算输出值，再写入硬件 */
+static void app_output_task(void)
+{
+    if ((!ForceDacOutFlag) && (!CalEnabledFlag))
+    {
+        /* 仪表系数 + 介质系数 */
+        float corrected_flow = effective_flow_rate()
+            * param_get_meter_coeff()
+            * param_get_medium_coeff();
+
+        /* 七点标定修正 */
+        corrected_flow = cal_correct_flow(corrected_flow);
+
+        /* DAC 线性换算: corrected_flow → 4~20mA PWM */
+        float dac_raw = ConvertFunc(corrected_flow,
+            param_get_value_4ma(), param_get_value_20ma(),
+            (float)DacZeroValue, (float)DacFullValue);
+        /* 限制范围，防止负值或超限值导致 uint16_t 异常 */
+        if (dac_raw < (float)DacZeroValue)
+        {
+            dac_raw = (float)DacZeroValue;
+        }
+        if (dac_raw > (float)DacFullValue)
+        {
+            dac_raw = (float)DacFullValue;
+        }
+        DacValue = (uint16_t)dac_raw;
+
+        /* 小信号切除：流量低于 [量程下限 + 量程×N%] 时输出零点 */
+        float span = param_get_value_20ma() - param_get_value_4ma();
+        if (span > 0.0f)
+        {
+            float threshold = span * param_get_small_signal() / 100.0f;
+            if (corrected_flow < (param_get_value_4ma() + threshold))
+            {
+                DacValue = DacZeroValue;
+            }
+        }
+    }
+
+    /* 强制输出或标定模式也需要写入当前输出值 */
+    PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
+    PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
+}
+
 /**
  * @Author: liyongtai
  * @description: flash program protect

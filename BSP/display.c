@@ -9,6 +9,12 @@
 static uint16_t s_cursor_x;
 static uint16_t s_cursor_y;
 
+/* 240x240 RGB565 整屏需要 115200 字节；仅缓存 8 行，复用 3840 字节。 */
+#define LCD_FRAME_ROWS 8U
+static uint16_t s_frame_pixels[LCD_FRAME_ROWS][OLED_WIDTH];
+static uint16_t s_frame_y;
+static uint8_t s_frame_active;
+
 static void LCD_StreamBegin(void)
 {
     OLED_DC_GPIO_Port->BSRR = OLED_DC_Pin;
@@ -76,6 +82,15 @@ void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
     if (x1 > x2 || y1 > y2 || x1 >= OLED_WIDTH || y1 >= OLED_HEIGHT) return;
     if (x2 >= OLED_WIDTH) x2 = OLED_WIDTH - 1U;
     if (y2 >= OLED_HEIGHT) y2 = OLED_HEIGHT - 1U;
+    if (s_frame_active) {
+        if (y2 < s_frame_y || y1 >= s_frame_y + LCD_FRAME_ROWS) return;
+        if (y1 < s_frame_y) y1 = s_frame_y;
+        if (y2 >= s_frame_y + LCD_FRAME_ROWS) y2 = s_frame_y + LCD_FRAME_ROWS - 1U;
+        for (y = y1; y <= y2; y++)
+            for (x = x1; x <= x2; x++)
+                s_frame_pixels[y - s_frame_y][x] = color;
+        return;
+    }
     LCD_Address_Set(x1, y1, x2, y2);
     LCD_StreamBegin();
     for (y = y1; y <= y2; y++) {
@@ -100,20 +115,33 @@ static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
     uint16_t width = (uint16_t)(glyph_font.width * scale);
     uint16_t height = (uint16_t)(glyph_font.height * scale);
     uint16_t bits;
+    uint16_t pixel_y;
     if (ch < 32 || ch > 126 || x + width > OLED_WIDTH ||
         y + height > OLED_HEIGHT) return;
-    LCD_Address_Set(x, y, x + width - 1U, y + height - 1U);
-    LCD_StreamBegin();
+    if (s_frame_active) {
+        if (y + height <= s_frame_y || y >= s_frame_y + LCD_FRAME_ROWS) return;
+    } else {
+        LCD_Address_Set(x, y, x + width - 1U, y + height - 1U);
+        LCD_StreamBegin();
+    }
     for (row = 0; row < glyph_font.height; row++) {
         bits = glyph_font.data[((uint8_t)ch - 32U) * glyph_font.height + row];
         for (sy = 0; sy < scale; sy++) {
+            pixel_y = (uint16_t)(y + row * scale + sy);
+            if (s_frame_active && (pixel_y < s_frame_y ||
+                pixel_y >= s_frame_y + LCD_FRAME_ROWS)) continue;
             for (col = 0; col < glyph_font.width; col++) {
                 uint16_t pixel = (bits & (0x8000U >> col)) ? fg : bg;
-                for (sx = 0; sx < scale; sx++) stream_color(pixel);
+                for (sx = 0; sx < scale; sx++) {
+                    if (s_frame_active)
+                        s_frame_pixels[pixel_y - s_frame_y][x + col * scale + sx] = pixel;
+                    else
+                        stream_color(pixel);
+                }
             }
         }
     }
-    LCD_StreamEnd();
+    if (!s_frame_active) LCD_StreamEnd();
 }
 
 void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
@@ -153,9 +181,23 @@ void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
 
 void OLED_Present(void) { }
 
-void OLED_SetDisplayEnabled(uint8_t enabled)
+void OLED_RenderFrame(void (*render)(const void *context), const void *context)
 {
-    LCD_WR_REG(enabled ? 0x29U : 0x28U);
+    uint16_t row, col;
+    LCD_Address_Set(0, 0, OLED_WIDTH - 1U, OLED_HEIGHT - 1U);
+    LCD_StreamBegin();
+    s_frame_active = 1U;
+    for (s_frame_y = 0; s_frame_y < OLED_HEIGHT; s_frame_y += LCD_FRAME_ROWS) {
+        memset(s_frame_pixels, 0, sizeof(s_frame_pixels));
+        render(context);
+        /* 背景和内容在内存中合成后，每个屏幕像素只发送一次。 */
+        for (row = 0; row < LCD_FRAME_ROWS; row++)
+            for (col = 0; col < OLED_WIDTH; col++)
+                stream_color(s_frame_pixels[row][col]);
+        IWDG->KR = 0xAAAAU;
+    }
+    s_frame_active = 0U;
+    LCD_StreamEnd();
 }
 
 void OLED_SetCursor(uint16_t x, uint16_t y)

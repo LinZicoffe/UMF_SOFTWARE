@@ -233,9 +233,6 @@ static int8_t             s_nav_depth;           /* -1 = 不活跃 */
 static volatile uint16_t  s_idle_counter;        /* ISR 递增 */
 static menu_config_t      s_config;
 static access_level_t     s_access_level;
-#if DISPLAY_ST7789
-static screen_t           s_rendered_screen = SCR_COUNT;
-#endif
 
 /* ===== 栈操作 ===== */
 static void nav_push(menu_mode_t mode, screen_t scr)
@@ -539,22 +536,6 @@ static void lcd_title(screen_t screen)
     OLED_FillRectangle(8, 27, 231, 28, OLED_CYAN);
 }
 
-static void erase_password_page(void)
-{
-    const char *title = get_screen_title(SCR_PASSWORD);
-    const char *range = "Range:000~999";
-    uint16_t width = OLED_TextWidth(title, OLED_FONT_SMALL);
-    uint16_t x = (uint16_t)((OLED_WIDTH - width) / 2U);
-    OLED_FillRectangle(x, 5, x + width - 1U,
-                       5U + OLED_FontHeight(OLED_FONT_SMALL) - 1U, OLED_BLACK);
-    OLED_FillRectangle(8, 27, 231, 28, OLED_BLACK);
-    OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
-    width = OLED_TextWidth(range, OLED_FONT_SMALL);
-    x = (uint16_t)((OLED_WIDTH - width) / 2U);
-    OLED_FillRectangle(x, 180, x + width - 1U,
-                       180U + OLED_FontHeight(OLED_FONT_SMALL) - 1U, OLED_BLACK);
-}
-
 static void render_list_row(const nav_frame_t *f, const list_item_t *items,
                             uint8_t idx, uint8_t row)
 {
@@ -822,15 +803,10 @@ static void render_confirm(nav_frame_t *f)
     render_confirm_buttons(f);
 }
 
-static void render_current_frame_with_clear(uint8_t clear_background)
+static void render_menu_frame(const void *context)
 {
-    nav_frame_t *f;
-    if (s_nav_depth < 0) return;
-    f = &s_nav_stack[s_nav_depth];
-    /* 换页时先隐藏直写过程，待屏幕 GRAM 写完后再显示。 */
-    if (clear_background && s_rendered_screen != f->screen_id)
-        OLED_SetDisplayEnabled(0U);
-    if (clear_background) OLED_Clear(OLED_BLACK);
+    nav_frame_t *f = &s_nav_stack[s_nav_depth];
+    (void)context;
     switch (f->mode) {
     case MODE_LIST: render_list(f); break;
     case MODE_NUMERIC: render_numeric(f); break;
@@ -839,16 +815,12 @@ static void render_current_frame_with_clear(uint8_t clear_background)
     case MODE_READONLY: render_readonly(f); break;
     case MODE_CONFIRM: render_confirm(f); break;
     }
-    OLED_Present();
-    if (s_rendered_screen != f->screen_id) {
-        OLED_SetDisplayEnabled(1U);
-        s_rendered_screen = f->screen_id;
-    }
 }
 
 static void render_current_frame(void)
 {
-    render_current_frame_with_clear(1U);
+    if (s_nav_depth < 0) return;
+    OLED_RenderFrame(render_menu_frame, NULL);
 }
 
 #else
@@ -1586,9 +1558,6 @@ void menu_init(const menu_config_t *p_cfg)
 {
     s_nav_depth = -1;
     s_access_level = ACCESS_NONE;
-#if DISPLAY_ST7789
-    s_rendered_screen = SCR_COUNT;
-#endif
     s_config.idle_timeout_10ms = (p_cfg && p_cfg->idle_timeout_10ms) ? p_cfg->idle_timeout_10ms : 3000;
     s_idle_counter = 0;
 }
@@ -1598,18 +1567,10 @@ uint8_t menu_process(key_event_t key_evt, menu_status_t *p_out)
     /* 1. 菜单未激活: KEY_ENTER 进入密码验证 */
     if (s_nav_depth < 0) {
         if (key_evt == KEY_ENTER) {
-#if DISPLAY_ST7789
-            OLED_SetDisplayEnabled(0U);
-            run_display_erase_visible_page();
-#endif
             nav_push(MODE_PASSWORD, SCR_PASSWORD);
             s_nav_stack[s_nav_depth].pwd_target = (uint8_t)SCR_MAIN_MENU;
             s_idle_counter = 0;
-#if DISPLAY_ST7789
-            render_current_frame_with_clear(0U);
-#else
             render_current_frame();
-#endif
         }
         if (p_out) { p_out->active = 0; p_out->screen_id = 0; p_out->mode = 0; }
         return (uint8_t)(s_nav_depth >= 0 ? 1 : 0);
@@ -1687,11 +1648,8 @@ void menu_exit(void)
     s_nav_depth = -1;
     s_access_level = ACCESS_NONE;
 #if DISPLAY_ST7789
-    OLED_SetDisplayEnabled(0U);
-    if (s_rendered_screen == SCR_PASSWORD) erase_password_page();
-    else OLED_Clear(OLED_BLACK);
-    run_display_prepare_after_menu();
-    s_rendered_screen = SCR_COUNT;
+    /* 保留菜单画面，主循环立即用运行页的最终像素覆盖。 */
+    run_display_invalidate();
 #else
     OLED_Clear(OLED_BLACK);
     OLED_Present();

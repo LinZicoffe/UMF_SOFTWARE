@@ -73,3 +73,5 @@ HostApplication/**/*.user
 HostApplication/**/*.suo
 HostApplication/**/packages/
 .claude/skills/
+.screen-refresh-work/
+outputs/
