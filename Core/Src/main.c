@@ -73,6 +73,7 @@ void  Time_Delay(uint32_t nCount);
 void  FlashProtect(void);
 void  Data_Init(void);
 float ConvertFunc(float pv, float x0, float x1, float y0, float y1);
+static void app_key_menu_task(void);
 static void app_display_task(void);
 static void app_output_task(void);
 /* USER CODE END PFP */
@@ -174,28 +175,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
         /* 按键事件 + 菜单处理 */
-        {
-            key_event_t evt = key_get_event();
-            menu_status_t menu_st;
-#if DISPLAY_ST7789
-            uint8_t menu_was_active = menu_is_active();
-#endif
-            if (menu_process(evt, &menu_st)) {
-                /* 菜单已激活并渲染 */
-            }
-            else if (evt == KEY_UP && !menu_is_active()) {
-                run_display_prev_page();
-            }
-            else if (evt == KEY_DOWN && !menu_is_active()) {
-                run_display_next_page();
-            }
-#if DISPLAY_ST7789
-            if (menu_was_active && !menu_is_active()) {
-                DisplayTimeBase = 20;
-                OledRecoveryTimeBase = 0;
-            }
-#endif
-        }
+        app_key_menu_task();
 
         /* 屏幕抗干扰自愈: 周期性重发控制器配置命令，不触发整屏重绘。
          * 间隔由 param_get_oled_recovery_interval() 控制 (单位 100ms, 即 10×10ms)
@@ -267,6 +247,31 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* 优先处理菜单按键，运行页面支持上下翻页 */
+static void app_key_menu_task(void)
+{
+    key_event_t evt = key_get_event();
+    menu_status_t menu_st;
+#if DISPLAY_ST7789
+    uint8_t menu_was_active = menu_is_active();
+#endif
+    if (menu_process(evt, &menu_st)) {
+        /* 菜单已激活并渲染 */
+    }
+    else if (evt == KEY_UP && !menu_is_active()) {
+        run_display_prev_page();
+    }
+    else if (evt == KEY_DOWN && !menu_is_active()) {
+        run_display_next_page();
+    }
+#if DISPLAY_ST7789
+    if (menu_was_active && !menu_is_active()) {
+        DisplayTimeBase = 20;
+        OledRecoveryTimeBase = 0;
+    }
+#endif
+}
+
 /* 运行页面刷新：每 200ms 执行一次，菜单激活时暂停 */
 static void app_display_task(void)
 {
