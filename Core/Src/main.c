@@ -73,6 +73,7 @@ void  Time_Delay(uint32_t nCount);
 void  FlashProtect(void);
 void  Data_Init(void);
 float ConvertFunc(float pv, float x0, float x1, float y0, float y1);
+static void app_display_task(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -211,36 +212,7 @@ int main(void)
         }
 
         /* 运行显示刷新 (200ms) */
-        if ((DisplayTimeBase >= 20) && DisplayEnabled && !menu_is_active())
-        {
-            DisplayTimeBase = 0;
-            {
-                Uart_SendfloatTypeDef eff_rate;
-                Uart_SendfloatTypeDef eff_temp;
-                eff_rate.num = convert_flow_rate_from_lph(
-                    effective_flow_rate(),
-                    param_get_flow_unit(),
-                    param_get_medium_density());
-                eff_temp.num = effective_temperature();
-
-                const run_display_input_t input = {
-                    .p_flow_rate    = &eff_rate,
-                    .p_temperature  = &eff_temp,
-                    .p_pressure     = &FlowPressure,
-                    .p_cumulative   = &Cumulativeflow,
-                    .p_flow_sum_buf = effective_flow_sum_buf(strFlowSumBuf),
-                    .p_sum_unit     = &Sumunit,
-                    .p_module_state = &ModuleState,
-                    .p_dac_value    = &DacValue,
-                    .p_dac_buf      = DacValueBuf,
-                    .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
-                    .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
-                };
-                
-                run_display_render(&input);
-            }
-            OLED_Present();
-        }
+        app_display_task();
 
         /* 原有逻辑 */
         HAL_IWDG_Refresh(&hiwdg);
@@ -328,6 +300,42 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* 运行页面刷新：每 200ms 执行一次，菜单激活时暂停 */
+static void app_display_task(void)
+{
+    if ((DisplayTimeBase < 20) || !DisplayEnabled || menu_is_active())
+    {
+        return;
+    }
+
+    DisplayTimeBase = 0;
+
+    Uart_SendfloatTypeDef eff_rate;
+    Uart_SendfloatTypeDef eff_temp;
+    eff_rate.num = convert_flow_rate_from_lph(
+        effective_flow_rate(),
+        param_get_flow_unit(),
+        param_get_medium_density());
+    eff_temp.num = effective_temperature();
+
+    const run_display_input_t input = {
+        .p_flow_rate      = &eff_rate,
+        .p_temperature    = &eff_temp,
+        .p_pressure       = &FlowPressure,
+        .p_cumulative     = &Cumulativeflow,
+        .p_flow_sum_buf   = effective_flow_sum_buf(strFlowSumBuf),
+        .p_sum_unit       = &Sumunit,
+        .p_module_state   = &ModuleState,
+        .p_dac_value      = &DacValue,
+        .p_dac_buf        = DacValueBuf,
+        .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
+        .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
+    };
+
+    run_display_render(&input);
+    OLED_Present();
+}
+
 /**
  * @Author: liyongtai
  * @description: flash program protect
