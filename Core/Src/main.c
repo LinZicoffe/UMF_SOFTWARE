@@ -74,6 +74,7 @@ void  FlashProtect(void);
 void  Data_Init(void);
 float ConvertFunc(float pv, float x0, float x1, float y0, float y1);
 static void app_display_task(void);
+static void app_output_task(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -219,42 +220,8 @@ int main(void)
         Uart1_Communication();
         Uart2_Communication();
 
-        /* DAC 换算 (先计算，再输出 PWM) */
-        if ((!ForceDacOutFlag) && (!CalEnabledFlag))
-        {
-            /* Step 3: 仪表系数 + 介质系数 */
-            float corrected_flow = effective_flow_rate()
-                * param_get_meter_coeff()
-                * param_get_medium_coeff();
-
-            /* 七点标定修正 */
-            corrected_flow = cal_correct_flow(corrected_flow);
-
-            /* DAC 线性换算: corrected_flow → 4~20mA PWM */
-            {
-                float dac_raw = ConvertFunc(corrected_flow,
-                    param_get_value_4ma(), param_get_value_20ma(),
-                    (float)DacZeroValue, (float)DacFullValue);
-                /* Clamp: 防止负值或超限值导致 uint16_t 异常 */
-                if (dac_raw < (float)DacZeroValue) dac_raw = (float)DacZeroValue;
-                if (dac_raw > (float)DacFullValue)  dac_raw = (float)DacFullValue;
-                DacValue = (uint16_t)dac_raw;
-            }
-
-            /* Step 4: 小信号切除 — 流量低于 [量程下限 + 量程×N%] 时输出零点 */
-            {
-                float span = param_get_value_20ma() - param_get_value_4ma();
-                if (span > 0.0f) {
-                    float threshold = span * param_get_small_signal() / 100.0f;
-                    if (corrected_flow < (param_get_value_4ma() + threshold))
-                        DacValue = DacZeroValue;
-                }
-            }
-        }
-
-        /* PWM 输出 — 在 DAC 换算之后，确保使用最新 DacValue */
-        PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
-        PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
+        /* 输出处理 (先计算，再输出 PWM) */
+        app_output_task();
     }
   /* USER CODE END 3 */
 }
@@ -334,6 +301,51 @@ static void app_display_task(void)
 
     run_display_render(&input);
     OLED_Present();
+}
+
+/* 输出处理：自动计算输出值，再写入硬件 */
+static void app_output_task(void)
+{
+    if ((!ForceDacOutFlag) && (!CalEnabledFlag))
+    {
+        /* 仪表系数 + 介质系数 */
+        float corrected_flow = effective_flow_rate()
+            * param_get_meter_coeff()
+            * param_get_medium_coeff();
+
+        /* 七点标定修正 */
+        corrected_flow = cal_correct_flow(corrected_flow);
+
+        /* DAC 线性换算: corrected_flow → 4~20mA PWM */
+        float dac_raw = ConvertFunc(corrected_flow,
+            param_get_value_4ma(), param_get_value_20ma(),
+            (float)DacZeroValue, (float)DacFullValue);
+        /* 限制范围，防止负值或超限值导致 uint16_t 异常 */
+        if (dac_raw < (float)DacZeroValue)
+        {
+            dac_raw = (float)DacZeroValue;
+        }
+        if (dac_raw > (float)DacFullValue)
+        {
+            dac_raw = (float)DacFullValue;
+        }
+        DacValue = (uint16_t)dac_raw;
+
+        /* 小信号切除：流量低于 [量程下限 + 量程×N%] 时输出零点 */
+        float span = param_get_value_20ma() - param_get_value_4ma();
+        if (span > 0.0f)
+        {
+            float threshold = span * param_get_small_signal() / 100.0f;
+            if (corrected_flow < (param_get_value_4ma() + threshold))
+            {
+                DacValue = DacZeroValue;
+            }
+        }
+    }
+
+    /* 强制输出或标定模式也需要写入当前输出值 */
+    PWMConfig(&htim1, 100000, (uint8_t)(DacValue >> 8));
+    PWMConfig(&htim4, 100000, (uint8_t)(DacValue >> 0));
 }
 
 /**
