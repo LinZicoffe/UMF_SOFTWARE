@@ -5,6 +5,7 @@
 
 #if DISPLAY_ST7789
 #include "lcd_init.h"
+#include "flow_digits_24x32.h"
 
 static uint16_t s_cursor_x;
 static uint16_t s_cursor_y;
@@ -43,11 +44,16 @@ static void LCD_StreamEnd(void)
 
 static uint8_t font_scale(oled_font_t font)
 {
+    if (font == OLED_FONT_FLOW_DIGITS) return 1U;
     return (uint8_t)(font + 2U);
 }
 
 static SSD1306_Font_t lcd_font_data(oled_font_t font)
 {
+    if (font == OLED_FONT_FLOW_DIGITS) {
+        SSD1306_Font_t digits = { FLOW_DIGIT_WIDTH, FLOW_DIGIT_HEIGHT, NULL, NULL };
+        return digits;
+    }
     return font == OLED_FONT_SMALL ? Font_7x10 : Font_6x8;
 }
 
@@ -114,10 +120,17 @@ static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
     SSD1306_Font_t glyph_font = lcd_font_data(font);
     uint16_t width = (uint16_t)(glyph_font.width * scale);
     uint16_t height = (uint16_t)(glyph_font.height * scale);
-    uint16_t bits;
+    uint32_t bits;
     uint16_t pixel_y;
+    uint8_t digit_index = 0U;
     if (ch < 32 || ch > 126 || x + width > OLED_WIDTH ||
         y + height > OLED_HEIGHT) return;
+    if (font == OLED_FONT_FLOW_DIGITS) {
+        if (ch >= '0' && ch <= '9') digit_index = (uint8_t)(ch - '0');
+        else if (ch == '.') digit_index = 10U;
+        else if (ch == '-') digit_index = 11U;
+        else return;
+    }
     if (s_frame_active) {
         if (y + height <= s_frame_y || y >= s_frame_y + LCD_FRAME_ROWS) return;
     } else {
@@ -125,13 +138,20 @@ static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
         LCD_StreamBegin();
     }
     for (row = 0; row < glyph_font.height; row++) {
-        bits = glyph_font.data[((uint8_t)ch - 32U) * glyph_font.height + row];
+        if (font == OLED_FONT_FLOW_DIGITS) {
+            /* 原生数字每行 24 位；其他字体仍按原有倍数展开。 */
+            const uint8_t *data = &s_flow_digit_font[digit_index][row * FLOW_DIGIT_STRIDE];
+            bits = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16)
+                 | ((uint32_t)data[2] << 8);
+        } else {
+            bits = (uint32_t)glyph_font.data[((uint8_t)ch - 32U) * glyph_font.height + row] << 16;
+        }
         for (sy = 0; sy < scale; sy++) {
             pixel_y = (uint16_t)(y + row * scale + sy);
             if (s_frame_active && (pixel_y < s_frame_y ||
                 pixel_y >= s_frame_y + LCD_FRAME_ROWS)) continue;
             for (col = 0; col < glyph_font.width; col++) {
-                uint16_t pixel = (bits & (0x8000U >> col)) ? fg : bg;
+                uint16_t pixel = (bits & (0x80000000UL >> col)) ? fg : bg;
                 for (sx = 0; sx < scale; sx++) {
                     if (s_frame_active)
                         s_frame_pixels[pixel_y - s_frame_y][x + col * scale + sx] = pixel;

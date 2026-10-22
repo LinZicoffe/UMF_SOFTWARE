@@ -77,8 +77,7 @@ static void render_page_main(const run_display_input_t *p_in)
     ftoa(rate, rate >= 1000.0f ? 0U : rate >= 100.0f ? 1U :
           rate >= 10.0f ? 2U : 3U, buf, sizeof(buf));
     if (s_display_dirty || strcmp(s_rate_text, buf) != 0) {
-        oled_font_t rate_font = OLED_TextWidth(buf, OLED_FONT_LARGE) <= 232U
-                              ? OLED_FONT_LARGE : OLED_FONT_MEDIUM;
+        oled_font_t rate_font = OLED_FONT_FLOW_DIGITS;
         size_t i;
         char glyph[2] = { 0, 0 };
         x = OLED_TextWidth(buf, rate_font);
