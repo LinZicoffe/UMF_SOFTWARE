@@ -58,9 +58,9 @@ static void render_page_main(const run_display_input_t *p_in)
     if (s_display_dirty) {
         OLED_DrawText(8, 8, p_in->p_flow_unit_str, OLED_FONT_SMALL,
                       OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 49, "FLOW", OLED_FONT_MEDIUM,
+        OLED_DrawText(8, 49, "FLOW", OLED_FONT_MAIN_LABELS,
                       OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 153, "TOTAL", OLED_FONT_MEDIUM,
+        OLED_DrawText(8, 153, "TOTAL", OLED_FONT_MAIN_LABELS,
                       OLED_CYAN, OLED_BLACK);
         OLED_DrawText(8, 213, p_in->p_total_unit_str, OLED_FONT_SMALL,
                       OLED_WHITE, OLED_BLACK);
