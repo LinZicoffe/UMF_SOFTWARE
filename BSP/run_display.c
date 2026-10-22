@@ -49,6 +49,13 @@ static void draw_field(uint16_t x, uint16_t y, uint16_t width,
     strcpy(previous, value);
 }
 
+static const char *main_unit_text(const char *unit)
+{
+    if (strcmp(unit, "m3/h") == 0) return "m\xC2\xB3/h";
+    if (strcmp(unit, "m3") == 0) return "m\xC2\xB3";
+    return unit;
+}
+
 static void render_page_main(const run_display_input_t *p_in)
 {
     char buf[32];
@@ -56,13 +63,13 @@ static void render_page_main(const run_display_input_t *p_in)
     float temp = p_in->p_temperature->num;
     uint16_t x;
     if (s_display_dirty) {
-        OLED_DrawText(8, 8, p_in->p_flow_unit_str, OLED_FONT_SMALL,
+        OLED_DrawText(8, 8, main_unit_text(p_in->p_flow_unit_str), OLED_FONT_SMALL,
                       OLED_CYAN, OLED_BLACK);
         OLED_DrawText(8, 49, "FLOW", OLED_FONT_MAIN_LABELS,
                       OLED_CYAN, OLED_BLACK);
         OLED_DrawText(8, 153, "TOTAL", OLED_FONT_MAIN_LABELS,
                       OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 213, p_in->p_total_unit_str, OLED_FONT_SMALL,
+        OLED_DrawText(8, 213, main_unit_text(p_in->p_total_unit_str), OLED_FONT_SMALL,
                       OLED_WHITE, OLED_BLACK);
     }
     if (temp > 999.9f) temp = 999.9f;

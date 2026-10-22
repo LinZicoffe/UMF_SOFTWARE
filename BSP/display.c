@@ -77,6 +77,11 @@ static uint16_t glyph_width(char ch, oled_font_t font)
     return (uint16_t)(lcd_font_data(font).width * font_scale(font));
 }
 
+static uint8_t is_superscript_three(const char *text)
+{
+    return (uint8_t)text[0] == 0xC2U && (uint8_t)text[1] == 0xB3U;
+}
+
 static void stream_color(uint16_t color)
 {
     LCD_StreamWrite8((uint8_t)(color >> 8));
@@ -133,13 +138,13 @@ void OLED_Clear(uint16_t color)
 }
 
 static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
-                      uint16_t fg, uint16_t bg)
+                      uint16_t fg, uint16_t bg, uint8_t scale)
 {
     uint8_t row, col, sy, sx;
-    uint8_t scale = font_scale(font);
     SSD1306_Font_t glyph_font = lcd_font_data(font);
     uint8_t columns = glyph_font.width;
-    uint16_t width = glyph_width(ch, font);
+    uint16_t width = font == OLED_FONT_MAIN_LABELS ? glyph_width(ch, font)
+                                                 : (uint16_t)(glyph_font.width * scale);
     uint16_t height = (uint16_t)(glyph_font.height * scale);
     uint32_t bits;
     uint16_t pixel_y;
@@ -196,20 +201,32 @@ static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
 void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
                    uint16_t foreground, uint16_t background)
 {
+    uint8_t scale = font_scale(font);
     if (!text) return;
     while (*text) {
-        uint16_t step = glyph_width(*text, font);
+        uint8_t superscript = font == OLED_FONT_SMALL && is_superscript_three(text);
+        uint16_t step = superscript ? Font_7x10.width : glyph_width(*text, font);
         if (x + step > OLED_WIDTH) break;
-        draw_char(x, y, *text++, font, foreground, background);
+        /* UTF-8 上标 3 复用现有字模，以原生 7x10 绘制在行顶部。 */
+        draw_char(x, y, superscript ? '3' : *text, font, foreground, background,
+                  superscript ? 1U : scale);
+        text += superscript ? 2 : 1;
         x += step;
     }
 }
 
 uint16_t OLED_TextWidth(const char *text, oled_font_t font)
 {
-    if (font == OLED_FONT_MAIN_LABELS && text) {
+    if ((font == OLED_FONT_MAIN_LABELS || font == OLED_FONT_SMALL) && text) {
         uint16_t width = 0U;
-        while (*text) width += glyph_width(*text++, font);
+        while (*text) {
+            if (font == OLED_FONT_SMALL && is_superscript_three(text)) {
+                width += Font_7x10.width;
+                text += 2;
+            } else {
+                width += glyph_width(*text++, font);
+            }
+        }
         return width;
     }
     return text ? (uint16_t)(strlen(text) * lcd_font_data(font).width * font_scale(font)) : 0U;
