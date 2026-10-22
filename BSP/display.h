@@ -26,7 +26,11 @@
 typedef enum {
     OLED_FONT_SMALL = 0,
     OLED_FONT_MEDIUM,
-    OLED_FONT_LARGE
+    OLED_FONT_LARGE,
+#if DISPLAY_ST7789
+    OLED_FONT_FLOW_DIGITS, /* 主界面流量专用，原生 24x32 数字字模 */
+    OLED_FONT_MAIN_LABELS  /* 主界面 FLOW、TOTAL，原生 24 像素行高字模 */
+#endif
 } oled_font_t;
 
 void OLED_Init(void);
