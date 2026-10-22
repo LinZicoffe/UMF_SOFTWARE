@@ -37,7 +37,7 @@ static char s_temp_text[24];
 static char s_total_text[32];
 static char s_aux_text[8][32];
 static run_page_t s_drawn_page = RUN_PAGE_COUNT;
-
+// ---- 绘制字段 ---- 
 static void draw_field(uint16_t x, uint16_t y, uint16_t width,
                        char *previous, const char *value, oled_font_t font,
                        uint16_t color)
@@ -55,7 +55,7 @@ static const char *main_unit_text(const char *unit)
     if (strcmp(unit, "m3") == 0) return "m\xC2\xB3";
     return unit;
 }
-
+// ---- S01 主界面 ---- */
 static void render_page_main(const run_display_input_t *p_in)
 {
     char buf[32];
@@ -63,6 +63,7 @@ static void render_page_main(const run_display_input_t *p_in)
     float temp = p_in->p_temperature->num;
     uint16_t x;
     if (s_display_dirty) {
+        // 绘制主界面静态文本
         OLED_DrawText(8, 8, main_unit_text(p_in->p_flow_unit_str), OLED_FONT_SMALL,
                       OLED_CYAN, OLED_BLACK);
         OLED_DrawText(8, 49, "FLOW", OLED_FONT_MAIN_LABELS,
@@ -83,16 +84,20 @@ static void render_page_main(const run_display_input_t *p_in)
     if (rate < 0.0f) rate = 0.0f;
     ftoa(rate, rate >= 1000.0f ? 0U : rate >= 100.0f ? 1U :
           rate >= 10.0f ? 2U : 3U, buf, sizeof(buf));
+    // 计算瞬时流量文本的水平居中位置，并根据脏标记和文本变化决定是否重绘
     if (s_display_dirty || strcmp(s_rate_text, buf) != 0) {
         oled_font_t rate_font = OLED_FONT_FLOW_DIGITS;
         size_t i;
         char glyph[2] = { 0, 0 };
         x = OLED_TextWidth(buf, rate_font);
         x = x < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - x) / 2U) : 0U;
+        // 如果文本位置或字体发生变化，清除原有文本区域并重绘整个文本；否则仅重绘变化的字符
         if (s_display_dirty || x != s_rate_x || rate_font != s_rate_font) {
+            // 清除原有文本区域并重绘整个文本
             OLED_FillRectangle(8, 83, 239, 133, OLED_BLACK);
             OLED_DrawText(x, 91, buf, rate_font, OLED_WHITE, OLED_BLACK);
         } else {
+            // 仅重绘变化的字符，避免闪烁
             uint16_t glyph_width = OLED_TextWidth("0", rate_font);
             for (i = 0; buf[i] != '\0'; i++) {
                 if (buf[i] == s_rate_text[i]) continue;
@@ -105,10 +110,12 @@ static void render_page_main(const run_display_input_t *p_in)
         s_rate_x = x;
         s_rate_font = rate_font;
     }
+    // 绘制累积流量文本
     strcpy(buf, (const char *)p_in->p_flow_sum_buf);
+    // 拼接累积流量单位字符串
     draw_field(8, 184, 232, s_total_text, buf, OLED_FONT_SMALL, OLED_YELLOW);
 }
-
+// ---- S02 辅助页 ---- */
 static void render_page_aux(const run_display_input_t *p_in)
 {
     char buf[32];
@@ -289,7 +296,7 @@ static void render_page_aux(const run_display_input_t *p_in)
 }
 
 #endif /* DISPLAY_ST7789 */
-
+// ---- 渲染回调 ----
 static void render_run_frame(const void *context)
 {
     const run_display_input_t *p_input = context;
@@ -302,6 +309,7 @@ static void render_run_frame(const void *context)
 
 /* ---- Public API ---- */
 
+// ---- 初始化显示器 ----
 void run_display_init(const run_display_config_t *p_cfg)
 {
     (void)p_cfg;
