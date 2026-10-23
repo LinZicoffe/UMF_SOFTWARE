@@ -47,7 +47,7 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 
 ### 编译步骤
 
-1. **IAR 构建 App**：打开 `EWARM/Project.eww`，选择 UMF 配置，Project → Make (F7)；**构建自动生成 `EWARM/UMF_app.bin`，并额外保存 `EWARM/UMF_app_yyyy-MM-dd.bin`**（日期取自导出时的电脑本地日期，同一天重新构建会覆盖当天文件；两份内容相同，均由 post-build `ielftool --bin --fill 0xFF` 生成，恒 53,248B，供 485 烧录上位机使用）。Make 若没有需要更新的产物，不会重复导出；需要强制重新生成时使用 Rebuild All。
+1. **IAR 构建 App**：打开 `EWARM/Project.eww`，选择 UMF 配置，Project → Make (F7)；**构建自动生成 `EWARM/UMF_app.bin`，并额外保存 `EWARM/UMF_app_yyyy-MM-dd-HHmmss.bin`**（时间取自导出时的电脑本地时间，精确到秒；两份内容相同，均由 post-build `ielftool --bin --fill 0xFF` 生成，恒 53,248B，供 485 烧录上位机使用）。Make 若没有需要更新的产物，不会重复导出；需要强制重新生成时使用 Rebuild All。
 2. **STM32CubeIDE 构建 App**（可替代 IAR）：导入 `STM32CubeIDE/` 工程，Build (Release)；post-build `arm-none-eabi-objcopy -O binary --gap-fill 0xFF --pad-to 0x0800F400` 生成同规格升级包 `UMF_app.bin`（输出于构建目录）
 3. **Bootloader 工程**（仅首次部署/BL 变更时）：IAR Make `UMF_Boot.ewp` 后用 SWD 烧录 `UMF_Boot.hex` 到页 0~7
 4. 下载 App 到目标板（SWD 或 485 在线升级，上位机见文末链接）
@@ -296,7 +296,7 @@ S03 主菜单 (5 项)
 
 ### IAR 固件文件名添加时间 (2026-10-23)
 
-- App 构建后在固定文件名 `UMF_app.bin` 之外，自动保存带导出日期的 `UMF_app_yyyy-MM-dd.bin`，同一天重新构建覆盖当天文件；升级包内容及填充范围保持不变。
+- App 构建后在固定文件名 `UMF_app.bin` 之外，自动保存带导出时间的 `UMF_app_yyyy-MM-dd-HHmmss.bin`，方便区分各次构建；升级包内容及填充范围保持不变。
 
 ### 主界面立方米单位上标 (2026-10-22)
 

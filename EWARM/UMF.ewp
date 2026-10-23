@@ -1108,7 +1108,7 @@
             <data>
                 <buildActions>
                     <buildAction>
-                        <cmdline>"$TOOLKIT_DIR$\bin\ielftool.exe" --bin --fill 0xFF;0x08002400-0x0800F3FF "$TARGET_PATH$" "$PROJ_DIR$\UMF_app.bin" &amp;&amp; powershell.exe -NoProfile -NonInteractive -Command "Copy-Item -LiteralPath '$PROJ_DIR$\UMF_app.bin' -Destination (Join-Path '$PROJ_DIR$' ('UMF_app_' + (Get-Date -Format 'yyyy-MM-dd') + '.bin')) -ErrorAction Stop" &amp;&amp; echo &gt; "$BUILD_FILES_DIR$/.postbuild"</cmdline>
+                        <cmdline>"$TOOLKIT_DIR$\bin\ielftool.exe" --bin --fill 0xFF;0x08002400-0x0800F3FF "$TARGET_PATH$" "$PROJ_DIR$\UMF_app.bin" &amp;&amp; powershell.exe -NoProfile -NonInteractive -Command "Copy-Item -LiteralPath '$PROJ_DIR$\UMF_app.bin' -Destination (Join-Path '$PROJ_DIR$' ('UMF_app_' + (Get-Date -Format 'yyyy-MM-dd-HHmmss') + '.bin')) -ErrorAction Stop" &amp;&amp; echo &gt; "$BUILD_FILES_DIR$/.postbuild"</cmdline>
                         <workingDirectory>$PROJ_DIR$</workingDirectory>
                         <buildSequence>postLink</buildSequence>
                         <outputs>
