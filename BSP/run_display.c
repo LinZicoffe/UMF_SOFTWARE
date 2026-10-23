@@ -87,6 +87,7 @@ static void render_page_main(const run_display_input_t *p_in)
     // 计算瞬时流量文本的水平居中位置，并根据脏标记和文本变化决定是否重绘
     if (s_display_dirty || strcmp(s_rate_text, buf) != 0) {
         oled_font_t rate_font = OLED_FONT_FLOW_DIGITS;
+        const uint16_t rate_y = 98U;
         size_t i;
         char glyph[2] = { 0, 0 };
         x = OLED_TextWidth(buf, rate_font);
@@ -95,14 +96,14 @@ static void render_page_main(const run_display_input_t *p_in)
         if (s_display_dirty || x != s_rate_x || rate_font != s_rate_font) {
             // 清除原有文本区域并重绘整个文本
             OLED_FillRectangle(8, 83, 239, 133, OLED_BLACK);
-            OLED_DrawText(x, 98, buf, rate_font, OLED_WHITE, OLED_BLACK);
+            OLED_DrawText(x, rate_y, buf, rate_font, OLED_WHITE, OLED_BLACK);
         } else {
             // 仅重绘变化的字符，避免闪烁
             uint16_t glyph_width = OLED_TextWidth("0", rate_font);
             for (i = 0; buf[i] != '\0'; i++) {
                 if (buf[i] == s_rate_text[i]) continue;
                 glyph[0] = buf[i];
-                OLED_DrawText(x + (uint16_t)i * glyph_width, 91, glyph,
+                OLED_DrawText(x + (uint16_t)i * glyph_width, rate_y, glyph,
                               rate_font, OLED_WHITE, OLED_BLACK);
             }
         }

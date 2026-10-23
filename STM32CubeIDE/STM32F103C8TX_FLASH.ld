@@ -89,6 +89,7 @@ SECTIONS
   .rodata :
   {
     . = ALIGN(4);
+    KEEP(*(.rodata.firmware_build_time)) /* 保留未被代码引用的构建时间。 */
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     . = ALIGN(4);

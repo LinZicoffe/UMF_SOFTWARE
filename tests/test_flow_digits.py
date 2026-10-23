@@ -103,7 +103,7 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
                 for y in range(32):
                     row = int.from_bytes(glyphs[glyph * 96 + y * 3:glyph * 96 + y * 3 + 3], 'big')
                     for x in range(24):
-                        offset = ((91 + y) * 240 + x0 + char_index * 24 + x) * 2
+                        offset = ((98 + y) * 240 + x0 + char_index * 24 + x) * 2
                         expected = b'\xff\xff' if row & (1 << (23 - x)) else b'\0\0'
                         self.assertEqual(image[offset:offset + 2], expected,
                                          f'rate={text}, char={char}, x={x}, y={y}')
