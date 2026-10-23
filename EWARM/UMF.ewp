@@ -70,7 +70,7 @@
                 </option>
                 <option>
                     <name>OGLastSavedByProductVersion</name>
-                    <state>9.60.2.5384</state>
+                    <state>9.60.4.11196</state>
                 </option>
                 <option>
                     <name>OGChipSelectEditMenu</name>
@@ -1106,8 +1106,18 @@
             <name>BUILDACTION</name>
             <archiveVersion>2</archiveVersion>
             <data>
-                <prebuild></prebuild>
-                <postbuild>&quot;$TOOLKIT_DIR$\bin\ielftool.exe&quot; --bin --fill 0xFF;0x08002400-0x0800F3FF &quot;$TARGET_PATH$&quot; &quot;$PROJ_DIR$\UMF_app.bin&quot;</postbuild>
+                <buildActions>
+                    <buildAction>
+                        <cmdline>"$TOOLKIT_DIR$\bin\ielftool.exe" --bin --fill 0xFF;0x08002400-0x0800F3FF "$TARGET_PATH$" "$PROJ_DIR$\UMF_app.bin" &amp;&amp; powershell.exe -NoProfile -NonInteractive -Command "Copy-Item -LiteralPath '$PROJ_DIR$\UMF_app.bin' -Destination (Join-Path '$PROJ_DIR$' ('UMF_app_' + (Get-Date -Format 'yyyy-MM-dd') + '.bin')) -ErrorAction Stop" &amp;&amp; echo &gt; "$BUILD_FILES_DIR$/.postbuild"</cmdline>
+                        <workingDirectory>$PROJ_DIR$</workingDirectory>
+                        <buildSequence>postLink</buildSequence>
+                        <outputs>
+                            <file>
+                                <name>$BUILD_FILES_DIR$/.postbuild</name>
+                            </file>
+                        </outputs>
+                    </buildAction>
+                </buildActions>
             </data>
         </settings>
         <settings>
@@ -1121,7 +1131,22 @@
         <group>
             <name>BSP</name>
             <file>
+                <name>$PROJ_DIR$\..\BSP\boot_flag.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\bsp_menu.c</name>
+            </file>
+            <file>
                 <name>$PROJ_DIR$\..\BSP\bsp_usart.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\Src\cal_table.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\display.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\BSP\ftoa.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\BSP\key.c</name>
@@ -1130,25 +1155,13 @@
                 <name>$PROJ_DIR$\..\BSP\mystring.c</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\BSP\ftoa.c</name>
+                <name>$PROJ_DIR$\..\BSP\param_storage.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\BSP\run_display.c</name>
             </file>
             <file>
-                <name>$PROJ_DIR$\..\BSP\display.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\BSP\param_storage.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\BSP\boot_flag.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\BSP\bsp_menu.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\BSP\Src\cal_table.c</name>
+                <name>$PROJ_DIR$\..\BSP\timestamp.c</name>
             </file>
         </group>
         <group>
@@ -1158,21 +1171,21 @@
             </file>
         </group>
         <group>
-            <name>OLED</name>
-            <file>
-                <name>$PROJ_DIR$\..\OLED\ssd1306.c</name>
-            </file>
-            <file>
-                <name>$PROJ_DIR$\..\OLED\ssd1306_fonts.c</name>
-            </file>
-        </group>
-        <group>
             <name>newOLED</name>
             <file>
                 <name>$PROJ_DIR$\..\newOLED\lcd.c</name>
             </file>
             <file>
                 <name>$PROJ_DIR$\..\newOLED\lcd_init.c</name>
+            </file>
+        </group>
+        <group>
+            <name>OLED</name>
+            <file>
+                <name>$PROJ_DIR$\..\OLED\ssd1306.c</name>
+            </file>
+            <file>
+                <name>$PROJ_DIR$\..\OLED\ssd1306_fonts.c</name>
             </file>
         </group>
         <group>
