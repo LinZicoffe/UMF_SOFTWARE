@@ -10,8 +10,8 @@
 #ifndef __APP_FW_VERSION_H
 #define __APP_FW_VERSION_H
 
-#define APP_FW_VERSION     0x00010700u  /* v1.7.0 */
-#define APP_BUILD_ID       0x20260918u  /* 2026-09-18 构建 */
+#define APP_FW_VERSION     0x00020500u  /* v2.5.0 */
+#define APP_BUILD_ID       0x20261023u  /* 2026-10-23 构建 */
 
 /* A6 双版本测试构建开关（param_storage_init 末尾仅 RAM 覆盖流量系数，不落盘）：
  *   0.0f  = 正式版（不覆盖，仓库默认提交状态）
