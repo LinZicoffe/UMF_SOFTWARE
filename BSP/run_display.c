@@ -95,7 +95,7 @@ static void render_page_main(const run_display_input_t *p_in)
         if (s_display_dirty || x != s_rate_x || rate_font != s_rate_font) {
             // 清除原有文本区域并重绘整个文本
             OLED_FillRectangle(8, 83, 239, 133, OLED_BLACK);
-            OLED_DrawText(x, 91, buf, rate_font, OLED_WHITE, OLED_BLACK);
+            OLED_DrawText(x, 98, buf, rate_font, OLED_WHITE, OLED_BLACK);
         } else {
             // 仅重绘变化的字符，避免闪烁
             uint16_t glyph_width = OLED_TextWidth("0", rate_font);
