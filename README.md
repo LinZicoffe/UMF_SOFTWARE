@@ -61,6 +61,13 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 - **Flash 分区 (v2.4.0)**：页 0~7 BL / 页 8 BL 备份 / 页 9~60 App (0x08002400 起，VTOR=0x2400) / 页 61~63 参数三页轮转——**SWD 下载 App 严禁整片擦除（会抹掉 BL 与参数区），必须按段/按范围擦除**
 - 首次刷 BL 前建议全片备份；现场切换与回滚步骤见 `BL更新日志.md`
 
+## 离线自动测试
+
+- 电脑显示像素回归见 [tests/README.md](tests/README.md)。
+- 真实 Cortex-M3 指令回归见 [tests/firmware/README.md](tests/firmware/README.md)：Arm GCC 交叉编译真实模块，使用 Unicorn 执行，检查按键、标定、传感器/滤波及部分 Modbus 路径。当前已知生产缺陷及实际结果见 [运行记录](tests/firmware/RESULTS.md)。
+
+两类离线测试均不能替代正式固件构建和目标板验收。
+
 ## 文件结构
 
 ```

@@ -83,3 +83,8 @@ outputs/
 /.reversa/
 /_reversa_sdd/
 /docs/superpowers/
+
+# 目标 CPU 指令回归的独立环境与可再生产物
+/.venv-firmware/
+/.venv-firmware.backup/
+/tests/firmware/build/
