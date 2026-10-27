@@ -1,5 +1,8 @@
 /* Included after the unchanged production menu rendering functions. */
 void save_frame(const char *prefix, unsigned index);
+void reset_refresh_stats(void);
+void save_refresh_stats(FILE *file, const char *kind, unsigned screen,
+                        unsigned previous, unsigned current, unsigned frame);
 
 static nav_frame_t s_test_frame;
 
@@ -35,6 +38,9 @@ int sim_menu_tests(void)
     const list_item_t *items;
     uint8_t count, previous, scroll;
     unsigned id, index = 0;
+    FILE *trace = fopen("menu_refresh.csv", "w");
+    if (!trace) return 1;
+    fputs("kind,screen,previous,current,start,clears,full_frames,pixels,frame\n", trace);
     s_access_level = ACCESS_DEVELOPER;
     for (id = 3; id < 45; id++) {
         memset(f, 0, sizeof(*f));
@@ -58,7 +64,9 @@ int sim_menu_tests(void)
             previous = f->cursor;
             scroll = f->scroll;
             f->cursor += step < (unsigned)(count - 1) ? 1 : -1;
+            reset_refresh_stats();
             render_list_selection(f, items, count, previous, scroll);
+            save_refresh_stats(trace, "list", id, previous, f->cursor, 100 + index);
             compare_menu(100 + index++);
         }
     }
@@ -73,10 +81,13 @@ int sim_menu_tests(void)
         for (unsigned step = 0; step < (unsigned)(count - 1) * 2; step++) {
             previous = f->enum_val;
             f->enum_val += step < (unsigned)(count - 1) ? 1 : -1;
+            reset_refresh_stats();
             render_enum_selection(f, previous);
+            save_refresh_stats(trace, "enum", id, previous, f->enum_val, 100 + index);
             compare_menu(100 + index++);
         }
     }
+    fclose(trace);
     memset(f, 0, sizeof(*f));
     f->screen_id = SCR_4MA_VALUE;
     f->mode = MODE_NUMERIC;

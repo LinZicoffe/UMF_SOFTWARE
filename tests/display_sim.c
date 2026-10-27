@@ -8,11 +8,14 @@ sim_iwdg_t sim_iwdg;
 static uint16_t s_pixels[240][240];
 static uint16_t s_x, s_y, s_right, s_left;
 static unsigned s_writes;
+static unsigned s_list_clears, s_full_frames;
 static uint8_t s_out_of_bounds;
 
 void LCD_Address_Set(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
     if (x1 > x2 || y1 > y2 || x2 >= 240 || y2 >= 240) s_out_of_bounds = 1U;
+    if (x1 == 9 && y1 == 47 && x2 == 230 && y2 == 209) s_list_clears++;
+    if (x1 == 0 && y1 == 0 && x2 == 239 && y2 == 239) s_full_frames++;
     s_x = s_left = x1;
     s_y = y1;
     s_right = x2;
@@ -43,6 +46,22 @@ void save_frame(const char *prefix, unsigned index)
         }
     }
     fclose(file);
+}
+
+void reset_refresh_stats(void)
+{
+    s_writes = s_list_clears = s_full_frames = 0;
+}
+
+void save_refresh_stats(FILE *file, const char *kind, unsigned screen,
+                        unsigned previous, unsigned current, unsigned frame)
+{
+    unsigned row;
+    for (row = 0; row < 5; row++) {
+        if (s_pixels[47 + 33 * row][9] == OLED_ACCENT) break;
+    }
+    fprintf(file, "%s,%u,%u,%u,%u,%u,%u,%u,%u\n", kind, screen, previous, current,
+            row < 5 ? current - row : 255, s_list_clears, s_full_frames, s_writes, frame);
 }
 
 int sim_menu_tests(void);

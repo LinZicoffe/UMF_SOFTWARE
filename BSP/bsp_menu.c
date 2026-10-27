@@ -586,9 +586,10 @@ static void render_list_rows(const nav_frame_t *f, const list_item_t *items,
         render_list_row(f, items, (uint8_t)(f->scroll + i), i);
 }
 
-static uint8_t list_window_start(uint8_t cursor)
+static uint8_t menu_page_start(uint8_t selected)
 {
-    return cursor >= LCD_MENU_ROWS ? (uint8_t)(cursor - LCD_MENU_ROWS + 1U) : 0U;
+    /* 固定五项一页：同页移动光标，跨页才重画列表区。 */
+    return (uint8_t)((selected / LCD_MENU_ROWS) * LCD_MENU_ROWS);
 }
 
 static void render_list(nav_frame_t *f)
@@ -598,7 +599,7 @@ static void render_list(nav_frame_t *f)
     get_list_data(f->screen_id, &items, &count);
     lcd_title(f->screen_id);
     if (!items || count == 0U) return;
-    f->scroll = list_window_start(f->cursor);
+    f->scroll = menu_page_start(f->cursor);
     render_list_rows(f, items, count);
     lcd_counter(f->cursor, count);
     lcd_footer("Back", "Open");
@@ -610,7 +611,7 @@ static void render_list_selection(nav_frame_t *f, const list_item_t *items,
 {
     uint8_t new_scroll;
     if (f->cursor == old_cursor) return;
-    new_scroll = list_window_start(f->cursor);
+    new_scroll = menu_page_start(f->cursor);
     f->scroll = new_scroll;
     if (new_scroll != old_scroll) {
         OLED_FillRectangle(9, 47, 230, 209, OLED_BLACK);
@@ -686,15 +687,6 @@ static void get_enum_data(screen_t screen, const char * const **opts,
     }
 }
 
-static uint8_t enum_window_start(uint8_t selected, uint8_t count)
-{
-    int8_t start = (int8_t)selected - 2;
-    if (start < 0) start = 0;
-    if (start + (int8_t)LCD_MENU_ROWS > count)
-        start = (int8_t)(count - (int8_t)LCD_MENU_ROWS);
-    return (uint8_t)(start < 0 ? 0 : start);
-}
-
 static void render_enum_row(const nav_frame_t *f, const char * const *opts,
                              uint8_t idx, uint8_t row)
 {
@@ -716,8 +708,8 @@ static void render_enum_selection(nav_frame_t *f, uint8_t old_value)
     if (f->enum_val == old_value) return;
     get_enum_data(f->screen_id, &opts, &count);
     if (!opts) return;
-    old_start = enum_window_start(old_value, count);
-    new_start = enum_window_start(f->enum_val, count);
+    old_start = menu_page_start(old_value);
+    new_start = menu_page_start(f->enum_val);
     if (new_start != old_start) {
         OLED_FillRectangle(9, 47, 230, 209, OLED_BLACK);
         render_enum_rows(f, opts, count, new_start);
@@ -735,7 +727,7 @@ static void render_enum(nav_frame_t *f)
     get_enum_data(f->screen_id, &opts, &count);
     lcd_title(f->screen_id);
     if (!opts) return;
-    render_enum_rows(f, opts, count, enum_window_start(f->enum_val, count));
+    render_enum_rows(f, opts, count, menu_page_start(f->enum_val));
     lcd_counter(f->enum_val, count);
     lcd_footer("Cancel", "Save");
 }

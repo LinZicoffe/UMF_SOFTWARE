@@ -1,5 +1,6 @@
 """Pixel regression of native production ST7789 fonts, runtime and menu templates."""
 from pathlib import Path
+import csv
 import os
 import re
 import shutil
@@ -122,6 +123,9 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
         if result.returncode:
             raise RuntimeError(f'pixel harness exit {result.returncode}: {result.stdout} {result.stderr}')
         print(result.stdout.strip())
+        with (cls.work / 'menu_refresh.csv').open(newline='') as trace:
+            cls.moves = [{key: value if key == 'kind' else int(value)
+                          for key, value in row.items()} for row in csv.DictReader(trace)]
         if os.environ.get('UMF_DISPLAY_EXPORT'):
             export = Path(os.environ['UMF_DISPLAY_EXPORT'])
             export.mkdir(parents=True, exist_ok=True)
@@ -195,6 +199,37 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
         image = self.frame('menu_full', 32)
         self.assertEqual(self.pixel(image, 14, 159), 0x1187)
         self.assertEqual(self.pixel(image, 128, 159), 0)
+
+    def test_lists_and_enums_use_fixed_five_item_pages(self):
+        for kind in ['list', 'enum']:
+            moves = [move for move in self.moves if move['kind'] == kind]
+            self.assertTrue(moves)
+            for move in moves:
+                self.assertEqual(move['start'], move['current'] // 5 * 5, move)
+
+    def test_same_page_selection_does_not_redraw_list(self):
+        for move in self.moves:
+            if move['previous'] // 5 == move['current'] // 5:
+                self.assertEqual(move['clears'], 0, move)
+                self.assertLess(move['pixels'], 25000, move)
+
+    def test_cross_page_selection_redraws_list_once_without_full_screen(self):
+        for move in self.moves:
+            self.assertEqual(move['full_frames'], 0, move)
+            if move['previous'] // 5 != move['current'] // 5:
+                self.assertEqual(move['clears'], 1, move)
+                image = self.frame('menu_partial', move['frame'])
+                row = 0 if move['current'] > move['previous'] else 4
+                self.assertEqual(self.pixel(image, 9, 47 + row * 33), 0x565B, move)
+
+    def test_last_partial_page_clears_old_rows(self):
+        # The 11-item list and both 6-item enums must leave four rows empty.
+        for screen, current in [(5, 10), (18, 5), (42, 5)]:
+            move = next(move for move in self.moves
+                        if move['screen'] == screen and move['current'] == current)
+            image = self.frame('menu_partial', move['frame'])
+            self.assertTrue(all(self.pixel(image, x, y) == 0
+                                for y in range(80, 210) for x in range(9, 231)), move)
 
 
 if __name__ == '__main__':
