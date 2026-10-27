@@ -23,13 +23,20 @@
 #define OLED_CYAN   0x07FFU
 #define OLED_BLUE   0x001FU
 
+/* 工业黑主题，RGB565（红 5 位、绿 6 位、蓝 5 位）。 */
+#define OLED_ACCENT 0x565BU
+#define OLED_MUTED  0xADD8U
+#define OLED_RULE   0x31C8U
+#define OLED_SELECT 0x1187U
+#define OLED_OK     0x8EF4U
+#define OLED_ERROR  0xFB8EU
+
 typedef enum {
     OLED_FONT_SMALL = 0,
     OLED_FONT_MEDIUM,
     OLED_FONT_LARGE,
 #if DISPLAY_ST7789
-    OLED_FONT_FLOW_DIGITS, /* 主界面流量专用，原生 24x32 数字字模 */
-    OLED_FONT_MAIN_LABELS  /* 主界面 FLOW、TOTAL，原生 24 像素行高字模 */
+    OLED_FONT_FLOW_DIGITS /* 主界面流量专用，60px 数字；其余为 12/16/32px */
 #endif
 } oled_font_t;
 

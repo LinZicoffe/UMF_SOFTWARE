@@ -55,105 +55,114 @@ static const char *main_unit_text(const char *unit)
     if (strcmp(unit, "m3") == 0) return "m\xC2\xB3";
     return unit;
 }
-// ---- S01 主界面 ---- */
+static void draw_centered(uint16_t y, const char *text, oled_font_t font,
+                          uint16_t color)
+{
+    uint16_t width = OLED_TextWidth(text, font);
+    OLED_DrawText((OLED_WIDTH - width) / 2U, y, text, font, color, OLED_BLACK);
+}
+
+/* S01：状态栏、瞬时流量、完整累积量。 */
 static void render_page_main(const run_display_input_t *p_in)
 {
     char buf[32];
     float rate = p_in->p_flow_rate->num;
     float temp = p_in->p_temperature->num;
-    uint16_t x;
     if (s_display_dirty) {
-        // 绘制主界面静态文本
-        OLED_DrawText(8, 8, main_unit_text(p_in->p_flow_unit_str), OLED_FONT_SMALL,
-                      OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 49, "FLOW", OLED_FONT_MAIN_LABELS,
-                      OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 153, "TOTAL", OLED_FONT_MAIN_LABELS,
-                      OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 213, main_unit_text(p_in->p_total_unit_str), OLED_FONT_SMALL,
-                      OLED_WHITE, OLED_BLACK);
+        OLED_FillRectangle(14, 39, 225, 39, OLED_RULE);
+        draw_centered(50, "Flow rate", OLED_FONT_MEDIUM, OLED_ACCENT);
+        draw_centered(141, main_unit_text(p_in->p_flow_unit_str),
+                       OLED_FONT_MEDIUM, OLED_MUTED);
+        OLED_FillRectangle(14, 170, 225, 170, OLED_RULE);
+        OLED_DrawText(14, 183, "Total", OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
+        OLED_DrawText(225U - OLED_TextWidth(main_unit_text(p_in->p_total_unit_str),
+                      OLED_FONT_SMALL), 183, main_unit_text(p_in->p_total_unit_str),
+                      OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
     }
     if (temp > 999.9f) temp = 999.9f;
     if (temp < -99.9f) temp = -99.9f;
     ftoa(temp, 1, buf, sizeof(buf));
-    strcat(buf, "C");
-    draw_field(8, 26, 160, s_temp_text, buf, OLED_FONT_SMALL, OLED_WHITE);
-    draw_field(190, 8, 48, s_aux_text[0],
-               *(p_in->p_module_state) ? "ER" : "OK", OLED_FONT_SMALL,
-               *(p_in->p_module_state) ? OLED_RED : OLED_GREEN);
+    strcat(buf, " \xC2\xB0" "C");
+    draw_field(14, 11, 135, s_temp_text, buf, OLED_FONT_MEDIUM, OLED_MUTED);
+    draw_field(185, 11, 41, s_aux_text[0],
+               *(p_in->p_module_state) ? "ER" : "OK", OLED_FONT_MEDIUM,
+               *(p_in->p_module_state) ? OLED_ERROR : OLED_OK);
     if (rate < 0.0f) rate = 0.0f;
     ftoa(rate, rate >= 1000.0f ? 0U : rate >= 100.0f ? 1U :
           rate >= 10.0f ? 2U : 3U, buf, sizeof(buf));
-    // 计算瞬时流量文本的水平居中位置，并根据脏标记和文本变化决定是否重绘
     if (s_display_dirty || strcmp(s_rate_text, buf) != 0) {
-        oled_font_t rate_font = OLED_FONT_FLOW_DIGITS;
-        const uint16_t rate_y = 98U;
+        oled_font_t font = OLED_FONT_FLOW_DIGITS;
+        uint16_t width = OLED_TextWidth(buf, font);
+        uint16_t x = (OLED_WIDTH - width) / 2U;
+        uint8_t same_cells = !s_display_dirty && x == s_rate_x && font == s_rate_font;
         size_t i;
         char glyph[2] = { 0, 0 };
-        x = OLED_TextWidth(buf, rate_font);
-        x = x < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - x) / 2U) : 0U;
-        // 如果文本位置或字体发生变化，清除原有文本区域并重绘整个文本；否则仅重绘变化的字符
-        if (s_display_dirty || x != s_rate_x || rate_font != s_rate_font) {
-            // 清除原有文本区域并重绘整个文本
-            OLED_FillRectangle(8, 83, 239, 133, OLED_BLACK);
-            OLED_DrawText(x, rate_y, buf, rate_font, OLED_WHITE, OLED_BLACK);
+        /* 比例字体即使总宽相同，各字符起点也可能不同。 */
+        for (i = 0; same_cells && buf[i] != '\0'; i++) {
+            char old_glyph[2] = { s_rate_text[i], 0 };
+            glyph[0] = buf[i];
+            if (OLED_TextWidth(glyph, font) != OLED_TextWidth(old_glyph, font))
+                same_cells = 0U;
+        }
+        if (!same_cells) {
+            OLED_FillRectangle(8, 74, 231, 137, OLED_BLACK);
+            OLED_DrawText(x, 74, buf, font, OLED_WHITE, OLED_BLACK);
         } else {
-            // 仅重绘变化的字符，避免闪烁
-            uint16_t glyph_width = OLED_TextWidth("0", rate_font);
             for (i = 0; buf[i] != '\0'; i++) {
-                if (buf[i] == s_rate_text[i]) continue;
                 glyph[0] = buf[i];
-                OLED_DrawText(x + (uint16_t)i * glyph_width, rate_y, glyph,
-                              rate_font, OLED_WHITE, OLED_BLACK);
+                if (buf[i] != s_rate_text[i])
+                    OLED_DrawText(x, 74, glyph, font, OLED_WHITE, OLED_BLACK);
+                x += OLED_TextWidth(glyph, font);
             }
         }
         strcpy(s_rate_text, buf);
-        s_rate_x = x;
-        s_rate_font = rate_font;
+        s_rate_x = (OLED_WIDTH - width) / 2U;
+        s_rate_font = font;
     }
-    // 绘制累积流量文本
-    strcpy(buf, (const char *)p_in->p_flow_sum_buf);
-    // 拼接累积流量单位字符串
-    draw_field(8, 184, 232, s_total_text, buf, OLED_FONT_SMALL, OLED_YELLOW);
+    draw_field(14, 204, 212, s_total_text, (const char *)p_in->p_flow_sum_buf,
+               OLED_FONT_MEDIUM, OLED_WHITE);
 }
-// ---- S02 辅助页 ---- */
+
+/* S02：七项实时数据使用同一套字体和列对齐。 */
 static void render_page_aux(const run_display_input_t *p_in)
 {
     char buf[32];
     float current = dac_to_mA(*(p_in->p_dac_value), p_in->p_dac_buf);
     static const char * const labels[7] = {
-        "Flow", "Vel", "Temp", "Press", "Cur", "Freq", "Comm"
+        "Flow", "Velocity", "Temp", "Pressure", "Current", "Freq", "Comm"
     };
     uint8_t i;
     if (s_display_dirty) {
+        OLED_DrawText(14, 11, "Live data", OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
+        OLED_FillRectangle(14, 39, 225, 39, OLED_RULE);
         for (i = 0; i < 7U; i++)
-            OLED_DrawText(8, 5U + i * 28U, labels[i], OLED_FONT_SMALL,
-                          OLED_CYAN, OLED_BLACK);
-        OLED_DrawText(8, 202, "TOTAL", OLED_FONT_SMALL,
-                      OLED_CYAN, OLED_BLACK);
+            OLED_DrawText(14, 48U + i * 21U, labels[i], OLED_FONT_SMALL,
+                          OLED_MUTED, OLED_BLACK);
+        OLED_FillRectangle(14, 196, 225, 196, OLED_RULE);
+        OLED_DrawText(14, 201, "Total", OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
     }
     ftoa(p_in->p_flow_rate->num, 1, buf, sizeof(buf));
     strncat(buf, " ", sizeof(buf) - strlen(buf) - 1U);
-    strncat(buf, p_in->p_flow_unit_str, sizeof(buf) - strlen(buf) - 1U);
-    draw_field(80, 5, 160, s_aux_text[0], buf, OLED_FONT_SMALL, OLED_WHITE);
-    draw_field(80, 33, 160, s_aux_text[1], "0.00 m/s", OLED_FONT_SMALL, OLED_WHITE);
+    strncat(buf, main_unit_text(p_in->p_flow_unit_str), sizeof(buf) - strlen(buf) - 1U);
+    draw_field(90, 48, 136, s_aux_text[0], buf, OLED_FONT_SMALL, OLED_WHITE);
+    draw_field(90, 69, 136, s_aux_text[1], "0.00 m/s", OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_temperature->num, 1, buf, sizeof(buf));
-    strcat(buf, " C");
-    draw_field(80, 61, 160, s_aux_text[2], buf, OLED_FONT_SMALL, OLED_WHITE);
+    strcat(buf, " \xC2\xB0" "C");
+    draw_field(90, 90, 136, s_aux_text[2], buf, OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_pressure->num, 1, buf, sizeof(buf));
     strcat(buf, " KPa");
-    draw_field(80, 89, 160, s_aux_text[3], buf, OLED_FONT_SMALL, OLED_WHITE);
+    draw_field(90, 111, 136, s_aux_text[3], buf, OLED_FONT_SMALL, OLED_WHITE);
     ftoa(current, 1, buf, sizeof(buf));
     strcat(buf, " mA");
-    draw_field(80, 117, 160, s_aux_text[4], buf, OLED_FONT_SMALL, OLED_WHITE);
-    draw_field(80, 145, 160, s_aux_text[5], "0.0 Hz", OLED_FONT_SMALL, OLED_WHITE);
-    draw_field(80, 173, 160, s_aux_text[6],
+    draw_field(90, 132, 136, s_aux_text[4], buf, OLED_FONT_SMALL, OLED_WHITE);
+    draw_field(90, 153, 136, s_aux_text[5], "0.0 Hz", OLED_FONT_SMALL, OLED_WHITE);
+    draw_field(90, 174, 136, s_aux_text[6],
                *(p_in->p_module_state) ? "Tx Err" : "Tx OK", OLED_FONT_SMALL,
-               *(p_in->p_module_state) ? OLED_RED : OLED_GREEN);
+               *(p_in->p_module_state) ? OLED_ERROR : OLED_OK);
     strcpy(buf, (const char *)p_in->p_flow_sum_buf);
     strncat(buf, " ", sizeof(buf) - strlen(buf) - 1U);
-    strncat(buf, p_in->p_total_unit_str, sizeof(buf) - strlen(buf) - 1U);
-    draw_field(8, 220, 232, s_total_text, buf, OLED_FONT_SMALL, OLED_YELLOW);
+    strncat(buf, main_unit_text(p_in->p_total_unit_str), sizeof(buf) - strlen(buf) - 1U);
+    draw_field(14, 220, 212, s_total_text, buf, OLED_FONT_SMALL, OLED_WHITE);
 }
 
 #else

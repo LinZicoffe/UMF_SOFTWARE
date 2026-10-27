@@ -29,9 +29,9 @@
  * 重要诊断 [测试 E]: 启用 Font_16x26 + bsp_menu 完整代码后, 字体表被
  *   推过 64KB Flash 边界, 读取返回 0xFF -> 字符渲染为实心白方块.
  * 解决方案: 临时禁用 Font_16x26, run_display.c 已有 #elif Font_11x18 fallback. */
-#define SSD1306_INCLUDE_FONT_6x8       /* 状态栏 + 辅助页 ≈1.1KB */
-#define SSD1306_INCLUDE_FONT_7x10      /* ST7789 菜单小字 / SSD1306 状态栏 ≈1.9KB */
 #if !DISPLAY_ST7789
+#define SSD1306_INCLUDE_FONT_6x8       /* 单色屏状态栏 + 辅助页 */
+#define SSD1306_INCLUDE_FONT_7x10      /* 单色屏菜单 */
 #define SSD1306_INCLUDE_FONT_11x18     /* 瞬时流量大字 ≈3.4KB */
 /* #define SSD1306_INCLUDE_FONT_16x26 */  /* 暂时禁用 ≈5KB - Flash 越界根因 */
 #endif

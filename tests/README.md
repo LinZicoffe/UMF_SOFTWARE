@@ -1,22 +1,22 @@
 # 显示像素回归
 
-使用Python 3和GCC运行，无需连接开发板；`CC`环境变量可指定GCC可执行文件，编译器所在目录需在`PATH`中。
+需要 Python 3、Pillow 和 GCC（GNU Compiler Collection，GNU 编译器集合）；`CC` 环境变量可指定 GCC 可执行文件，编译器所在目录需在 `PATH` 中。
 
-运行全部测试：
+运行全部显示测试：
 
 ```text
 python -m unittest discover -s tests -v
 ```
 
-测试编译真实的`display.c`、`run_display.c`和`ftoa.c`，仅把屏幕总线输出替换为240×240像素接收器，检查数字字形、主页FLOW与TOTAL字母、旧字体、局部更新与完整重绘是否一致，以及内容不变时不重复写屏。
+`test_industrial_display.py` 编译真实 `display.c`、`run_display.c` 和 `ftoa.c`，并原样提取 `bsp_menu.c` 的绘图函数。屏幕总线替换为 240×240 RGB565 像素接收器，菜单参数替换为仓库默认值，不修改生产接口。
 
-`fixtures/flow_digits_24x32.bitmap`是独立于渲染器保存的字形参考数据：字符顺序`0123456789.-`，每个字形96字节，每行3字节、高位在左。来源与授权见`OLED/flow_digits_24x32.h`和`OLED/licenses/flow_digits-OFL.txt`。
+8 项测试覆盖四档字模、主界面单位和大数字、42 个菜单页面，以及 120 次局部更新与全屏重绘比对。C 夹具同时断言完整帧恰好写入 57,600 像素、主/辅助页数据未变时零写屏、文字/屏幕地址/像素写入未越界。
 
-`fixtures/main_labels_24.bitmap`为主页标题参考字模：字符顺序`FLOWTA`，每字72字节，每行3字节；自然字宽依次为15、13、19、23、15、16像素。主页面标题以外的静态内容、原数字字形和辅助页均有独立回归检查。
+`fixtures/industrial-font-0.png` 至 `industrial-font-3.png` 是独立用 Pillow 12.2.0 从 Montserrat Medium TTF 栅格化的黑白图，分别对应 12/16/32/60px 字体。文字图顺序为 ASCII 32~126、度号、上标 3；数字图顺序为 `0123456789.-`。它们不从生产头文件解码，能够检出位序、跨字节、裁剪和字宽错误。字体来源与授权见 `OLED/licenses/industrial-OFL.txt`。
 
-单位回归验证主页m³/h与m³的上标位置、复用字模及文本宽度，并检查L/h、L/min、L、kg和辅助页的原显示不变。测试顶部单位时避开从y=26开始覆盖其末尾空行的温度字段。
+设置 `UMF_DISPLAY_EXPORT` 为输出目录后，测试会额外导出实际 C 渲染的 PNG 画面；常规测试不会写入仓库。预览参数为离线输入，不代表传感器实测值。
 
-这些测试不验证屏幕总线时序和实物显示效果；固件仍需完成IAR构建及目标板验收。
+这些测试不验证屏幕总线时序和实物显示效果；构建与容量结果见 [工业黑界面说明](../docs/industrial-black-display.md)，仍需目标板验收。
 
 ## 真实目标 CPU 指令回归
 

@@ -4,7 +4,7 @@
 
 ## 1. 先理解这层测试
 
-原有 `tests/test_flow_digits.py` 把显示代码编译成电脑可执行程序，检查像素。新增链路为：
+原有 `tests/test_industrial_display.py` 把显示代码编译成电脑可执行程序，检查像素。新增链路为：
 
 `真实 C 源码 → Arm GCC → ELF → Cortex-M3 指令执行 → C 断言 → JSON 报告/退出码`
 

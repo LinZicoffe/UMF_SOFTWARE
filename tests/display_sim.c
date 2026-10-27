@@ -12,7 +12,7 @@ static uint8_t s_out_of_bounds;
 
 void LCD_Address_Set(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
-    (void)y2;
+    if (x1 > x2 || y1 > y2 || x2 >= 240 || y2 >= 240) s_out_of_bounds = 1U;
     s_x = s_left = x1;
     s_y = y1;
     s_right = x2;
@@ -29,7 +29,7 @@ void sim_pixel(uint16_t color)
     }
 }
 
-static void save_frame(const char *prefix, unsigned index)
+void save_frame(const char *prefix, unsigned index)
 {
     char path[64];
     unsigned x, y;
@@ -45,10 +45,12 @@ static void save_frame(const char *prefix, unsigned index)
     fclose(file);
 }
 
+int sim_menu_tests(void);
+
 int main(void)
 {
     static const float rates[] = {
-        0.0f, 1.234f, 9.9996f, 10.0f, 99.999f, 100.0f,
+        0.0f, 0.008f, 0.009f, 1.234f, 9.9996f, 10.0f, 99.999f, 100.0f,
         999.999f, 1000.0f, 99999.0f, 100000.0f, -3.0f
     };
     Uart_SendfloatTypeDef rate = { 0 }, temp = { 25.0f }, pressure = { 101.3f };
@@ -83,17 +85,25 @@ int main(void)
     run_display_set_page(RUN_PAGE_AUX);
     run_display_render(&input);
     save_frame("aux", 0);
-    for (i = 0; i < 3; i++) {
+    s_writes = 0;
+    run_display_render(&input);
+    if (s_writes != 0U) return 3;
+    for (i = 0; i < 4; i++) {
+        unsigned g, count = i < 2 ? 97 : 12;
+        unsigned columns = i == 0 ? 16 : i == 1 ? 12 : i == 2 ? 6 : 4;
+        unsigned cell_width = 240 / columns;
+        unsigned cell_height = OLED_FontHeight((oled_font_t)i);
         OLED_Clear(OLED_BLACK);
-        OLED_DrawText(0, 0, "A0.9", (oled_font_t)i, OLED_WHITE, OLED_BLACK);
-        save_frame("legacy", i);
+        for (g = 0; g < count; g++) {
+            char text[3] = { 0, 0, 0 };
+            if (i >= 2) text[0] = "0123456789.-"[g];
+            else if (g < 95) text[0] = (char)(g + 32);
+            else { text[0] = (char)0xC2; text[1] = g == 95 ? (char)0xB0 : (char)0xB3; }
+            OLED_DrawText((g % columns) * cell_width, (g / columns) * cell_height,
+                          text, (oled_font_t)i, OLED_WHITE, OLED_BLACK);
+        }
+        save_frame("font", i);
     }
-    OLED_Clear(OLED_BLACK);
-    OLED_DrawText(0, 0, "0123456789", OLED_FONT_FLOW_DIGITS, OLED_WHITE, OLED_BLACK);
-    OLED_DrawText(0, 40, ".-", OLED_FONT_FLOW_DIGITS, OLED_WHITE, OLED_BLACK);
-    save_frame("digits", 0);
-    if (OLED_TextWidth("m\xC2\xB3/h", OLED_FONT_SMALL) != 49U ||
-        OLED_TextWidth("m\xC2\xB3", OLED_FONT_SMALL) != 21U) return 5;
     input.p_flow_unit_str = "L/h";
     input.p_total_unit_str = "L";
     run_display_set_page(RUN_PAGE_MAIN);
@@ -105,6 +115,7 @@ int main(void)
     run_display_invalidate();
     run_display_render(&input);
     save_frame("units", 1);
+    if (sim_menu_tests() != 0) return 6;
     if (s_out_of_bounds) return 4;
     puts("PASS: bounded full frames, partial updates and unchanged-value no-write checks");
     return 0;

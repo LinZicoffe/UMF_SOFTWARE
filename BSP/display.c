@@ -5,8 +5,7 @@
 
 #if DISPLAY_ST7789
 #include "lcd_init.h"
-#include "flow_digits_24x32.h"
-#include "main_labels_24.h"
+#include "industrial_fonts.h"
 
 static uint16_t s_cursor_x;
 static uint16_t s_cursor_y;
@@ -43,43 +42,28 @@ static void LCD_StreamEnd(void)
     OLED_CS_GPIO_Port->BSRR = OLED_CS_Pin;
 }
 
-static uint8_t font_scale(oled_font_t font)
+static const industrial_font_t *lcd_font_data(oled_font_t font)
 {
-    if (font == OLED_FONT_FLOW_DIGITS || font == OLED_FONT_MAIN_LABELS) return 1U;
-    return (uint8_t)(font + 2U);
+    return &s_industrial_fonts[(uint8_t)font];
 }
 
-static SSD1306_Font_t lcd_font_data(oled_font_t font)
+/* 字符串保留 UTF-8 编码；字模仅补充单位需要的度号、上标 3。 */
+static uint8_t next_glyph(const char **text, oled_font_t font)
 {
-    if (font == OLED_FONT_FLOW_DIGITS) {
-        SSD1306_Font_t digits = { FLOW_DIGIT_WIDTH, FLOW_DIGIT_HEIGHT, NULL, NULL };
-        return digits;
+    uint8_t ch = (uint8_t)*(*text)++;
+    if (font == OLED_FONT_LARGE || font == OLED_FONT_FLOW_DIGITS) {
+        if (ch >= '0' && ch <= '9') return (uint8_t)(ch - '0');
+        return ch == '.' ? 10U : 11U;
     }
-    if (font == OLED_FONT_MAIN_LABELS) {
-        SSD1306_Font_t labels = { MAIN_LABEL_WIDTH, MAIN_LABEL_HEIGHT, NULL, NULL };
-        return labels;
+    if (ch == 0xC2U && (uint8_t)**text == 0xB0U) {
+        (*text)++;
+        return 95U;
     }
-    return font == OLED_FONT_SMALL ? Font_7x10 : Font_6x8;
-}
-
-static uint8_t main_label_index(char ch)
-{
-    const char *glyph = strchr(s_main_label_chars, ch);
-    return glyph ? (uint8_t)(glyph - s_main_label_chars) : MAIN_LABEL_GLYPH_COUNT;
-}
-
-static uint16_t glyph_width(char ch, oled_font_t font)
-{
-    if (font == OLED_FONT_MAIN_LABELS) {
-        uint8_t index = main_label_index(ch);
-        if (index < MAIN_LABEL_GLYPH_COUNT) return s_main_label_advances[index];
+    if (ch == 0xC2U && (uint8_t)**text == 0xB3U) {
+        (*text)++;
+        return 96U;
     }
-    return (uint16_t)(lcd_font_data(font).width * font_scale(font));
-}
-
-static uint8_t is_superscript_three(const char *text)
-{
-    return (uint8_t)text[0] == 0xC2U && (uint8_t)text[1] == 0xB3U;
+    return ch >= 32U && ch <= 126U ? (uint8_t)(ch - 32U) : (uint8_t)('?' - 32);
 }
 
 static void stream_color(uint16_t color)
@@ -137,62 +121,32 @@ void OLED_Clear(uint16_t color)
     OLED_FillRectangle(0, 0, OLED_WIDTH - 1U, OLED_HEIGHT - 1U, color);
 }
 
-static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
-                      uint16_t fg, uint16_t bg, uint8_t scale)
+static void draw_char(uint16_t x, uint16_t y, uint8_t index, oled_font_t font,
+                      uint16_t fg, uint16_t bg)
 {
-    uint8_t row, col, sy, sx;
-    SSD1306_Font_t glyph_font = lcd_font_data(font);
-    uint8_t columns = glyph_font.width;
-    uint16_t width = font == OLED_FONT_MAIN_LABELS ? glyph_width(ch, font)
-                                                 : (uint16_t)(glyph_font.width * scale);
-    uint16_t height = (uint16_t)(glyph_font.height * scale);
-    uint32_t bits;
-    uint16_t pixel_y;
-    uint8_t glyph_index = 0U;
-    if (ch < 32 || ch > 126 || x + width > OLED_WIDTH ||
-        y + height > OLED_HEIGHT) return;
-    if (font == OLED_FONT_FLOW_DIGITS) {
-        if (ch >= '0' && ch <= '9') glyph_index = (uint8_t)(ch - '0');
-        else if (ch == '.') glyph_index = 10U;
-        else if (ch == '-') glyph_index = 11U;
-        else return;
-    } else if (font == OLED_FONT_MAIN_LABELS) {
-        glyph_index = main_label_index(ch);
-        if (glyph_index >= MAIN_LABEL_GLYPH_COUNT) return;
-        columns = (uint8_t)width;
-    }
+    const industrial_font_t *data = lcd_font_data(font);
+    const industrial_glyph_t *glyph = &data->glyphs[index];
+    uint16_t row, col, pixel_y;
+    if (x + glyph->advance > OLED_WIDTH || y + data->height > OLED_HEIGHT) return;
     if (s_frame_active) {
-        if (y + height <= s_frame_y || y >= s_frame_y + LCD_FRAME_ROWS) return;
+        if (y + data->height <= s_frame_y || y >= s_frame_y + LCD_FRAME_ROWS) return;
     } else {
-        LCD_Address_Set(x, y, x + width - 1U, y + height - 1U);
+        LCD_Address_Set(x, y, x + glyph->advance - 1U, y + data->height - 1U);
         LCD_StreamBegin();
     }
-    for (row = 0; row < glyph_font.height; row++) {
-        if (font == OLED_FONT_FLOW_DIGITS) {
-            /* 原生数字每行 24 位；其他字体仍按原有倍数展开。 */
-            const uint8_t *data = &s_flow_digit_font[glyph_index][row * FLOW_DIGIT_STRIDE];
-            bits = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16)
-                 | ((uint32_t)data[2] << 8);
-        } else if (font == OLED_FONT_MAIN_LABELS) {
-            const uint8_t *data = &s_main_label_font[glyph_index][row * MAIN_LABEL_STRIDE];
-            bits = ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16)
-                 | ((uint32_t)data[2] << 8);
-        } else {
-            bits = (uint32_t)glyph_font.data[((uint8_t)ch - 32U) * glyph_font.height + row] << 16;
-        }
-        for (sy = 0; sy < scale; sy++) {
-            pixel_y = (uint16_t)(y + row * scale + sy);
-            if (s_frame_active && (pixel_y < s_frame_y ||
-                pixel_y >= s_frame_y + LCD_FRAME_ROWS)) continue;
-            for (col = 0; col < columns; col++) {
-                uint16_t pixel = (bits & (0x80000000UL >> col)) ? fg : bg;
-                for (sx = 0; sx < scale; sx++) {
-                    if (s_frame_active)
-                        s_frame_pixels[pixel_y - s_frame_y][x + col * scale + sx] = pixel;
-                    else
-                        stream_color(pixel);
-                }
+    for (row = 0; row < data->height; row++) {
+        pixel_y = (uint16_t)(y + row);
+        if (s_frame_active && (pixel_y < s_frame_y ||
+            pixel_y >= s_frame_y + LCD_FRAME_ROWS)) continue;
+        for (col = 0; col < glyph->advance; col++) {
+            uint16_t pixel = bg;
+            if (row >= glyph->top && row < glyph->top + glyph->height) {
+                uint16_t bit = (uint16_t)((row - glyph->top) * glyph->advance + col);
+                if (data->bitmap[glyph->offset + bit / 8U] & (0x80U >> (bit % 8U)))
+                    pixel = fg;
             }
+            if (s_frame_active) s_frame_pixels[pixel_y - s_frame_y][x + col] = pixel;
+            else stream_color(pixel);
         }
     }
     if (!s_frame_active) LCD_StreamEnd();
@@ -201,40 +155,30 @@ static void draw_char(uint16_t x, uint16_t y, char ch, oled_font_t font,
 void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
                    uint16_t foreground, uint16_t background)
 {
-    uint8_t scale = font_scale(font);
+    const industrial_font_t *data = lcd_font_data(font);
     if (!text) return;
     while (*text) {
-        uint8_t superscript = font == OLED_FONT_SMALL && is_superscript_three(text);
-        uint16_t step = superscript ? Font_7x10.width : glyph_width(*text, font);
+        uint8_t index = next_glyph(&text, font);
+        uint8_t step = data->glyphs[index].advance;
         if (x + step > OLED_WIDTH) break;
-        /* UTF-8 上标 3 复用现有字模，以原生 7x10 绘制在行顶部。 */
-        draw_char(x, y, superscript ? '3' : *text, font, foreground, background,
-                  superscript ? 1U : scale);
-        text += superscript ? 2 : 1;
+        draw_char(x, y, index, font, foreground, background);
         x += step;
     }
 }
 
 uint16_t OLED_TextWidth(const char *text, oled_font_t font)
 {
-    if ((font == OLED_FONT_MAIN_LABELS || font == OLED_FONT_SMALL) && text) {
-        uint16_t width = 0U;
-        while (*text) {
-            if (font == OLED_FONT_SMALL && is_superscript_three(text)) {
-                width += Font_7x10.width;
-                text += 2;
-            } else {
-                width += glyph_width(*text++, font);
-            }
-        }
-        return width;
+    const industrial_font_t *data = lcd_font_data(font);
+    uint16_t width = 0U;
+    if (text) {
+        while (*text) width += data->glyphs[next_glyph(&text, font)].advance;
     }
-    return text ? (uint16_t)(strlen(text) * lcd_font_data(font).width * font_scale(font)) : 0U;
+    return width;
 }
 
 uint8_t OLED_FontHeight(oled_font_t font)
 {
-    return (uint8_t)(lcd_font_data(font).height * font_scale(font));
+    return lcd_font_data(font)->height;
 }
 
 void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
