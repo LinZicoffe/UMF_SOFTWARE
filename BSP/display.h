@@ -53,6 +53,8 @@ uint16_t OLED_TextWidth(const char *text, oled_font_t font);
 uint8_t OLED_FontHeight(oled_font_t font);
 void OLED_Present(void);
 #if DISPLAY_ST7789
+/* rotation: 0/1/2/3 分别为顺时针 0°/90°/180°/270°；调用后需重绘整页。 */
+void OLED_SetRotation(uint8_t rotation);
 /* 按 8 行分段合成整页；回调会重复调用，只能绘制，不能推进业务状态。 */
 void OLED_RenderFrame(void (*render)(const void *context), const void *context);
 #endif
