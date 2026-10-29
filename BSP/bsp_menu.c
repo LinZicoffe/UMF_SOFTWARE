@@ -74,8 +74,7 @@ typedef enum {
     SCR_BAUD_RATE    = 42,
     SCR_DEVICE_INFO  = 43,
     SCR_LANGUAGE     = 44,
-    SCR_ROTATION     = 45,
-    SCR_COUNT        = 46
+    SCR_COUNT        = 45
 } screen_t;
 
 /* ===== 导航栈帧 ===== */
@@ -184,18 +183,15 @@ static const list_item_t c_calib_set[] = {
 };
 #define CALIB_SET_COUNT  4
 
-/* S39 系统设置 (彩屏 6 项，单色屏 5 项) */
+/* S39 系统设置 (5 项) */
 static const list_item_t c_system_set[] = {
     { "Language",     SCR_LANGUAGE    },
-#if DISPLAY_ST7789
-    { "Rotation",     SCR_ROTATION    },
-#endif
     { "Factory Rst",  SCR_FACTORY_RST },
     { "Comm Addr",    SCR_COMM_ADDR   },
     { "Baud Rate",    SCR_BAUD_RATE   },
     { "Device Info",  SCR_DEVICE_INFO },
 };
-#define SYSTEM_SET_COUNT  (sizeof(c_system_set) / sizeof(c_system_set[0]))
+#define SYSTEM_SET_COUNT  5
 
 /* ===== 数值参数描述符 ===== */
 typedef struct {
@@ -278,7 +274,7 @@ static menu_mode_t detect_mode(screen_t scr)
     /* 枚举屏幕 */
     if (scr == SCR_STD_COND || scr == SCR_FLOW_UNIT ||
         scr == SCR_TOTAL_UNIT || scr == SCR_PULSE_EQUIV ||
-        scr == SCR_BAUD_RATE || scr == SCR_LANGUAGE || scr == SCR_ROTATION)
+        scr == SCR_BAUD_RATE || scr == SCR_LANGUAGE)
         return MODE_ENUM;
 
     /* 只读屏幕 */
@@ -377,7 +373,6 @@ static uint8_t load_enum_idx(screen_t scr)
     case SCR_PULSE_EQUIV: return param_get_pulse_equiv();
     case SCR_BAUD_RATE:   return param_get_baud_rate();
     case SCR_LANGUAGE:    return param_get_language();
-    case SCR_ROTATION:    return param_get_display_rotation();
     default:              return 0;
     }
 }
@@ -393,15 +388,9 @@ static void save_enum_idx(screen_t scr, uint8_t idx)
                           (void)param_flush();   /* 先落盘再切硬件，掉电后软硬件波特率保持一致 */
                           bsp_usart2_apply_uart_config(param_get_uart_config()); break;
     case SCR_LANGUAGE:    param_set_language(idx);    break;
-#if DISPLAY_ST7789
-    case SCR_ROTATION:    param_set_display_rotation(idx); break;
-#endif
     default: break;
     }
     (void)param_flush();   /* 保存动作语义: ENTER = 已落盘 */
-#if DISPLAY_ST7789
-    if (scr == SCR_ROTATION) OLED_SetRotation(param_get_display_rotation());
-#endif
 }
 
 static float load_readonly_val(screen_t scr)
@@ -513,7 +502,6 @@ static const char *get_screen_title(screen_t scr)
     case SCR_BAUD_RATE:    return "Baud Rate";
     case SCR_DEVICE_INFO:  return "Device Info";
     case SCR_LANGUAGE:     return "Language";
-    case SCR_ROTATION:     return "Rotation (CW)";
     default:               return "Menu";
     }
 }
@@ -535,10 +523,6 @@ static const char * const s_language_str[LANG_COUNT] = { "English" };
 #if DISPLAY_ST7789
 
 #define LCD_MENU_ROWS 5U
-
-static const char * const s_rotation_str[DISPLAY_ROTATION_COUNT] = {
-    "0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"
-};
 
 static void lcd_center(uint16_t y, const char *text, oled_font_t font,
                        uint16_t color)
@@ -699,7 +683,6 @@ static void get_enum_data(screen_t screen, const char * const **opts,
     case SCR_PULSE_EQUIV: *opts = param_get_pulse_equiv_strings(); *count = PULSE_EQUIV_COUNT; break;
     case SCR_BAUD_RATE: *opts = param_get_baud_rate_strings(); *count = BAUD_RATE_COUNT; break;
     case SCR_LANGUAGE: *opts = s_language_str; *count = LANG_COUNT; break;
-    case SCR_ROTATION: *opts = s_rotation_str; *count = DISPLAY_ROTATION_COUNT; break;
     default: break;
     }
 }
@@ -1397,7 +1380,6 @@ static void handle_enum(key_event_t evt)
     case SCR_PULSE_EQUIV: max_val = (uint8_t)(PULSE_EQUIV_COUNT - 1); break;
     case SCR_BAUD_RATE:   max_val = (uint8_t)(BAUD_RATE_COUNT - 1);   break;
     case SCR_LANGUAGE:    max_val = (uint8_t)(LANG_COUNT - 1);        break;
-    case SCR_ROTATION:    max_val = (uint8_t)(DISPLAY_ROTATION_COUNT - 1); break;
     default: break;
     }
 
@@ -1553,9 +1535,6 @@ static void handle_confirm(key_event_t evt)
                 /* 参数缓存/Flash 已恢复默认值，同步更新当前运行中的通信配置。 */
                 bsp_usart_set_modbus_addr(param_get_modbus_addr());
                 bsp_usart2_apply_uart_config(param_get_uart_config());
-#if DISPLAY_ST7789
-                OLED_SetRotation(param_get_display_rotation());
-#endif
                 /* DAC/Span 默认值已随统一存储复位，同步 RAM 镜像 */
                 DacZeroValue = param_get_dac_zero();
                 DacFullValue = param_get_dac_full();
