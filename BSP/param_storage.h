@@ -86,6 +86,15 @@ typedef enum {
     LANG_COUNT
 } language_t;
 
+/* 相对当前安装方向顺时针旋转；存储值为四分之一圈的数量。 */
+typedef enum {
+    DISPLAY_ROTATION_0 = 0,
+    DISPLAY_ROTATION_90,
+    DISPLAY_ROTATION_180,
+    DISPLAY_ROTATION_270,
+    DISPLAY_ROTATION_COUNT
+} display_rotation_t;
+
 /* ===== 参数集合结构体 ===== */
 
 typedef struct {
@@ -130,6 +139,7 @@ typedef struct {
     uint16_t modbus_addr;    /* 1~247, 默认 2 */
     uint8_t  uart_config;    /* packed: [5]=stop [4:3]=parity [2:0]=baud, 默认 4 (115200,8N1) */
     uint8_t  language;       /* language_t, 默认 0 (English) */
+    uint8_t  display_rotation; /* display_rotation_t, 默认 0 (0°), 仅 ST7789 使用 */
 
     /* --- Phase 5: OLED 抗干扰自愈 --- */
     uint16_t oled_recovery_interval; /* 重初始化间隔 (单位: 100ms)
@@ -194,6 +204,7 @@ uint8_t  param_get_baud_rate(void);     /* 返回波特率索引 (uart_config bi
 uint8_t  param_get_uart_config(void);   /* 返回完整 packed uart_config */
 uint16_t param_get_pwd_engineer(void);
 uint8_t  param_get_language(void);
+uint8_t  param_get_display_rotation(void);
 
 /* ===== Phase 5 OLED 自愈 getter ===== */
 uint16_t param_get_oled_recovery_interval(void);
@@ -238,6 +249,7 @@ HAL_StatusTypeDef param_set_modbus_addr(uint16_t addr);
 HAL_StatusTypeDef param_set_baud_rate(uint8_t idx);      /* 仅修改波特率索引, 保留校验/停止位 */
 HAL_StatusTypeDef param_set_uart_config(uint8_t cfg);    /* 设置完整 packed uart_config (Modbus 用) */
 HAL_StatusTypeDef param_set_language(uint8_t idx);
+HAL_StatusTypeDef param_set_display_rotation(uint8_t idx);
 
 /* ===== Phase 5 OLED 自愈 setter ===== */
 HAL_StatusTypeDef param_set_oled_recovery_interval(uint16_t val);

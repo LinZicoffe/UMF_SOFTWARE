@@ -6,7 +6,7 @@
  * 改为 Page 61~63（0x0800F400~0x0800FFFF）3 页轮转 + 每次提交整页镜像。
  * 页格式/BL 通信槽与 Boot/Inc/bl_common.h、bl_info.c 的冻结契约一致：
  *   页头 16B: magic "PPG1" / seq u16 / state=0xA5 / fmt=1 / data_crc16 / hdr_crc16 / rsvd
- *   数据 0x010~0x099 + 保留 0x09A~0x0FF + BL 槽 0x100~0x10F
+ *   数据 0x010~0x09E + 保留 0x09F~0x0FF + BL 槽 0x100~0x10F
  *   data_crc16 覆盖 0x010~0x10F；hdr_crc16 覆盖页头 0x000~0x009
  * 提交目标选择（§7.2 v3.1）：优先无效页（物理序号最小）→ 全有效选 seq 最小。
  * 读取：取有效页中 seq 最大者，不改写任何东西。
@@ -48,6 +48,7 @@
 #define DEF_PWD_OPERATOR   0
 #define DEF_PWD_ENGINEER   123
 #define DEF_LANGUAGE       0
+#define DEF_DISPLAY_ROTATION 0
 #define DEF_OLED_RECOVERY_INTERVAL  50  /* 50 × 100ms = 5s, 0=禁用 */
 #define DEF_CAL_ENABLED      0
 #define DEF_CAL_K            1.0f
@@ -144,6 +145,7 @@
 #define D_SPAN_4MA         0x092u
 #define D_SPAN_20MA        0x096u
 #define D_FORWARD_TOTAL    0x09Au
+#define D_DISPLAY_ROTATION 0x09Eu         /* 新增保留字节；旧镜像 0xFF 按 0° 读取 */
 
 /* ===== 枚举字符串 ===== */
 static const char * const s_std_cond_str[STD_COND_COUNT] = {
@@ -378,7 +380,7 @@ static void page_image_build(uint16_t seq)
 
     memset(s_page_img, 0xFF, sizeof(s_page_img));
 
-    /* --- 数据区 0x010~0x099 --- */
+    /* --- 数据区 0x010~0x09E --- */
     {
         uint32_t v;
         v = float_to_u32(s_params.meter_coeff);
@@ -444,6 +446,7 @@ static void page_image_build(uint16_t seq)
         memcpy(&s_page_img[D_SPAN_20MA], &v, 4u);
         v = float_to_u32(s_params.forward_total);
         memcpy(&s_page_img[D_FORWARD_TOTAL], &v, 4u);
+        s_page_img[D_DISPLAY_ROTATION] = s_params.display_rotation;
     }
 
     /* --- BL 通信槽 0x100~0x10F（每次提交都从 RAM 缓存重写, §7.2 v3.1）--- */
@@ -548,6 +551,8 @@ static void page_image_decode(void)
         s_params.uart_config = uart_cfg_pack(baud, par, stop);
     }
     s_params.language = clamp_u8(s_page_img[D_CFG_U8 + 5u], 0, (uint8_t)(LANG_COUNT - 1));
+    s_params.display_rotation = s_page_img[D_DISPLAY_ROTATION] < DISPLAY_ROTATION_COUNT
+                              ? s_page_img[D_DISPLAY_ROTATION] : DEF_DISPLAY_ROTATION;
 
     s_params.preset_total = dec_f(D_PRESET_TOTAL, DEF_PRESET_TOTAL,
                                   PRESET_TOTAL_MIN, PRESET_TOTAL_MAX);
@@ -668,6 +673,7 @@ static void param_load_defaults(void)
     s_params.modbus_addr = DEF_MODBUS_ADDR;
     s_params.uart_config = DEF_BAUD_RATE;
     s_params.language = DEF_LANGUAGE;
+    s_params.display_rotation = DEF_DISPLAY_ROTATION;
     s_params.oled_recovery_interval = DEF_OLED_RECOVERY_INTERVAL;
     s_params.cal_enabled = DEF_CAL_ENABLED;
     for (i = 0; i < CAL_POINT_COUNT; i++) s_params.cal_k[i] = DEF_CAL_K;
@@ -1089,6 +1095,7 @@ uint8_t  param_get_baud_rate(void)   { return uart_cfg_baud(s_params.uart_config
 uint8_t  param_get_uart_config(void) { return s_params.uart_config; }
 uint16_t param_get_pwd_engineer(void) { return s_params.pwd_engineer; }
 uint8_t  param_get_language(void)    { return s_params.language; }
+uint8_t  param_get_display_rotation(void) { return s_params.display_rotation; }
 
 /* ===== Phase 5 OLED 自愈 getter ===== */
 uint16_t param_get_oled_recovery_interval(void) { return s_params.oled_recovery_interval; }
@@ -1352,6 +1359,15 @@ HAL_StatusTypeDef param_set_language(uint8_t idx)
     uint8_t new_v = clamp_u8(idx, 0, (uint8_t)(LANG_COUNT - 1));
     if (new_v == s_params.language) return HAL_OK;
     s_params.language = new_v;
+    s_param_dirty = 1u;
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef param_set_display_rotation(uint8_t idx)
+{
+    if (idx >= DISPLAY_ROTATION_COUNT) return HAL_ERROR;
+    if (idx == s_params.display_rotation) return HAL_OK;
+    s_params.display_rotation = idx;
     s_param_dirty = 1u;
     return HAL_OK;
 }
