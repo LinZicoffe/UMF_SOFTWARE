@@ -42,7 +42,7 @@ int sim_menu_tests(void)
     if (!trace) return 1;
     fputs("kind,screen,previous,current,start,clears,full_frames,pixels,frame\n", trace);
     s_access_level = ACCESS_DEVELOPER;
-    for (id = 3; id < 45; id++) {
+    for (id = 3; id < SCR_COUNT; id++) {
         memset(f, 0, sizeof(*f));
         f->screen_id = (screen_t)id;
         f->mode = id == 4 ? MODE_PASSWORD : detect_mode(f->screen_id);
@@ -52,7 +52,7 @@ int sim_menu_tests(void)
         fresh_menu(id);
     }
     /* Both directions, including five-row window boundaries. */
-    for (id = 3; id < 45; id++) {
+    for (id = 3; id < SCR_COUNT; id++) {
         if (detect_mode((screen_t)id) != MODE_LIST) continue;
         memset(f, 0, sizeof(*f));
         f->screen_id = (screen_t)id;
@@ -70,7 +70,7 @@ int sim_menu_tests(void)
             compare_menu(100 + index++);
         }
     }
-    for (id = 3; id < 45; id++) {
+    for (id = 3; id < SCR_COUNT; id++) {
         if (detect_mode((screen_t)id) != MODE_ENUM) continue;
         const char * const *options;
         memset(f, 0, sizeof(*f));
@@ -136,6 +136,6 @@ int sim_menu_tests(void)
     f->confirm_sel = 1;
     render_confirm_buttons(f);
     compare_menu(100 + index++);
-    printf("PASS: 42 menu pages and %u partial updates captured\n", index);
+    printf("PASS: 43 menu pages and %u partial updates captured\n", index);
     return 0;
 }

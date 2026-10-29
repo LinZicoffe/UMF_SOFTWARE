@@ -184,8 +184,8 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
         for path in paths:
             self.assertEqual(path.read_bytes(), (self.work / path.name.replace('_partial_', '_full_')).read_bytes(), path.name)
 
-    def test_all_42_menu_pages_have_header_and_footer(self):
-        for screen in range(3, 45):
+    def test_all_43_menu_pages_have_header_and_footer(self):
+        for screen in range(3, 46):
             image = self.frame('menu_full', screen)
             self.assertEqual(self.pixel(image, 14, 39), 0x31C8, f'screen {screen}')
             self.assertEqual(self.pixel(image, 14, 212), 0x31C8, f'screen {screen}')
