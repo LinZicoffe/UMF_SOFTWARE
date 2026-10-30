@@ -522,6 +522,8 @@ static const char * const s_language_str[LANG_COUNT] = { "English" };
 
 #if DISPLAY_ST7789
 
+#define LCD_MENU_ROWS 5U
+
 static void lcd_center(uint16_t y, const char *text, oled_font_t font,
                        uint16_t color)
 {
@@ -532,31 +534,62 @@ static void lcd_center(uint16_t y, const char *text, oled_font_t font,
 
 static void lcd_title(screen_t screen)
 {
-    lcd_center(5, get_screen_title(screen), OLED_FONT_SMALL, OLED_CYAN);
-    OLED_FillRectangle(8, 27, 231, 28, OLED_CYAN);
+    OLED_DrawText(14, 11, screen == SCR_PASSWORD ? "Access" : get_screen_title(screen), OLED_FONT_MEDIUM,
+                  OLED_MUTED, OLED_BLACK);
+    OLED_FillRectangle(14, 39, 225, 39, OLED_RULE);
+}
+
+static void lcd_footer(const char *left, const char *right)
+{
+    OLED_FillRectangle(14, 212, 225, 212, OLED_RULE);
+    OLED_DrawText(14, 220, left, OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
+    OLED_DrawText(225U - OLED_TextWidth(right, OLED_FONT_SMALL), 220, right,
+                  OLED_FONT_SMALL, OLED_ACCENT, OLED_BLACK);
+}
+
+static void lcd_counter(uint8_t selected, uint8_t count)
+{
+    char buf[12], tmp[4];
+    itoa_local(selected + 1, buf);
+    strcat(buf, " / ");
+    itoa_local(count, tmp);
+    strcat(buf, tmp);
+    OLED_FillRectangle(180, 11, 225, 30, OLED_BLACK);
+    OLED_DrawText(225U - OLED_TextWidth(buf, OLED_FONT_SMALL), 15, buf,
+                  OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
+}
+
+static void lcd_row(const char *text, uint8_t row, uint8_t selected, uint8_t list)
+{
+    uint16_t y = (uint16_t)(47U + 33U * row);
+    uint16_t bg = selected ? OLED_SELECT : OLED_BLACK;
+    OLED_FillRectangle(9, y, 230, y + 30U, bg);
+    if (selected) OLED_FillRectangle(9, y, 11, y + 30U, OLED_ACCENT);
+    OLED_DrawText(19, y + 5U, text, OLED_FONT_MEDIUM,
+                  selected ? OLED_ACCENT : OLED_WHITE, bg);
+    if (list || selected)
+        OLED_DrawText(212, y + 5U, list ? ">" : "*", OLED_FONT_MEDIUM,
+                      selected ? OLED_ACCENT : OLED_MUTED, bg);
 }
 
 static void render_list_row(const nav_frame_t *f, const list_item_t *items,
                             uint8_t idx, uint8_t row)
 {
-    char label[19];
-    uint16_t y = (uint16_t)(38U + 32U * row);
-    uint8_t selected = idx == f->cursor;
-    OLED_FillRectangle(5, y - 4U, 234, y + 22U,
-                       selected ? OLED_BLUE : OLED_BLACK);
-    strncpy(label, items[idx].label, sizeof(label) - 1U);
-    label[sizeof(label) - 1U] = '\0';
-    OLED_DrawText(11, y, label, OLED_FONT_SMALL,
-                  selected ? OLED_YELLOW : OLED_WHITE,
-                  selected ? OLED_BLUE : OLED_BLACK);
+    lcd_row(items[idx].label, row, idx == f->cursor, 1U);
 }
 
 static void render_list_rows(const nav_frame_t *f, const list_item_t *items,
                              uint8_t count)
 {
     uint8_t i;
-    for (i = 0; i < 6U && f->scroll + i < count; i++)
+    for (i = 0; i < LCD_MENU_ROWS && f->scroll + i < count; i++)
         render_list_row(f, items, (uint8_t)(f->scroll + i), i);
+}
+
+static uint8_t menu_page_start(uint8_t selected)
+{
+    /* 固定五项一页：同页移动光标，跨页才重画列表区。 */
+    return (uint8_t)((selected / LCD_MENU_ROWS) * LCD_MENU_ROWS);
 }
 
 static void render_list(nav_frame_t *f)
@@ -566,8 +599,10 @@ static void render_list(nav_frame_t *f)
     get_list_data(f->screen_id, &items, &count);
     lcd_title(f->screen_id);
     if (!items || count == 0U) return;
-    f->scroll = f->cursor >= 6U ? (uint8_t)(f->cursor - 5U) : 0U;
+    f->scroll = menu_page_start(f->cursor);
     render_list_rows(f, items, count);
+    lcd_counter(f->cursor, count);
+    lcd_footer("Back", "Open");
 }
 
 static void render_list_selection(nav_frame_t *f, const list_item_t *items,
@@ -576,81 +611,64 @@ static void render_list_selection(nav_frame_t *f, const list_item_t *items,
 {
     uint8_t new_scroll;
     if (f->cursor == old_cursor) return;
-    new_scroll = f->cursor >= 6U ? (uint8_t)(f->cursor - 5U) : 0U;
+    new_scroll = menu_page_start(f->cursor);
     f->scroll = new_scroll;
     if (new_scroll != old_scroll) {
-        /* 窗口移动时只重画列表区，标题保持不变。 */
-        OLED_FillRectangle(5, 34, 234, 220, OLED_BLACK);
+        OLED_FillRectangle(9, 47, 230, 209, OLED_BLACK);
         render_list_rows(f, items, count);
     } else {
-        render_list_row(f, items, old_cursor,
-                        (uint8_t)(old_cursor - new_scroll));
-        render_list_row(f, items, f->cursor,
-                        (uint8_t)(f->cursor - new_scroll));
+        render_list_row(f, items, old_cursor, (uint8_t)(old_cursor - new_scroll));
+        render_list_row(f, items, f->cursor, (uint8_t)(f->cursor - new_scroll));
     }
+    lcd_counter(f->cursor, count);
 }
 
 static void render_coeff_digit(const nav_frame_t *f, uint8_t i)
 {
-    uint16_t x = (uint16_t)(57U + i * 22U + (i >= 2U ? 18U : 0U));
-    char digit[2];
-    OLED_FillRectangle(x - 2U, 62, x + 19U, 91,
-                       i == f->cursor ? OLED_BLUE : OLED_BLACK);
-    digit[0] = (char)('0' + f->coeff_digits[i]);
-    digit[1] = '\0';
-    OLED_DrawText(x, 65, digit, OLED_FONT_MEDIUM, OLED_YELLOW,
-                  i == f->cursor ? OLED_BLUE : OLED_BLACK);
-    if (i == 2U)
-        OLED_DrawText(100, 65, ".", OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+    /* 固定数位槽，避免比例数字变宽后挤动小数点与编辑光标。 */
+    uint16_t x = (uint16_t)(48U + i * 27U + (i >= 2U ? 9U : 0U));
+    char digit[2] = { (char)('0' + f->coeff_digits[i]), 0 };
+    OLED_FillRectangle(x, 86, x + 25U, 128, OLED_BLACK);
+    OLED_DrawText(x + (26U - OLED_TextWidth(digit, OLED_FONT_LARGE)) / 2U,
+                  86, digit, OLED_FONT_LARGE, OLED_WHITE, OLED_BLACK);
+    if (i == f->cursor) OLED_FillRectangle(x, 126, x + 25U, 128, OLED_ACCENT);
+    if (i == 2U) OLED_DrawText(102, 86, ".", OLED_FONT_LARGE, OLED_WHITE, OLED_BLACK);
 }
 
 static void render_numeric_value(const nav_frame_t *f, float old_value)
 {
     const num_desc_t *desc = &c_num_desc[f->screen_id];
     char buf[32];
-    uint16_t width, x;
     if (f->edit_val == old_value) return;
-    ftoa(old_value, desc->decimals, buf, sizeof(buf));
-    width = OLED_TextWidth(buf, OLED_FONT_MEDIUM);
-    x = width < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - width) / 2U) : 0U;
-    OLED_FillRectangle(x, 65, x + width - 1U,
-                       65U + OLED_FontHeight(OLED_FONT_MEDIUM) - 1U, OLED_BLACK);
+    OLED_FillRectangle(14, 86, 225, 123, OLED_BLACK);
     ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
-    lcd_center(65, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
+    lcd_center(86, buf, OLED_FONT_LARGE, OLED_WHITE);
 }
 
 static void render_numeric(nav_frame_t *f)
 {
     const num_desc_t *desc = &c_num_desc[f->screen_id];
     float min_val, max_val;
-    char buf[32], tmp[16];
+    char buf[40], tmp[16];
     uint8_t i;
     get_numeric_range(f->screen_id, &min_val, &max_val);
     lcd_title(f->screen_id);
+    OLED_DrawText(14, 52, "Edit value", OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
     if (is_coeff_screen(f->screen_id)) {
         for (i = 0; i < COEFF_DIGIT_COUNT; i++) render_coeff_digit(f, i);
     } else {
         ftoa(f->edit_val, desc->decimals, buf, sizeof(buf));
-        lcd_center(65, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
+        lcd_center(86, buf, OLED_FONT_LARGE, OLED_WHITE);
     }
-    strcpy(buf, "Min:");
-    ftoa(min_val, desc->decimals, tmp, sizeof(tmp));
+    lcd_center(137, desc->unit, OLED_FONT_MEDIUM, OLED_MUTED);
+    OLED_DrawText(14, 164, "Allowed range", OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
+    ftoa(min_val, desc->decimals, buf, sizeof(buf));
+    strcat(buf, " to ");
+    if (max_val > 99999.0f) itoa_local((int)max_val, tmp);
+    else ftoa(max_val, desc->decimals, tmp, sizeof(tmp));
     strcat(buf, tmp);
-    OLED_DrawText(8, 115, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
-    strcpy(buf, "Max:");
-    ftoa(max_val, desc->decimals, tmp, sizeof(tmp));
-    strcat(buf, tmp);
-    OLED_DrawText(8, 144, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
-    if (is_coeff_screen(f->screen_id)) {
-        strcpy(buf, "Enter:Next/Save");
-    } else {
-        strcpy(buf, "Step:");
-        ftoa(desc->step, desc->decimals, tmp, sizeof(tmp));
-        strcat(buf, tmp);
-        strcat(buf, " ");
-        strcat(buf, desc->unit);
-    }
-    OLED_DrawText(8, 190, buf, OLED_FONT_SMALL, OLED_CYAN, OLED_BLACK);
+    OLED_DrawText(14, 183, buf, OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
+    lcd_footer("Cancel", is_coeff_screen(f->screen_id) ? "Next / Save" : "Save");
 }
 
 static void get_enum_data(screen_t screen, const char * const **opts,
@@ -669,31 +687,17 @@ static void get_enum_data(screen_t screen, const char * const **opts,
     }
 }
 
-static uint8_t enum_window_start(uint8_t selected, uint8_t count)
-{
-    int8_t start = (int8_t)selected - 2;
-    if (start < 0) start = 0;
-    if (start + 6 > (int8_t)count) start = (int8_t)count - 6;
-    return (uint8_t)(start < 0 ? 0 : start);
-}
-
 static void render_enum_row(const nav_frame_t *f, const char * const *opts,
                              uint8_t idx, uint8_t row)
 {
-    uint16_t y = (uint16_t)(38U + 32U * row);
-    uint8_t selected = idx == f->enum_val;
-    OLED_FillRectangle(5, y - 4U, 239, y + 22U, OLED_BLACK);
-    if (selected) OLED_FillRectangle(5, y - 4U, 234, y + 22U, OLED_BLUE);
-    OLED_DrawText(11, y, opts[idx], OLED_FONT_SMALL,
-                  selected ? OLED_YELLOW : OLED_WHITE,
-                  selected ? OLED_BLUE : OLED_BLACK);
+    lcd_row(opts[idx], row, idx == f->enum_val, 0U);
 }
 
 static void render_enum_rows(const nav_frame_t *f, const char * const *opts,
                               uint8_t count, uint8_t start)
 {
     uint8_t i;
-    for (i = 0; i < 6U && start + i < count; i++)
+    for (i = 0; i < LCD_MENU_ROWS && start + i < count; i++)
         render_enum_row(f, opts, (uint8_t)(start + i), i);
 }
 
@@ -704,15 +708,16 @@ static void render_enum_selection(nav_frame_t *f, uint8_t old_value)
     if (f->enum_val == old_value) return;
     get_enum_data(f->screen_id, &opts, &count);
     if (!opts) return;
-    old_start = enum_window_start(old_value, count);
-    new_start = enum_window_start(f->enum_val, count);
+    old_start = menu_page_start(old_value);
+    new_start = menu_page_start(f->enum_val);
     if (new_start != old_start) {
-        OLED_FillRectangle(5, 34, 239, 220, OLED_BLACK);
+        OLED_FillRectangle(9, 47, 230, 209, OLED_BLACK);
         render_enum_rows(f, opts, count, new_start);
     } else {
         render_enum_row(f, opts, old_value, (uint8_t)(old_value - new_start));
         render_enum_row(f, opts, f->enum_val, (uint8_t)(f->enum_val - new_start));
     }
+    lcd_counter(f->enum_val, count);
 }
 
 static void render_enum(nav_frame_t *f)
@@ -722,28 +727,27 @@ static void render_enum(nav_frame_t *f)
     get_enum_data(f->screen_id, &opts, &count);
     lcd_title(f->screen_id);
     if (!opts) return;
-    render_enum_rows(f, opts, count, enum_window_start(f->enum_val, count));
+    render_enum_rows(f, opts, count, menu_page_start(f->enum_val));
+    lcd_counter(f->enum_val, count);
+    lcd_footer("Cancel", "Save");
 }
 
 static void render_password_digit(const nav_frame_t *f, uint8_t i)
 {
-    char digit[2];
-    uint16_t x = (uint16_t)(72U + 34U * i);
-    OLED_FillRectangle(x - 3U, 84, x + 26U, 122,
-                       f->cursor == i ? OLED_BLUE : OLED_BLACK);
-    digit[0] = (char)('0' + f->pwd_digits[i]);
-    digit[1] = '\0';
-    OLED_DrawText(x, 88, digit, OLED_FONT_LARGE, OLED_YELLOW,
-                  f->cursor == i ? OLED_BLUE : OLED_BLACK);
+    uint16_t x = (uint16_t)(48U + 50U * i);
+    char digit[2] = { (char)('0' + f->pwd_digits[i]), 0 };
+    OLED_FillRectangle(x, 112, x + 43U, 160, OLED_BLACK);
+    OLED_DrawText(x + (44U - OLED_TextWidth(digit, OLED_FONT_LARGE)) / 2U,
+                  112, digit, OLED_FONT_LARGE, OLED_WHITE, OLED_BLACK);
+    if (f->cursor == i) OLED_FillRectangle(x, 158, x + 43U, 160, OLED_ACCENT);
 }
 
 static void render_password_content(const nav_frame_t *f)
 {
     uint8_t i;
-    OLED_FillRectangle(45, 80, 194, 153, OLED_BLACK);
+    OLED_FillRectangle(14, 112, 225, 195, OLED_BLACK);
     if (f->pwd_err_visible) {
-        lcd_center(86, "Password", OLED_FONT_MEDIUM, OLED_RED);
-        lcd_center(125, "Error!", OLED_FONT_MEDIUM, OLED_RED);
+        lcd_center(128, "Password error", OLED_FONT_MEDIUM, OLED_ERROR);
         return;
     }
     for (i = 0; i < 3U; i++) render_password_digit(f, i);
@@ -752,8 +756,9 @@ static void render_password_content(const nav_frame_t *f)
 static void render_password(nav_frame_t *f)
 {
     lcd_title(SCR_PASSWORD);
+    lcd_center(79, "Enter password", OLED_FONT_MEDIUM, OLED_WHITE);
     render_password_content(f);
-    lcd_center(180, "Range:000~999", OLED_FONT_SMALL, OLED_WHITE);
+    lcd_footer("Cancel", "Next");
 }
 
 static void render_readonly(nav_frame_t *f)
@@ -761,46 +766,45 @@ static void render_readonly(nav_frame_t *f)
     char buf[32];
     lcd_title(f->screen_id);
     if (f->screen_id == SCR_DEVICE_INFO) {
-        strcpy(buf, "Addr:");
-        Int2String((int)param_get_modbus_addr(), buf + 5);
-        OLED_DrawText(8, 66, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
-        strcpy(buf, "Baud:");
-        strncat(buf, param_get_baud_rate_strings()[param_get_baud_rate()],
-                sizeof(buf) - 6U);
-        OLED_DrawText(8, 103, buf, OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
-        OLED_DrawText(8, 140, "FW:v1.0.0", OLED_FONT_SMALL, OLED_WHITE, OLED_BLACK);
+        strcpy(buf, "Addr: ");
+        Int2String((int)param_get_modbus_addr(), buf + 6);
+        OLED_DrawText(14, 87, buf, OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+        strcpy(buf, "Baud: ");
+        strncat(buf, param_get_baud_rate_strings()[param_get_baud_rate()], sizeof(buf) - 7U);
+        OLED_DrawText(14, 119, buf, OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+        OLED_DrawText(14, 151, "FW:v1.0.0", OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
     } else {
         ftoa(load_readonly_val(f->screen_id), 1, buf, sizeof(buf));
-        lcd_center(80, buf, OLED_FONT_MEDIUM, OLED_YELLOW);
-        lcd_center(118, param_get_total_unit_str(param_get_total_unit()),
-                   OLED_FONT_SMALL, OLED_WHITE);
-        lcd_center(184, "[Read Only]", OLED_FONT_SMALL, OLED_CYAN);
+        lcd_center(91, buf, OLED_FONT_LARGE, OLED_WHITE);
+        lcd_center(137, param_get_total_unit_str(param_get_total_unit()),
+                   OLED_FONT_MEDIUM, OLED_MUTED);
+        lcd_center(177, "Read only", OLED_FONT_SMALL, OLED_ACCENT);
     }
+    lcd_footer("Back", "");
 }
 
 static void render_confirm_buttons(const nav_frame_t *f)
 {
-    OLED_FillRectangle(25, 166, 107, 201,
-                       f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
-    OLED_FillRectangle(130, 166, 212, 201,
-                       f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
-    OLED_DrawText(46, 176, "YES", OLED_FONT_SMALL, OLED_WHITE,
-                  f->confirm_sel == 1U ? OLED_BLUE : OLED_BLACK);
-    OLED_DrawText(155, 176, "NO", OLED_FONT_SMALL, OLED_WHITE,
-                  f->confirm_sel == 1U ? OLED_BLACK : OLED_BLUE);
+    uint8_t i;
+    for (i = 0; i < 2U; i++) {
+        uint16_t x = i == 0U ? 14U : 128U;
+        uint16_t bg = f->confirm_sel == i ? OLED_SELECT : OLED_BLACK;
+        const char *text = i == 0U ? "No" : "Yes";
+        OLED_FillRectangle(x, 159, x + 97U, 193, bg);
+        OLED_DrawText(x + (98U - OLED_TextWidth(text, OLED_FONT_MEDIUM)) / 2U,
+                      166, text, OLED_FONT_MEDIUM,
+                      f->confirm_sel == i ? OLED_ACCENT : OLED_WHITE, bg);
+    }
 }
 
 static void render_confirm(nav_frame_t *f)
 {
     lcd_title(f->screen_id);
-    if (f->screen_id == SCR_CLEAR_TOTALS) {
-        lcd_center(65, "All totals will", OLED_FONT_SMALL, OLED_WHITE);
-        lcd_center(94, "be reset to ZERO", OLED_FONT_SMALL, OLED_RED);
-    } else {
-        lcd_center(65, "All parameters", OLED_FONT_SMALL, OLED_WHITE);
-        lcd_center(94, "will be DEFAULT", OLED_FONT_SMALL, OLED_RED);
-    }
+    lcd_center(85, f->screen_id == SCR_CLEAR_TOTALS ? "Clear all totals?" :
+                   "Restore defaults?", OLED_FONT_MEDIUM, OLED_WHITE);
+    lcd_center(121, "Confirm operation", OLED_FONT_SMALL, OLED_MUTED);
     render_confirm_buttons(f);
+    lcd_footer("Cancel", "Confirm");
 }
 
 static void render_menu_frame(const void *context)
