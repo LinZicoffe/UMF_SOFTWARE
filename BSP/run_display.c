@@ -32,11 +32,21 @@ static float dac_to_mA(uint16_t dac_val, const uint16_t *p_dac_buf)
 
 static char s_rate_text[24];
 static uint16_t s_rate_x;
-static oled_font_t s_rate_font;
 static char s_temp_text[24];
 static char s_total_text[32];
 static char s_aux_text[8][32];
 static run_page_t s_drawn_page = RUN_PAGE_COUNT;
+/* 数值由旧/新字形直接求像素差异，避免先清空数值矩形造成闪烁。 */
+static void draw_value(uint16_t x, uint16_t previous_x, uint16_t y,
+                        char *previous, const char *value, oled_font_t font)
+{
+    if (s_display_dirty)
+        OLED_DrawText(x, y, value, font, OLED_WHITE, OLED_BLACK);
+    else
+        OLED_DrawTextDiff(x, y, value, previous_x, previous, font, OLED_WHITE, OLED_BLACK);
+    strcpy(previous, value);
+}
+
 // ---- 绘制字段 ---- 
 static void draw_field(uint16_t x, uint16_t y, uint16_t width,
                        char *previous, const char *value, oled_font_t font,
@@ -94,33 +104,11 @@ static void render_page_main(const run_display_input_t *p_in)
         oled_font_t font = OLED_FONT_FLOW_DIGITS;
         uint16_t width = OLED_TextWidth(buf, font);
         uint16_t x = (OLED_WIDTH - width) / 2U;
-        uint8_t same_cells = !s_display_dirty && x == s_rate_x && font == s_rate_font;
-        size_t i;
-        char glyph[2] = { 0, 0 };
-        /* 比例字体即使总宽相同，各字符起点也可能不同。 */
-        for (i = 0; same_cells && buf[i] != '\0'; i++) {
-            char old_glyph[2] = { s_rate_text[i], 0 };
-            glyph[0] = buf[i];
-            if (OLED_TextWidth(glyph, font) != OLED_TextWidth(old_glyph, font))
-                same_cells = 0U;
-        }
-        if (!same_cells) {
-            OLED_FillRectangle(8, 74, 231, 137, OLED_BLACK);
-            OLED_DrawText(x, 74, buf, font, OLED_WHITE, OLED_BLACK);
-        } else {
-            for (i = 0; buf[i] != '\0'; i++) {
-                glyph[0] = buf[i];
-                if (buf[i] != s_rate_text[i])
-                    OLED_DrawText(x, 74, glyph, font, OLED_WHITE, OLED_BLACK);
-                x += OLED_TextWidth(glyph, font);
-            }
-        }
-        strcpy(s_rate_text, buf);
-        s_rate_x = (OLED_WIDTH - width) / 2U;
-        s_rate_font = font;
+        draw_value(x, s_rate_x, 74, s_rate_text, buf, font);
+        s_rate_x = x;
     }
-    draw_field(14, 204, 212, s_total_text, (const char *)p_in->p_flow_sum_buf,
-               OLED_FONT_MEDIUM, OLED_WHITE);
+    draw_value(14, 14, 204, s_total_text, (const char *)p_in->p_flow_sum_buf,
+               OLED_FONT_MEDIUM);
 }
 
 /* S02：七项实时数据使用同一套字体和列对齐。 */
@@ -144,7 +132,7 @@ static void render_page_aux(const run_display_input_t *p_in)
     ftoa(p_in->p_flow_rate->num, 1, buf, sizeof(buf));
     strncat(buf, " ", sizeof(buf) - strlen(buf) - 1U);
     strncat(buf, main_unit_text(p_in->p_flow_unit_str), sizeof(buf) - strlen(buf) - 1U);
-    draw_field(90, 48, 136, s_aux_text[0], buf, OLED_FONT_SMALL, OLED_WHITE);
+    draw_value(90, 90, 48, s_aux_text[0], buf, OLED_FONT_SMALL);
     draw_field(90, 69, 136, s_aux_text[1], "0.00 m/s", OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_temperature->num, 1, buf, sizeof(buf));
     strcat(buf, " \xC2\xB0" "C");
@@ -162,7 +150,7 @@ static void render_page_aux(const run_display_input_t *p_in)
     strcpy(buf, (const char *)p_in->p_flow_sum_buf);
     strncat(buf, " ", sizeof(buf) - strlen(buf) - 1U);
     strncat(buf, main_unit_text(p_in->p_total_unit_str), sizeof(buf) - strlen(buf) - 1U);
-    draw_field(14, 220, 212, s_total_text, buf, OLED_FONT_SMALL, OLED_WHITE);
+    draw_value(14, 14, 220, s_total_text, buf, OLED_FONT_SMALL);
 }
 
 #else

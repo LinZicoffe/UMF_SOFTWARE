@@ -6,8 +6,10 @@
 
 sim_iwdg_t sim_iwdg;
 static uint16_t s_pixels[240][240];
+static uint16_t s_previous_pixels[240][240];
 static uint16_t s_x, s_y, s_right, s_left;
 static unsigned s_writes;
+static unsigned s_unchanged_writes;
 static unsigned s_list_clears, s_full_frames;
 static uint8_t s_out_of_bounds;
 
@@ -23,7 +25,10 @@ void LCD_Address_Set(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 
 void sim_pixel(uint16_t color)
 {
-    if (s_x < 240 && s_y < 240) s_pixels[s_y][s_x] = color;
+    if (s_x < 240 && s_y < 240) {
+        if (s_pixels[s_y][s_x] == color) s_unchanged_writes++;
+        s_pixels[s_y][s_x] = color;
+    }
     else s_out_of_bounds = 1U;
     s_writes++;
     if (++s_x > s_right) {
@@ -66,6 +71,41 @@ void save_refresh_stats(FILE *file, const char *kind, unsigned screen,
 
 int sim_menu_tests(void);
 
+static void check_value_updates(run_display_input_t *input, Uart_SendfloatTypeDef *rate,
+                                const char *kind,
+                                const float *rates, const char * const *totals,
+                                unsigned count, FILE *trace)
+{
+    unsigned i, x, y, changed;
+    for (i = 0; i < count; i++) {
+        if (rates) rate->num = rates[i];
+        if (totals) input->p_flow_sum_buf = (const unsigned char *)totals[i];
+        memcpy(s_previous_pixels, s_pixels, sizeof(s_pixels));
+        s_writes = s_unchanged_writes = 0;
+        run_display_render(input);
+        changed = 0;
+        for (y = 0; y < 240; y++)
+            for (x = 0; x < 240; x++)
+                changed += s_previous_pixels[y][x] != s_pixels[y][x];
+        fprintf(trace, "%s,%u,%u,%u,%u,", kind, i, s_writes, s_unchanged_writes, changed);
+        if ((strcmp(kind, "flow_dirty") == 0 && i == 1U) ||
+            (strcmp(kind, "total_dirty") == 0 && i == 0U))
+            printf("%s: %u writes, %u changed pixels, %u unchanged writes\n",
+                   kind, s_writes, changed, s_unchanged_writes);
+        save_frame(kind, i);
+        s_writes = 0;
+        run_display_render(input);
+        fprintf(trace, "%u\n", s_writes);
+        run_display_invalidate();
+        run_display_render(input);
+        {
+            char full_kind[32];
+            snprintf(full_kind, sizeof(full_kind), "%s_full", kind);
+            save_frame(full_kind, i);
+        }
+    }
+}
+
 int main(void)
 {
     static const float rates[] = {
@@ -82,6 +122,7 @@ int main(void)
         &dac, dacs, "m3/h", "m3"
     };
     unsigned i;
+    FILE *trace;
     run_display_init(NULL);
     for (i = 0; i < sizeof(rates) / sizeof(rates[0]); i++) {
         rate.num = rates[i];
@@ -97,6 +138,29 @@ int main(void)
         run_display_render(&input);
         if (s_writes != 0U) return 3;
     }
+    trace = fopen("value_refresh.csv", "w");
+    fprintf(trace, "kind,index,pixels,unchanged_pixels,changed_pixels,repeat_pixels\n");
+    rate.num = 0.0f;
+    run_display_invalidate();
+    run_display_render(&input);
+    check_value_updates(&input, &rate, "flow_dirty", rates, NULL,
+                        sizeof(rates) / sizeof(rates[0]), trace);
+    {
+        static const char * const totals[] = {
+            "000001234.568", "000001234.569", "000001235.000",
+            "999999999.999", "0.000", "000001234.567", "000001234.567"
+        };
+        check_value_updates(&input, &rate, "total_dirty", NULL, totals,
+                            sizeof(totals) / sizeof(totals[0]), trace);
+        run_display_set_page(RUN_PAGE_AUX);
+        run_display_render(&input);
+        check_value_updates(&input, &rate, "aux_flow_dirty", rates, NULL,
+                            sizeof(rates) / sizeof(rates[0]), trace);
+        check_value_updates(&input, &rate, "aux_total_dirty", NULL, totals,
+                            sizeof(totals) / sizeof(totals[0]), trace);
+    }
+    fclose(trace);
+    run_display_set_page(RUN_PAGE_MAIN);
     rate.num = 123.4f;
     run_display_invalidate();
     run_display_render(&input);

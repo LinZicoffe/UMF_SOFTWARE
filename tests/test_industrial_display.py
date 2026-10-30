@@ -128,6 +128,9 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
         with (cls.work / 'menu_refresh.csv').open(newline='') as trace:
             cls.moves = [{key: value if key == 'kind' else int(value)
                           for key, value in row.items()} for row in csv.DictReader(trace)]
+        with (cls.work / 'value_refresh.csv').open(newline='') as trace:
+            cls.value_updates = [{key: value if key == 'kind' else int(value)
+                                  for key, value in row.items()} for row in csv.DictReader(trace)]
         if os.environ.get('UMF_DISPLAY_EXPORT'):
             export = Path(os.environ['UMF_DISPLAY_EXPORT'])
             export.mkdir(parents=True, exist_ok=True)
@@ -161,6 +164,16 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
     def test_changed_digits_lengths_and_decimal_positions_match_full_render(self):
         for index in range(len(RATE_TEXT)):
             self.assertEqual(self.frame('partial', index), self.frame('full', index), f'rate {RATE_TEXT[index]}')
+
+    def test_flow_and_total_updates_write_only_changed_pixels(self):
+        self.assertEqual(len(self.value_updates), 40)
+        for update in self.value_updates:
+            with self.subTest(update=update):
+                self.assertEqual(update['unchanged_pixels'], 0)
+                self.assertEqual(update['pixels'], update['changed_pixels'])
+                self.assertEqual(update['repeat_pixels'], 0)
+                self.assertEqual(self.frame(update['kind'], update['index']),
+                                 self.frame(update['kind'] + '_full', update['index']))
 
     def test_main_has_industrial_dividers_and_large_white_digits(self):
         image = self.frame('main', 0)
