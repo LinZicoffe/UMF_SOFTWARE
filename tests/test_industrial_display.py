@@ -100,6 +100,7 @@ class DisplayTests(unittest.TestCase):
         (cls.work / 'bsp_usart.h').write_text('typedef struct { float num; } Uart_SendfloatTypeDef;\n')
         (cls.work / 'ssd1306.h').write_text('#include <stdint.h>\n#include <stddef.h>\n')
         (cls.work / 'ssd1306_fonts.h').write_text('')
+        (cls.work / 'param_storage.h').write_text('#include <stdint.h>\nuint8_t param_get_display_rotation(void);\n')
         (cls.work / 'sim_hw.h').write_text('''#include <stdint.h>
 void sim_check_text(uint16_t x, uint16_t y, const char *text, oled_font_t font);
 typedef struct { uint32_t KR; } sim_iwdg_t;
@@ -108,6 +109,7 @@ extern sim_iwdg_t sim_iwdg;
 void sim_pixel(uint16_t color);
 void LCD_Address_Set(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2);
 static inline void LCD_Init(void) { }
+static inline void LCD_SetRotation(uint8_t x) { (void)x; }
 static inline void LCD_WR_REG(uint8_t x) { (void)x; }
 static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
 ''')
@@ -182,8 +184,8 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
         for path in paths:
             self.assertEqual(path.read_bytes(), (self.work / path.name.replace('_partial_', '_full_')).read_bytes(), path.name)
 
-    def test_all_42_menu_pages_have_header_and_footer(self):
-        for screen in range(3, 45):
+    def test_all_43_menu_pages_have_header_and_footer(self):
+        for screen in range(3, 46):
             image = self.frame('menu_full', screen)
             self.assertEqual(self.pixel(image, 14, 39), 0x31C8, f'screen {screen}')
             self.assertEqual(self.pixel(image, 14, 212), 0x31C8, f'screen {screen}')

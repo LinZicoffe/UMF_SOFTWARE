@@ -6,6 +6,7 @@
 #if DISPLAY_ST7789
 #include "lcd_init.h"
 #include "industrial_fonts.h"
+#include "param_storage.h"
 
 static uint16_t s_cursor_x;
 static uint16_t s_cursor_y;
@@ -75,18 +76,23 @@ static void stream_color(uint16_t color)
 void OLED_Init(void)
 {
     LCD_Init();
+    OLED_SetRotation(param_get_display_rotation());
     s_cursor_x = 0;
     s_cursor_y = 0;
 }
 
 void OLED_Recovery(void)
 {
-    LCD_WR_REG(0x36);
-    LCD_WR_DATA8(0x00);
+    OLED_SetRotation(param_get_display_rotation());
     LCD_WR_REG(0x3A);
     LCD_WR_DATA8(0x05);
     LCD_WR_REG(0x21);
     LCD_WR_REG(0x29);
+}
+
+void OLED_SetRotation(uint8_t rotation)
+{
+    LCD_SetRotation(rotation);
 }
 
 void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,

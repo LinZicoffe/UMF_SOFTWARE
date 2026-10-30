@@ -4,7 +4,6 @@
 #include "main.h"
 #include "lcd.h"
 
-#define USE_HORIZONTAL 0  //���ú�������������ʾ 0��1Ϊ���� 2��3Ϊ����
 
 
 #define LCD_W 240
@@ -37,6 +36,7 @@ void LCD_WR_DATA8(u8 dat);//д��һ���ֽ�
 void LCD_WR_DATA(u16 dat);//д�������ֽ�
 void LCD_WR_REG(u8 dat);//д��һ��ָ��
 void LCD_Address_Set(u16 x1,u16 y1,u16 x2,u16 y2);//�������꺯��
+void LCD_SetRotation(u8 rotation); /* 0/1/2/3: clockwise 0/90/180/270 degrees */
 void LCD_Init(void);//LCD��ʼ��
 #endif
 

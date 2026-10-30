@@ -88,3 +88,7 @@ outputs/
 /.venv-firmware/
 /.venv-firmware.backup/
 /tests/firmware/build/
+EWARM/UMF_Boot/.UMF_Boot_build_cache
+EWARM/UMF_Boot/.ninja_deps
+EWARM/UMF_Boot/.UMF_Boot_build_cache
+EWARM/UMF_Boot/.ninja_log

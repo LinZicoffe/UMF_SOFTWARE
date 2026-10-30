@@ -1,5 +1,7 @@
 #include "lcd_init.h"
 
+static u8 s_rotation;
+
 /******************************************************************************
       函数说明：LCD串行数据写入函数
       入口数据：dat  要写入的串行数据
@@ -63,6 +65,16 @@ void LCD_WR_REG(u8 dat)
 }
 
 
+/* 以原 0° 为基准，依次顺时针旋转 90°；不改变 RGB 颜色顺序。 */
+void LCD_SetRotation(u8 rotation)
+{
+    static const u8 madctl[4] = { 0x00, 0x60, 0xC0, 0xA0 };
+    if (rotation >= 4U) return;
+    s_rotation = rotation;
+    LCD_WR_REG(0x36);
+    LCD_WR_DATA8(madctl[rotation]);
+}
+
 /******************************************************************************
       函数说明：设置起始和结束地址
       入口数据：x1,x2 设置列的起始和结束地址
@@ -71,46 +83,21 @@ void LCD_WR_REG(u8 dat)
 ******************************************************************************/
 void LCD_Address_Set(u16 x1,u16 y1,u16 x2,u16 y2)
 {
-	if(USE_HORIZONTAL==0)
-	{
-		LCD_WR_REG(0x2a);//列地址设置
-		LCD_WR_DATA(x1);
-		LCD_WR_DATA(x2);
-		LCD_WR_REG(0x2b);//行地址设置
-		LCD_WR_DATA(y1);
-		LCD_WR_DATA(y2);
-		LCD_WR_REG(0x2c);//储存器写
-	}
-	else if(USE_HORIZONTAL==1)
-	{
-		LCD_WR_REG(0x2a);//列地址设置
-		LCD_WR_DATA(x1);
-		LCD_WR_DATA(x2);
-		LCD_WR_REG(0x2b);//行地址设置
-		LCD_WR_DATA(y1+80);
-		LCD_WR_DATA(y2+80);
-		LCD_WR_REG(0x2c);//储存器写
-	}
-	else if(USE_HORIZONTAL==2)
-	{
-		LCD_WR_REG(0x2a);//列地址设置
-		LCD_WR_DATA(x1);
-		LCD_WR_DATA(x2);
-		LCD_WR_REG(0x2b);//行地址设置
-		LCD_WR_DATA(y1);
-		LCD_WR_DATA(y2);
-		LCD_WR_REG(0x2c);//储存器写
-	}
-	else
-	{
-		LCD_WR_REG(0x2a);//列地址设置
-		LCD_WR_DATA(x1+80);
-		LCD_WR_DATA(x2+80);
-		LCD_WR_REG(0x2b);//行地址设置
-		LCD_WR_DATA(y1);
-		LCD_WR_DATA(y2);
-		LCD_WR_REG(0x2c);//储存器写
-	}
+    /* 240x240 面板使用 240x320 显存；翻转后补偿不可见的 80 行/列。 */
+    if (s_rotation == 2U) {
+        y1 += 80U;
+        y2 += 80U;
+    } else if (s_rotation == 3U) {
+        x1 += 80U;
+        x2 += 80U;
+    }
+    LCD_WR_REG(0x2A);
+    LCD_WR_DATA(x1);
+    LCD_WR_DATA(x2);
+    LCD_WR_REG(0x2B);
+    LCD_WR_DATA(y1);
+    LCD_WR_DATA(y2);
+    LCD_WR_REG(0x2C);
 }
 
 void LCD_Init(void)
@@ -138,11 +125,7 @@ void LCD_Init(void)
 	LCD_WR_REG(0x35);     
 	LCD_WR_DATA8(0x00);   
 
-	LCD_WR_REG(0x36);     
-	if(USE_HORIZONTAL==0)LCD_WR_DATA8(0x00);
-	else if(USE_HORIZONTAL==1)LCD_WR_DATA8(0xC0);
-	else if(USE_HORIZONTAL==2)LCD_WR_DATA8(0x70);
-	else LCD_WR_DATA8(0xA0);  
+	LCD_SetRotation(s_rotation);
 
 	LCD_WR_REG(0x3A);     
 	LCD_WR_DATA8(0x05);   
