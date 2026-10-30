@@ -172,6 +172,64 @@ void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
     }
 }
 
+/* 在一行缓冲中还原字形，包含空白列；旧字形消失的位置也必须参与比较。 */
+static void raster_text_row(uint16_t *pixels, uint16_t x, uint16_t row,
+                             const char *text, oled_font_t font, uint16_t fg,
+                             uint16_t bg)
+{
+    const industrial_font_t *data = lcd_font_data(font);
+    uint16_t col;
+    for (col = 0; col < OLED_WIDTH; col++) pixels[col] = bg;
+    while (*text) {
+        const industrial_glyph_t *glyph = &data->glyphs[next_glyph(&text, font)];
+        if (x + glyph->advance > OLED_WIDTH) break;
+        if (row >= glyph->top && row < glyph->top + glyph->height) {
+            for (col = 0; col < glyph->advance; col++) {
+                uint16_t bit = (uint16_t)((row - glyph->top) * glyph->advance + col);
+                if (data->bitmap[glyph->offset + bit / 8U] & (0x80U >> (bit % 8U)))
+                    pixels[x + col] = fg;
+            }
+        }
+        x += glyph->advance;
+    }
+}
+
+void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text,
+                       uint16_t previous_x, const char *previous, oled_font_t font,
+                       uint16_t foreground, uint16_t background)
+{
+    uint16_t row, col, start, pixel;
+    uint16_t *old_pixels = s_frame_pixels[0];
+    uint16_t *new_pixels = s_frame_pixels[1];
+    if (s_frame_active) {
+        OLED_DrawText(x, y, text, font, foreground, background);
+        return;
+    }
+    if (x == previous_x && strcmp(text, previous) == 0) return;
+    if (y + OLED_FontHeight(font) > OLED_HEIGHT) return;
+    for (row = 0; row < OLED_FontHeight(font); row++) {
+        raster_text_row(old_pixels, previous_x, row, previous, font, foreground, background);
+        raster_text_row(new_pixels, x, row, text, font, foreground, background);
+        col = 0U;
+        while (col < OLED_WIDTH) {
+            if (old_pixels[col] == new_pixels[col]) {
+                col++;
+                continue;
+            }
+            start = col;
+            do {
+                col++;
+            } while (col < OLED_WIDTH && old_pixels[col] != new_pixels[col]);
+            /* 每个窗口只包含本行连续变化的像素，不跨过未变化的背景。 */
+            LCD_Address_Set(start, y + row, col - 1U, y + row);
+            LCD_StreamBegin();
+            for (pixel = start; pixel < col; pixel++) stream_color(new_pixels[pixel]);
+            LCD_StreamEnd();
+        }
+        IWDG->KR = 0xAAAAU;
+    }
+}
+
 uint16_t OLED_TextWidth(const char *text, oled_font_t font)
 {
     const industrial_font_t *data = lcd_font_data(font);

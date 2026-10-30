@@ -55,6 +55,10 @@ void OLED_Present(void);
 #if DISPLAY_ST7789
 /* rotation: 0/1/2/3 分别为顺时针 0°/90°/180°/270°；调用后需重绘整页。 */
 void OLED_SetRotation(uint8_t rotation);
+/* 同字体、同颜色的数值更新；旧/新坐标分别计算，仅发送颜色变化的像素。 */
+void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text,
+                       uint16_t previous_x, const char *previous, oled_font_t font,
+                       uint16_t foreground, uint16_t background);
 /* 按 8 行分段合成整页；回调会重复调用，只能绘制，不能推进业务状态。 */
 void OLED_RenderFrame(void (*render)(const void *context), const void *context);
 #endif
