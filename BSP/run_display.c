@@ -9,8 +9,13 @@
 #include "ftoa.h"
 #include <string.h>
 
+#define FLOW_OVER_RANGE_LPH  2400.0f
+#define FLOW_RECOVER_LPH     2000.0f
+#define FLOW_OVER_RANGE_TEXT "Over range"
+
 /* 内部状态 — 全部 static */
 static run_page_t  s_current_page   = RUN_PAGE_MAIN;
+static uint8_t s_flow_over_range;
 #if DISPLAY_ST7789
 static uint8_t s_display_dirty = 1U;
 #endif
@@ -32,6 +37,7 @@ static float dac_to_mA(uint16_t dac_val, const uint16_t *p_dac_buf)
 
 static char s_rate_text[24];
 static uint16_t s_rate_x;
+static uint8_t s_rate_over_range;
 static char s_temp_text[24];
 static char s_total_text[32];
 static char s_aux_text[8][32];
@@ -97,16 +103,27 @@ static void render_page_main(const run_display_input_t *p_in)
     draw_field(185, 11, 41, s_aux_text[0],
                *(p_in->p_module_state) ? "ER" : "OK", OLED_FONT_MEDIUM,
                *(p_in->p_module_state) ? OLED_ERROR : OLED_OK);
-    if (rate < 0.0f) rate = 0.0f;
-    ftoa(rate, rate >= 1000.0f ? 0U : rate >= 100.0f ? 1U :
-          rate >= 10.0f ? 2U : 3U, buf, sizeof(buf));
-    if (s_display_dirty || strcmp(s_rate_text, buf) != 0) {
-        oled_font_t font = OLED_FONT_FLOW_DIGITS;
-        uint16_t width = OLED_TextWidth(buf, font);
-        uint16_t x = (OLED_WIDTH - width) / 2U;
-        draw_value(x, s_rate_x, 74, s_rate_text, buf, font);
-        s_rate_x = x;
+    /* 数字和提示的字体不同，仅切换时清除原流量区域，避免残留笔画。 */
+    if (!s_display_dirty && s_rate_over_range != s_flow_over_range) {
+        OLED_FillRectangle(0, 74, OLED_WIDTH - 1U, 133, OLED_BLACK);
+        s_rate_text[0] = '\0';
     }
+    if (s_flow_over_range) {
+        if (s_display_dirty || !s_rate_over_range)
+            draw_centered(96, FLOW_OVER_RANGE_TEXT, OLED_FONT_MEDIUM, OLED_WHITE);
+    } else {
+        if (rate < 0.0f) rate = 0.0f;
+        ftoa(rate, rate >= 1000.0f ? 0U : rate >= 100.0f ? 1U :
+              rate >= 10.0f ? 2U : 3U, buf, sizeof(buf));
+        if (s_display_dirty || s_rate_over_range || strcmp(s_rate_text, buf) != 0) {
+            oled_font_t font = OLED_FONT_FLOW_DIGITS;
+            uint16_t width = OLED_TextWidth(buf, font);
+            uint16_t x = (OLED_WIDTH - width) / 2U;
+            draw_value(x, s_rate_x, 74, s_rate_text, buf, font);
+            s_rate_x = x;
+        }
+    }
+    s_rate_over_range = s_flow_over_range;
     draw_value(14, 14, 204, s_total_text, (const char *)p_in->p_flow_sum_buf,
                OLED_FONT_MEDIUM);
 }
@@ -187,41 +204,47 @@ static void render_page_main(const run_display_input_t *p_in)
     OLED_WriteString((char *)(*(p_in->p_module_state) ? "ER" : "OK"), OLED_FONT_MEDIUM, OLED_WHITE);
 #endif
 
+    if (s_flow_over_range) {
+        OLED_SetCursor((OLED_WIDTH - OLED_TextWidth(FLOW_OVER_RANGE_TEXT,
+                       OLED_FONT_MEDIUM)) / 2U, 27);
+        OLED_WriteString(FLOW_OVER_RANGE_TEXT, OLED_FONT_MEDIUM, OLED_WHITE);
+    } else {
 #ifdef SSD1306_INCLUDE_FONT_16x26
-    /* Zone B: 瞬时流量 (16×26 大字, 垂直居中于状态栏与累积栏之间) */
-    rate = p_in->p_flow_rate->num;
-    if (rate < 0.0f) rate = 0.0f;
-    if (rate >= 1000.0f) {
-        ftoa(rate, 0, buf, sizeof(buf));
-    } else if (rate >= 100.0f) {
-        ftoa(rate, 1, buf, sizeof(buf));
-    } else if (rate >= 10.0f) {
-        ftoa(rate, 2, buf, sizeof(buf));
-    } else {
-        ftoa(rate, 3, buf, sizeof(buf));
-    }
-    len = (uint8_t)strlen(buf);
-    x_start = (uint8_t)((128 - len * 16) / 2);
-    OLED_SetCursor(x_start, 19);
-    OLED_WriteString(buf, OLED_FONT_LARGE, OLED_WHITE);
+        /* Zone B: 瞬时流量 (16×26 大字, 垂直居中于状态栏与累积栏之间) */
+        rate = p_in->p_flow_rate->num;
+        if (rate < 0.0f) rate = 0.0f;
+        if (rate >= 1000.0f) {
+            ftoa(rate, 0, buf, sizeof(buf));
+        } else if (rate >= 100.0f) {
+            ftoa(rate, 1, buf, sizeof(buf));
+        } else if (rate >= 10.0f) {
+            ftoa(rate, 2, buf, sizeof(buf));
+        } else {
+            ftoa(rate, 3, buf, sizeof(buf));
+        }
+        len = (uint8_t)strlen(buf);
+        x_start = (uint8_t)((128 - len * 16) / 2);
+        OLED_SetCursor(x_start, 19);
+        OLED_WriteString(buf, OLED_FONT_LARGE, OLED_WHITE);
 #elif defined(SSD1306_INCLUDE_FONT_11x18)
-    /* Zone B: 瞬时流量 (11×18, 4位有效数字自适应小数位) */
-    rate = p_in->p_flow_rate->num;
-    if (rate < 0.0f) rate = 0.0f;
-    if (rate >= 1000.0f) {
-        ftoa(rate, 0, buf, sizeof(buf));
-    } else if (rate >= 100.0f) {
-        ftoa(rate, 1, buf, sizeof(buf));
-    } else if (rate >= 10.0f) {
-        ftoa(rate, 2, buf, sizeof(buf));
-    } else {
-        ftoa(rate, 3, buf, sizeof(buf));
-    }
-    len = (uint8_t)strlen(buf);
-    x_start = (uint8_t)((128 - len * 11) / 2);
-    OLED_SetCursor(x_start, 22);
-    OLED_WriteString(buf, OLED_FONT_LARGE, OLED_WHITE);
+        /* Zone B: 瞬时流量 (11×18, 4位有效数字自适应小数位) */
+        rate = p_in->p_flow_rate->num;
+        if (rate < 0.0f) rate = 0.0f;
+        if (rate >= 1000.0f) {
+            ftoa(rate, 0, buf, sizeof(buf));
+        } else if (rate >= 100.0f) {
+            ftoa(rate, 1, buf, sizeof(buf));
+        } else if (rate >= 10.0f) {
+            ftoa(rate, 2, buf, sizeof(buf));
+        } else {
+            ftoa(rate, 3, buf, sizeof(buf));
+        }
+        len = (uint8_t)strlen(buf);
+        x_start = (uint8_t)((128 - len * 11) / 2);
+        OLED_SetCursor(x_start, 22);
+        OLED_WriteString(buf, OLED_FONT_LARGE, OLED_WHITE);
 #endif
+    }
 
 #ifdef SSD1306_INCLUDE_FONT_7x10
     /* Zone C: 累积流量 (y=54, OLED_FONT_MEDIUM)
@@ -312,6 +335,7 @@ void run_display_init(const run_display_config_t *p_cfg)
 {
     (void)p_cfg;
     s_current_page = RUN_PAGE_MAIN;
+    s_flow_over_range = 0U;
     OLED_Init();
     OLED_Clear(OLED_BLACK);
     OLED_Present();
@@ -323,6 +347,12 @@ void run_display_init(const run_display_config_t *p_cfg)
 
 void run_display_render(const run_display_input_t *p_input)
 {
+    /* 超过 2.4 m³/h 报警，低于 2.0 m³/h 才恢复；等于阈值时保持状态。 */
+    if (p_input->flow_rate_lph > FLOW_OVER_RANGE_LPH)
+        s_flow_over_range = 1U;
+    else if (p_input->flow_rate_lph < FLOW_RECOVER_LPH)
+        s_flow_over_range = 0U;
+
 #if !DISPLAY_ST7789
     OLED_Clear(OLED_BLACK);
     render_run_frame(p_input);

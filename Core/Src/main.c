@@ -289,8 +289,9 @@ static void app_display_task(void)
 
     Uart_SendfloatTypeDef eff_rate;
     Uart_SendfloatTypeDef eff_temp;
+    float flow_rate_lph = effective_flow_rate();
     eff_rate.num = convert_flow_rate_from_lph(
-        effective_flow_rate(),
+        flow_rate_lph,
         param_get_flow_unit(),
         param_get_medium_density());
     eff_temp.num = effective_temperature();
@@ -307,6 +308,7 @@ static void app_display_task(void)
         .p_dac_buf        = DacValueBuf,
         .p_flow_unit_str  = param_get_flow_unit_str(param_get_flow_unit()),
         .p_total_unit_str = param_get_total_unit_str(param_get_total_unit()),
+        .flow_rate_lph    = flow_rate_lph,
     };
 
     run_display_render(&input);
