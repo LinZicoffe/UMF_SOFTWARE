@@ -14,8 +14,8 @@ static uint16_t s_cursor_y;
 /* 240x240 RGB565 整屏需要 115200 字节；仅缓存 8 行，复用 3840 字节。 */
 #define LCD_FRAME_ROWS 8U
 static uint16_t s_frame_pixels[LCD_FRAME_ROWS][OLED_WIDTH];
-static uint16_t s_frame_y;
-static uint8_t s_frame_active;
+static uint16_t s_frame_y;     // 当前帧在屏幕上的起始行 (0~239)
+static uint8_t s_frame_active; // 帧是否激活
 
 static void LCD_StreamBegin(void)
 {
