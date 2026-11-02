@@ -106,6 +106,78 @@ static void check_value_updates(run_display_input_t *input, Uart_SendfloatTypeDe
     }
 }
 
+static int save_over_range_frame(run_display_input_t *input, unsigned index)
+{
+    run_display_render(input);
+    save_frame("over_range", index);
+    s_writes = 0;
+    run_display_render(input);
+    if (s_writes != 0U) return 8;
+    run_display_invalidate();
+    run_display_render(input);
+    save_frame("over_range_full", index);
+    return 0;
+}
+
+static int check_over_range(run_display_input_t *input, Uart_SendfloatTypeDef *rate)
+{
+    static const float rates_lph[] = {
+        0.0f, 2000.0f, 2399.9f, 2400.0f, 2400.1f, 2400.0f, 2200.0f,
+        2000.0f, 1999.9f, 2100.0f, 2400.0f, 2400.1f, 2600.0f, 1999.9f
+    };
+    static const char * const units[] = { "m3/h", "L/h", "L/min", "kg/h" };
+    unsigned unit, i, index = 0;
+    int result;
+
+    input->p_total_unit_str = "m3";
+    for (unit = 0; unit < 4; unit++) {
+        run_display_init(NULL);
+        input->p_flow_unit_str = units[unit];
+        for (i = 0; i < sizeof(rates_lph) / sizeof(rates_lph[0]); i++) {
+            input->flow_rate_lph = rates_lph[i];
+            /* kg/h 使用 800 kg/m³ 的介质，验证判定不依赖显示单位和密度。 */
+            rate->num = unit == 0 ? rates_lph[i] / 1000.0f :
+                        unit == 1 ? rates_lph[i] :
+                        unit == 2 ? rates_lph[i] / 60.0f : rates_lph[i] * 0.8f;
+            result = save_over_range_frame(input, index++);
+            if (result) return result;
+        }
+    }
+
+    /* 辅助页仍更新报警状态；切页和整页重绘不能解除报警。 */
+    run_display_init(NULL);
+    input->p_flow_unit_str = "m3/h";
+    run_display_set_page(RUN_PAGE_AUX);
+    input->flow_rate_lph = 2600.0f;
+    rate->num = 2.6f;
+    run_display_render(input);
+    for (i = 0; i < 3; i++) {
+        run_display_set_page(RUN_PAGE_AUX);
+        input->flow_rate_lph = i == 0 ? 2200.0f : i == 1 ? 2000.0f : 1999.0f;
+        rate->num = input->flow_rate_lph / 1000.0f;
+        run_display_render(input);
+        run_display_set_page(RUN_PAGE_MAIN);
+        result = save_over_range_frame(input, index++);
+        if (result) return result;
+    }
+
+    input->flow_rate_lph = 2600.0f;
+    rate->num = 2.6f;
+    run_display_render(input);
+    run_display_init(NULL);
+    input->flow_rate_lph = 2200.0f;
+    rate->num = 2.2f;
+    result = save_over_range_frame(input, index);
+    if (result) return result;
+
+    /* 用现有标题字体独立画出期望提示，供 Python 对比整个流量区域。 */
+    OLED_Clear(OLED_BLACK);
+    OLED_DrawText((OLED_WIDTH - OLED_TextWidth("Over range", OLED_FONT_MEDIUM)) / 2U,
+                  96, "Over range", OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
+    save_frame("over_range_reference", 0);
+    return 0;
+}
+
 int main(void)
 {
     static const float rates[] = {
@@ -119,7 +191,7 @@ int main(void)
     run_display_input_t input = {
         &rate, &temp, &pressure, &cumulative,
         (const unsigned char *)"000001234.567", &sum_unit, &module_state,
-        &dac, dacs, "m3/h", "m3"
+        &dac, dacs, "m3/h", "m3", 0.0f
     };
     unsigned i;
     FILE *trace;
@@ -199,6 +271,7 @@ int main(void)
     run_display_render(&input);
     save_frame("units", 1);
     if (sim_menu_tests() != 0) return 6;
+    if (check_over_range(&input, &rate) != 0) return 8;
     if (s_out_of_bounds) return 4;
     puts("PASS: bounded full frames, partial updates and unchanged-value no-write checks");
     return 0;
