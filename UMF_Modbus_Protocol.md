@@ -45,7 +45,7 @@
 
 | 寄存器地址 | Modbus 4X | 参数名 | 数据类型 | 读写 | 说明 |
 |:---:|:---:|--------|:---:|:---:|------|
-| 0~1 | 40001~40002 | 瞬时流量 FlowRateValue | float (2 regs) | R | 固定 L/h，IEEE 754 单精度浮点 |
+| 0~1 | 40001~40002 | 瞬时流量 FlowRateValue | float (2 regs) | R | 固定 L/h，上限 2400，IEEE 754 单精度浮点 |
 | 2~3 | 40003~40004 | 温度 FlowTemperature | float (2 regs) | R | 单位 ℃ |
 | 4~5 | 40005~40006 | 压力 FlowPressure | float (2 regs) | R | 单位 KPa |
 | 6~17 | 40007~40018 | 保留 | — | R | InputBuffer[3~9]，未使用 |
@@ -208,7 +208,7 @@
 | 2 | 升每分钟 | L/min |
 | 3 | 千克每小时 | kg/h |
 
-> 40001~40002 始终返回传感器瞬时流量的固定 L/h 数值，不随 `flow_unit` 改变。OLED 显示按 `flow_unit` 换算：m³/h=`L/h ÷ 1000`，L/min=`L/h ÷ 60`，kg/h=`L/h × medium_density ÷ 1000`。
+> 40001~40002 返回传感器瞬时流量的固定 L/h 数值，上限为 2400 L/h，不随 `flow_unit` 改变。超过上限时返回 2400，低于上限时立即返回实际值；该值不使用主界面警告的滞回规则。OLED 数值先按 2400 L/h 限幅，再按 `flow_unit` 换算：m³/h=`L/h ÷ 1000`，L/min=`L/h ÷ 60`，kg/h=`L/h × medium_density ÷ 1000`。主界面警告使用未限幅的有效流量，超过 2400 L/h 触发，低于 2000 L/h 解除。
 
 ### 5.3 累积单位 (total_unit, 地址 23)
 

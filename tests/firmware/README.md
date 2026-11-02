@@ -93,23 +93,25 @@ Rename-Item -LiteralPath .venv-firmware -NewName .venv-firmware.backup
 
 ## 4. 运行
 
-**全部测试**（当前应为 29 PASS / 1 FAIL，退出码 1，已知缺陷仍然存在）：
+**全部测试**（包含一项已知缺陷，失败时退出码为 1）：
 
 ```powershell
 .\.venv-firmware\Scripts\python.exe tests\firmware\run.py --cc $armCc --group all
 ```
 
-正常回归组（明确排除 `known-defects`；当前 29 PASS / 0 FAIL）：
+正常回归组（明确排除 `known-defects`；2026-11-02 为 34 PASS / 0 FAIL）：
 
 ```powershell
 .\.venv-firmware\Scripts\python.exe tests\firmware\run.py --cc $armCc --group regression
 ```
 
-指定组；可多次传 `--group`，可选 `smoke`、`runner`、`keys`、`calibration`、`sensor`、`protocol`、`known-defects`：
+指定组；可多次传 `--group`，可选 `smoke`、`runner`、`keys`、`calibration`、`sensor`、`protocol`、`flow`、`known-defects`：
 
 ```powershell
 .\.venv-firmware\Scripts\python.exe tests\firmware\run.py --cc $armCc --group sensor --group keys
 ```
+
+`flow` 组新增五项 2400 L/h 限幅检查，覆盖边界/即时恢复、原始与滤波数据保留、显示单位和报警输入、FC03 回包、自动电流输入。`app_tasks.c` 包含完整生产 `Core/Src/main.c`，仅包装其中的静态显示/输出任务；显示器和 PWM（Pulse Width Modulation，脉冲宽度调制）写入由测试边界记录，不复制业务算法。电流用例将量程设为 4000 L/h，避免原有电流满度钳位掩盖流量限幅缺失。报告另记录被包含的 `main.c` 哈希；运行器从 GCC 的 DWARF（Debugging With Attributed Record Formats，调试信息格式）抽象声明中解析内联候选函数的来源，继续核对真实生产文件和执行入口。
 
 按函数名片段选择用例；可重复传 `--case`，匹配规则为“或”：
 
