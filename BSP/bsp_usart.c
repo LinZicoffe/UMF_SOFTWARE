@@ -1140,13 +1140,17 @@ void Modbus_Function_3(void)
         {
             for (j = 0; j < MbBufferLen / 2; j++) // 显示数据以连续形式放数据，数据为flowmeter
             {
-                Uart2SendDataType.TxBuffer[i] = InputBuffer[j + (startaddress - InputBufferStartMinAddress) / 2].str[1];
+                uint16_t index = j + (startaddress - InputBufferStartMinAddress) / 2;
+                Uart_SendfloatTypeDef value = InputBuffer[index];
+                /* 只限制回包中的瞬时流量，不改写传感器数据或滤波状态。 */
+                if (index == 0U) value.num = limit_flow_rate(value.num);
+                Uart2SendDataType.TxBuffer[i] = value.str[1];
                 i++;
-                Uart2SendDataType.TxBuffer[i] = InputBuffer[j + (startaddress - InputBufferStartMinAddress) / 2].str[0];
+                Uart2SendDataType.TxBuffer[i] = value.str[0];
                 i++;
-                Uart2SendDataType.TxBuffer[i] = InputBuffer[j + (startaddress - InputBufferStartMinAddress) / 2].str[3];
+                Uart2SendDataType.TxBuffer[i] = value.str[3];
                 i++;
-                Uart2SendDataType.TxBuffer[i] = InputBuffer[j + (startaddress - InputBufferStartMinAddress) / 2].str[2];
+                Uart2SendDataType.TxBuffer[i] = value.str[2];
                 i++;
             }
         }
