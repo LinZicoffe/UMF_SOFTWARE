@@ -1985,6 +1985,11 @@ float effective_flow_rate(void)
     return FlowRateValue.num;
 }
 
+float limit_flow_rate(float flow_lph)
+{
+    return flow_lph > 2400.0f ? 2400.0f : flow_lph;
+}
+
 float convert_flow_rate_from_lph(
     float flow_lph,
     uint8_t target_unit,
