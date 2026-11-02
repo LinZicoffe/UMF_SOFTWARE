@@ -321,7 +321,7 @@ static void app_output_task(void)
     if ((!ForceDacOutFlag) && (!CalEnabledFlag))
     {
         /* 仪表系数 + 介质系数 */
-        float corrected_flow = effective_flow_rate()
+        float corrected_flow = limit_flow_rate(effective_flow_rate())
             * param_get_meter_coeff()
             * param_get_medium_coeff();
 
