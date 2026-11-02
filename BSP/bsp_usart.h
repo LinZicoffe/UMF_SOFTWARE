@@ -160,6 +160,8 @@ extern void          bsp_usart2_check_baud_rate_pending(void);
 /* 模拟参数 API — 自动选择真实值或模拟值 */
 uint8_t              sim_is_active(void);
 float                effective_flow_rate(void);
+/* 对外瞬时流量上限为 2400 L/h；报警判断仍使用未限幅的 effective_flow_rate()。 */
+float                limit_flow_rate(float flow_lph);
 float                effective_temperature(void);
 const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf);
 float                convert_flow_rate_from_lph(float flow_lph, uint8_t target_unit, float density_kg_m3);

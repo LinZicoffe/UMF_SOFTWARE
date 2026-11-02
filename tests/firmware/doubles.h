@@ -42,6 +42,11 @@ extern uint32_t sim_key_mask;
 extern uint32_t sim_gpio_read_count;
 extern HAL_StatusTypeDef sim_tx_status;
 extern const char *sim_failure;
+extern uint8_t sim_flow_unit;
+extern float sim_meter_coeff;
+extern float sim_display_rate;
+extern float sim_alarm_rate_lph;
+extern uint32_t sim_pwm_calls;
 extern uint32_t ModuleRecTimes;
 /* 生产文件已经导出的接收标志；测试只注入 DMA/IDLE 交付后的输入边界。 */
 extern volatile uint8_t Uart1HaveData;
@@ -51,6 +56,9 @@ extern uint16_t getCRC16(uint8_t *ptr, uint8_t len);
 void Uart1_Send_Function(void);
 void Uart1_Receive_Function(void);
 void Modbus_Function_1(void);
+void Modbus_Function_3(void);
+void sim_app_display_task(void);
+void sim_app_output_task(void);
 
 /* 表达式和行号在目标 CPU 内产生，由 Python 读取；不调用主机 assert。 */
 #define CHECK(expr) do { if (!(expr)) { sim_failure = #expr; return __LINE__; } } while (0)

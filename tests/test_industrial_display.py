@@ -175,6 +175,34 @@ static inline void LCD_WR_DATA8(uint8_t x) { (void)x; }
                 self.assertEqual(self.frame(update['kind'], update['index']),
                                  self.frame(update['kind'] + '_full', update['index']))
 
+    def test_over_range_hysteresis_and_font_in_all_flow_units(self):
+        warning = self.frame('over_range_reference', 0)[74 * 240 * 2:134 * 240 * 2]
+        states = [False, False, False, False, True, True, True,
+                  True, False, False, False, True, True, False]
+        for unit in range(4):
+            for sample, over_range in enumerate(states):
+                index = unit * len(states) + sample
+                with self.subTest(unit=unit, sample=sample, over_range=over_range):
+                    image = self.frame('over_range', index)
+                    self.assertEqual(image, self.frame('over_range_full', index))
+                    region = image[74 * 240 * 2:134 * 240 * 2]
+                    if over_range:
+                        self.assertEqual(region, warning)
+                    else:
+                        self.assertNotEqual(region, warning)
+                        white_rows = [y for y in range(74, 134)
+                                      if any(self.pixel(image, x, y) == 0xFFFF
+                                             for x in range(240))]
+                        self.assertGreaterEqual(max(white_rows) - min(white_rows), 40)
+
+    def test_over_range_survives_page_changes_and_resets_on_init(self):
+        warning = self.frame('over_range_reference', 0)[74 * 240 * 2:134 * 240 * 2]
+        for index, over_range in [(56, True), (57, True), (58, False), (59, False)]:
+            with self.subTest(index=index):
+                image = self.frame('over_range', index)
+                self.assertEqual(image, self.frame('over_range_full', index))
+                self.assertEqual(image[74 * 240 * 2:134 * 240 * 2] == warning, over_range)
+
     def test_main_has_industrial_dividers_and_large_white_digits(self):
         image = self.frame('main', 0)
         for y in [39, 170]:

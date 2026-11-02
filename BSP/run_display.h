@@ -28,6 +28,7 @@ typedef struct {
     const uint16_t              *p_dac_buf;      /* [2]: DacZeroValue, DacFullValue */
     const char                  *p_flow_unit_str;  /* 流量单位字符串, 由 param_get_flow_unit_str() 填充 */
     const char                  *p_total_unit_str; /* 累积单位字符串, 由 param_get_total_unit_str() 填充 */
+    float                        flow_rate_lph;    /* 换算前的瞬时流量，固定 L/h，用于超量程判定 */
 } run_display_input_t;
 
 /* 运行显示配置 */
