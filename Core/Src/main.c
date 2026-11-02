@@ -291,7 +291,7 @@ static void app_display_task(void)
     Uart_SendfloatTypeDef eff_temp;
     float flow_rate_lph = effective_flow_rate();
     eff_rate.num = convert_flow_rate_from_lph(
-        flow_rate_lph,
+        limit_flow_rate(flow_rate_lph),
         param_get_flow_unit(),
         param_get_medium_density());
     eff_temp.num = effective_temperature();
