@@ -226,6 +226,111 @@ uint32_t test_sensor_unit_conversion(void)
     return 0;
 }
 
+uint32_t test_flow_limit_boundaries_and_immediate_recovery(void)
+{
+    /* 整数和 .5 可由 float 精确表示，直接比较，避免固定小容差被舍入掉。 */
+    CHECK(limit_flow_rate(2399.5f) == 2399.5f);
+    CHECK(limit_flow_rate(2400.0f) == 2400.0f);
+    CHECK(limit_flow_rate(2400.5f) == 2400.0f);
+    CHECK(limit_flow_rate(100000.0f) == 2400.0f);
+    CHECK(limit_flow_rate(2300.0f) == 2300.0f);
+    CHECK(limit_flow_rate(0.0f) == 0.0f);
+    CHECK(limit_flow_rate(-3.0f) == -3.0f);
+    return 0;
+}
+
+uint32_t test_flow_limit_preserves_sensor_and_filter_values(void)
+{
+    sim_sensor_frame(0, 0x26, 0x1b); Uart1_Receive_Function();
+    CHECK(FlowRateValue.num == 2600.0f);
+    CHECK(effective_flow_rate() == 2600.0f);
+    CHECK(limit_flow_rate(effective_flow_rate()) == 2400.0f);
+    sim_sensor_frame(0, 0x23, 0x1b); Uart1_Receive_Function();
+    CHECK(FlowRateValue.num == 2300.0f);
+    CHECK(effective_flow_rate() == 2450.0f);
+    CHECK(limit_flow_rate(effective_flow_rate()) == 2400.0f);
+    sim_sensor_frame(0, 0x23, 0x1b); Uart1_Receive_Function();
+    CHECK(effective_flow_rate() == 2375.0f);
+    CHECK(limit_flow_rate(effective_flow_rate()) == 2375.0f);
+    return 0;
+}
+
+uint32_t test_flow_display_limits_units_but_keeps_alarm_input(void)
+{
+    static const float expected[] = { 2.4f, 2400.0f, 40.0f, 1920.0f };
+    uint8_t unit;
+    FlowRateValue.num = 2600.0f;
+    for (unit = 0; unit < 4; unit++) {
+        sim_flow_unit = unit;
+        DisplayTimeBase = 20;
+        sim_app_display_task();
+        CHECK(sim_display_rate == expected[unit]);
+        CHECK(sim_alarm_rate_lph == 2600.0f);
+        CHECK(FlowRateValue.num == 2600.0f);
+    }
+    FlowRateValue.num = 2300.0f;
+    sim_flow_unit = FLOW_UNIT_LH;
+    DisplayTimeBase = 20;
+    sim_app_display_task();
+    CHECK(sim_display_rate == 2300.0f);
+    CHECK(sim_alarm_rate_lph == 2300.0f);
+    return 0;
+}
+
+uint32_t test_flow_modbus_caps_only_flow_and_preserves_measurement(void)
+{
+    Uart_SendfloatTypeDef value;
+    FlowRateValue.num = 2600.0f;
+    FlowTemperature.num = 23.5f;
+    FlowPressure.num = 101.25f;
+    sim_coil_request(0, 6);
+    Uart2RxBuffer[1] = 3;
+    Modbus_Function_3();
+    CHECK(sim_event_count == 3 && sim_events[2].length == 17);
+    CHECK(sim_events[2].data[3] == 0 && sim_events[2].data[4] == 0);
+    CHECK(sim_events[2].data[5] == 0x45 && sim_events[2].data[6] == 0x16);
+    CHECK(sim_events[2].data[7] == 0 && sim_events[2].data[8] == 0);
+    CHECK(sim_events[2].data[9] == 0x41 && sim_events[2].data[10] == 0xbc);
+    CHECK(sim_events[2].data[11] == 0x80 && sim_events[2].data[12] == 0);
+    CHECK(sim_events[2].data[13] == 0x42 && sim_events[2].data[14] == 0xca);
+    CHECK(FlowRateValue.num == 2600.0f);
+    sim_event_count = 0;
+    huart2.gState = HAL_UART_STATE_READY;
+    FlowRateValue.num = 2399.5f;
+    sim_coil_request(0, 2);
+    Uart2RxBuffer[1] = 3;
+    Modbus_Function_3();
+    CHECK(sim_event_count == 3 && sim_events[2].length == 9);
+    value.str[0] = sim_events[2].data[4];
+    value.str[1] = sim_events[2].data[3];
+    value.str[2] = sim_events[2].data[6];
+    value.str[3] = sim_events[2].data[5];
+    CHECK(value.num == 2399.5f);
+    return 0;
+}
+
+uint32_t test_flow_auto_current_limits_before_coefficients(void)
+{
+    sim_config.range_high = 4000.0f;
+    DacZeroValue = 12100;
+    DacFullValue = 60000;
+    FlowRateValue.num = 2600.0f;
+    sim_app_output_task();
+    CHECK(DacValue == 40840 && sim_pwm_calls == 2);
+    FlowRateValue.num = 4000.0f;
+    sim_app_output_task();
+    CHECK(DacValue == 40840);
+    FlowRateValue.num = 2300.0f;
+    sim_app_output_task();
+    CHECK(DacValue == 39642);
+    FlowRateValue.num = 2600.0f;
+    sim_meter_coeff = 0.5f;
+    sim_app_output_task();
+    CHECK(DacValue == 26470);
+    CHECK(FlowRateValue.num == 2600.0f);
+    return 0;
+}
+
 uint32_t test_protocol_crc_reference_vector(void)
 {
     uint8_t vector[] = "123456789";

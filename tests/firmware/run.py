@@ -29,7 +29,7 @@ RETURN = 0x0800FFF0
 PRODUCTION = ["BSP/ftoa.c", "BSP/key.c", "BSP/Src/cal_table.c",
               "BSP/bsp_usart.c", "BSP/mystring.c"]
 GROUPS = ("all", "regression", "smoke", "runner", "keys", "calibration",
-          "sensor", "protocol", "known-defects")
+          "sensor", "protocol", "flow", "known-defects")
 PROBES = {
     "test_runner_reject_invalid_read": ("probe_invalid_read", "UC_ERR_READ_UNMAPPED"),
     "test_runner_reject_invalid_write": ("probe_invalid_write", "UC_ERR_WRITE_UNMAPPED"),
@@ -51,6 +51,10 @@ def required_target(name):
         return "key_scan_10ms"
     if name.startswith("test_calibration_"):
         return "cal_correct_flow"
+    if name.startswith("test_flow_modbus_"):
+        return "Modbus_Function_3"
+    if name.startswith("test_flow_"):
+        return "limit_flow_rate"
     if name == "test_protocol_crc_reference_vector":
         return "getCRC16"
     if name.startswith(("test_protocol_", "test_known_")):
@@ -94,8 +98,8 @@ def build(args, out):
     if machine != "arm-none-eabi":
         raise RegressionError(f"expected arm-none-eabi compiler, got {machine}")
     sources = [ROOT / name for name in PRODUCTION]
-    sources += [HERE / name for name in ("smoke.c", "doubles.c", "cases.c")]
-    includes = ["Core/Inc", "BSP", "Drivers/STM32F1xx_HAL_Driver/Inc",
+    sources += [HERE / name for name in ("smoke.c", "doubles.c", "cases.c", "app_tasks.c")]
+    includes = ["Core/Inc", "BSP", "OLED", "newOLED", "Drivers/STM32F1xx_HAL_Driver/Inc",
                 "Drivers/STM32F1xx_HAL_Driver/Inc/Legacy",
                 "Drivers/CMSIS/Device/ST/STM32F1xx/Include", "Drivers/CMSIS/Include"]
     command = [cc, "-std=c99", "-mcpu=cortex-m3", "-mthumb", "-mlittle-endian",
@@ -126,7 +130,7 @@ def build(args, out):
         info = command_run([str(tool), *flags, str(elf)], ROOT)
         (out / filename).write_text(info.stdout, encoding="utf-8")
     hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-              for p in sources}
+              for p in sources + [ROOT / "Core/Src/main.c"]}
     return elf, {"compiler": version, "machine": machine, "sources_sha256": hashes,
                  "elf_sha256": hashlib.sha256(elf.read_bytes()).hexdigest()}
 
@@ -164,13 +168,16 @@ class Image:
                 for die in unit.iter_DIEs():
                     if die.tag != "DW_TAG_subprogram" or "DW_AT_low_pc" not in die.attributes:
                         continue
-                    if "DW_AT_name" in die.attributes:
-                        self.origins[die.attributes["DW_AT_name"].value.decode()] = origin
+                    # GCC 的内联候选函数可能把名称放在抽象声明中。
+                    declaration = (die.get_DIE_from_attribute("DW_AT_abstract_origin")
+                                   if "DW_AT_abstract_origin" in die.attributes else die)
+                    if "DW_AT_name" in declaration.attributes:
+                        self.origins[declaration.attributes["DW_AT_name"].value.decode()] = origin
         if self.symbols["__ram_used_end"] >= STACK_BOTTOM:
             raise RegressionError("data overlaps reserved stack")
         for target in ("itoa_local", "ftoa", "key_scan_10ms", "cal_correct_flow",
-                       "Modbus_Function_1", "getCRC16", "Uart1_Receive_Function",
-                       "Uart1_Send_Function", "convert_flow_rate_from_lph"):
+                       "Modbus_Function_1", "Modbus_Function_3", "getCRC16", "Uart1_Receive_Function",
+                       "Uart1_Send_Function", "convert_flow_rate_from_lph", "limit_flow_rate"):
             origin = Path(self.origins.get(target, "")).resolve()
             if origin not in [ROOT / p for p in PRODUCTION]:
                 raise RegressionError(f"production symbol has unexpected origin: {target}: {origin}")

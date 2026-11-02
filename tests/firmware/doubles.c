@@ -1,4 +1,6 @@
 #include "doubles.h"
+#include "boot_flag.h"
+#include "run_display.h"
 
 /* 使用真实 HAL 类型和地址常量，但所有边界函数都只操作下列测试状态。 */
 UART_HandleTypeDef huart1 = { .Instance = USART1 };
@@ -6,7 +8,9 @@ UART_HandleTypeDef huart2 = { .Instance = USART2, .gState = HAL_UART_STATE_READY
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_tx;
 volatile uint16_t Timer3Uart1TimeBase10ms;
-uint16_t BitControlBuf[50];
+volatile uint8_t DisplayTimeBase;
+TIM_HandleTypeDef htim1 = { .Instance = TIM1 };
+TIM_HandleTypeDef htim4 = { .Instance = TIM4 };
 
 sim_config_t sim_config = {
     .sample_ms = 500, .window = 2, .tau = 0.5f,
@@ -21,6 +25,26 @@ uint32_t sim_now_ms;
 uint32_t sim_key_mask;
 uint32_t sim_gpio_read_count;
 HAL_StatusTypeDef sim_tx_status = HAL_OK;
+uint8_t sim_flow_unit;
+float sim_meter_coeff = 1.0f;
+float sim_display_rate;
+float sim_alarm_rate_lph;
+uint32_t sim_pwm_calls;
+
+uint8_t menu_is_active(void) { return 0; }
+void OLED_Present(void) { }
+void run_display_render(const run_display_input_t *input)
+{
+    sim_display_rate = input->p_flow_rate->num;
+    sim_alarm_rate_lph = input->flow_rate_lph;
+}
+void PWMConfig(TIM_HandleTypeDef *timer, uint32_t frequency, uint16_t ccr)
+{
+    (void)ccr;
+    if ((timer != &htim1 && timer != &htim4) || frequency != 100000U)
+        sim_boundary_error = 7;
+    sim_pwm_calls++;
+}
 
 static sim_event_t *record_event(uint32_t kind)
 {
@@ -85,6 +109,33 @@ HAL_StatusTypeDef HAL_UART_Transmit_DMA(UART_HandleTypeDef *uart, const uint8_t 
 uint16_t param_get_sample_interval_ms(void) { return sim_config.sample_ms; }
 uint16_t param_get_filter_window_count(void) { return sim_config.window; }
 float param_get_filter_time(void) { return sim_config.tau; }
+uint8_t param_get_flow_unit(void) { return sim_flow_unit; }
+float param_get_meter_coeff(void) { return sim_meter_coeff; }
+float param_get_medium_coeff(void) { return 1.0f; }
+float param_get_medium_density(void) { return 800.0f; }
+float param_get_small_signal(void) { return 0.0f; }
+const char *param_get_flow_unit_str(uint8_t unit) { (void)unit; return "m3/h"; }
+const char *param_get_total_unit_str(uint8_t unit) { (void)unit; return "m3"; }
+uint8_t param_get_total_unit(void) { return 0; }
+/* FC03 链接所需的其他参数边界；限幅用例不读取这些地址。 */
+uint8_t param_get_std_cond(void) { return 0; }
+uint8_t param_get_pulse_equiv(void) { return 0; }
+uint8_t param_get_uart_config(void) { return 0; }
+uint8_t param_get_language(void) { return 0; }
+uint8_t param_get_status(void) { return 0; }
+uint16_t param_get_oled_recovery_interval(void) { return 0; }
+float param_get_forward_total(void) { return 0; }
+float param_get_reverse_total(void) { return 0; }
+float param_get_damping_time(void) { return 0; }
+float param_get_freq_output(void) { return 0; }
+float param_get_pipe_diameter(void) { return 0; }
+float param_get_gas_ref_press(void) { return 0; }
+float param_get_gas_ref_temp(void) { return 0; }
+float param_get_reynolds_k(void) { return 0; }
+float param_get_total_factor(void) { return 0; }
+float param_get_preset_total(void) { return 0; }
+const app_fw_header_t g_app_fw_header = { 0 };
+uint16_t boot_flag_iap_mirror(void) { return 0; }
 uint8_t param_get_cal_enabled(void) { return sim_config.cal_enabled; }
 float param_get_value_4ma(void) { return sim_config.range_low; }
 float param_get_value_20ma(void) { return sim_config.range_high; }
