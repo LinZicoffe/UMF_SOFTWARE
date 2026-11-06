@@ -13,15 +13,12 @@
 #include "bl_iwdg.h"
 
 /* 等待喂狗间隔（§4.6：等待字节的轮询循环内每约 100ms 一次）*/
-#define BL_USART_FEED_MS   100u
+#define BL_USART_FEED_MS 100u
 
 static uint32_t s_baud_hz = 115200u;
 
 /* 波特率表（与 App param_storage.c s_baud_rate_str 索引一致）*/
-const uint32_t bl_baud_table[BL_UART_BAUD_COUNT] =
-{
-    4800u, 9600u, 19200u, 38400u, 115200u, 2400u
-};
+const uint32_t bl_baud_table[BL_UART_BAUD_COUNT] = {4800u, 9600u, 19200u, 38400u, 115200u, 2400u};
 
 /* 1 字符时间（10 bit：1起始+8数据+1停止，不含校验/停止位扩展，量级用途）*/
 static uint32_t bl_usart_char_time_us(void)
@@ -32,9 +29,9 @@ static uint32_t bl_usart_char_time_us(void)
 
 bl_status_t bl_usart_init(uint8_t uart_config)
 {
-    uint8_t  baud_idx = bl_uart_cfg_baud(uart_config);
-    uint8_t  parity   = bl_uart_cfg_parity(uart_config);
-    uint8_t  stop     = bl_uart_cfg_stop(uart_config);
+    uint8_t baud_idx = bl_uart_cfg_baud(uart_config);
+    uint8_t parity = bl_uart_cfg_parity(uart_config);
+    uint8_t stop = bl_uart_cfg_stop(uart_config);
     uint32_t pclk1;
     uint32_t div16;
     uint32_t cr1;
@@ -53,11 +50,11 @@ bl_status_t bl_usart_init(uint8_t uart_config)
     {
         uint32_t crl = GPIOA->CRL;
         crl &= ~((uint32_t)0xFu << 4 | (uint32_t)0xFu << 8 | (uint32_t)0xFu << 12);
-        crl |= ((uint32_t)0x2u << 4);    /* PA1: MODE=10(2MHz) CNF=00(推挽输出) */
-        crl |= ((uint32_t)0xAu << 8);    /* PA2: MODE=10 CNF=10(复用推挽) */
-        crl |= ((uint32_t)0x4u << 12);   /* PA3: MODE=00 CNF=01(浮空输入) */
+        crl |= ((uint32_t)0x2u << 4);  /* PA1: MODE=10(2MHz) CNF=00(推挽输出) */
+        crl |= ((uint32_t)0xAu << 8);  /* PA2: MODE=10 CNF=10(复用推挽) */
+        crl |= ((uint32_t)0x4u << 12); /* PA3: MODE=00 CNF=01(浮空输入) */
         GPIOA->CRL = crl;
-        GPIOA->BSRR = (1u << (1 + 16));   /* BR1 置位 = PA1 输出低（DE=0 接收态）*/
+        GPIOA->BSRR = (1u << (1 + 16)); /* BR1 置位 = PA1 输出低（DE=0 接收态）*/
     }
 
     /* 先关 USART 再配置（幂等）*/
@@ -69,29 +66,35 @@ bl_status_t bl_usart_init(uint8_t uart_config)
     pclk1 = bl_clock_pclk1_hz();
     s_baud_hz = bl_baud_table[baud_idx];
     div16 = (pclk1 + s_baud_hz / 2u) / s_baud_hz;
-    if (div16 < 1u)     { div16 = 1u; }
-    if (div16 > 0xFFFFu) { div16 = 0xFFFFu; }
+    if (div16 < 1u)
+    {
+        div16 = 1u;
+    }
+    if (div16 > 0xFFFFu)
+    {
+        div16 = 0xFFFFu;
+    }
     USART2->BRR = div16;
 
     /* 停止位（CR2.STOP[13:12]：00=1位，10=2位）*/
     if (stop == 1u)
     {
-        USART2->CR2 |= USART_CR2_STOP_1;   /* 2 停止位 */
+        USART2->CR2 |= USART_CR2_STOP_1; /* 2 停止位 */
     }
 
     /* 字长/校验：与 App 一致——启用校验时 M=1（8 数据 + 1 校验）*/
     cr1 = 0u;
     if (parity != 0u)
     {
-        cr1 |= USART_CR1_M;                /* 9 位字长 */
-        cr1 |= USART_CR1_PCE;              /* 校验使能 */
+        cr1 |= USART_CR1_M;   /* 9 位字长 */
+        cr1 |= USART_CR1_PCE; /* 校验使能 */
         if (parity == 1u)
         {
-            cr1 |= USART_CR1_PS;           /* PS=1 奇校验 */
+            cr1 |= USART_CR1_PS; /* PS=1 奇校验 */
         }
     }
     cr1 |= USART_CR1_TE | USART_CR1_RE;
-    cr1 |= USART_CR1_UE;                   /* UE 最后置位 */
+    cr1 |= USART_CR1_UE; /* UE 最后置位 */
     USART2->CR1 = cr1;
 
     /* 读一次 DR 清洗可能残留的 RXNE/ORE */
@@ -111,7 +114,7 @@ int bl_usart_getc(uint32_t timeout_ms)
      * 为准，与单次调用的等待时长无关——50ms 轮询片可跨调用累计，
      * 字节连续快速到达（RXNE 命中路径）也按墙钟时间喂狗。*/
     static uint32_t s_last_feed;
-    static uint8_t  s_feed_init;
+    static uint8_t s_feed_init;
     uint32_t start = bl_time_now();
 
     for (;;)
@@ -131,21 +134,21 @@ int bl_usart_getc(uint32_t timeout_ms)
         {
             return (int)(USART2->DR & 0xFFu);
         }
-        if (sr & USART_SR_ORE)             /* 溢出：读 SR 后读 DR 清除 */
+        if (sr & USART_SR_ORE) /* 溢出：读 SR 后读 DR 清除 */
         {
             (void)USART2->DR;
         }
 
         if (bl_time_elapsed_ms(start) >= timeout_ms)
         {
-            return -1;                     /* 超时 */
+            return -1; /* 超时 */
         }
     }
 }
 
 void bl_usart_putc(uint8_t byte)
 {
-    GPIOA->BSRR = (1u << 1);               /* PA1=1，DE 发送态 */
+    GPIOA->BSRR = (1u << 1); /* PA1=1，DE 发送态 */
 
     while ((USART2->SR & USART_SR_TXE) == 0u)
     {
@@ -157,9 +160,9 @@ void bl_usart_putc(uint8_t byte)
     {
         /* 等发送完成（移位寄存器移出，总线真正空闲）*/
     }
-    USART2->SR &= ~USART_SR_TC;            /* 写 0 清 TC（F1）*/
+    USART2->SR &= ~USART_SR_TC; /* 写 0 清 TC（F1）*/
 
-    GPIOA->BSRR = (1u << (1 + 16));        /* PA1=0，DE 接收态 */
+    GPIOA->BSRR = (1u << (1 + 16)); /* PA1=0，DE 接收态 */
 
     /* 保持 DE 低 ≥1 字符时间（§4.6），等待收发器/总线建立 */
     {

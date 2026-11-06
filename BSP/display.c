@@ -26,7 +26,8 @@ static void LCD_StreamBegin(void)
 static void LCD_StreamWrite8(uint8_t dat)
 {
     uint8_t i;
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < 8; i++)
+    {
         OLED_CLK_GPIO_Port->BRR = OLED_CLK_Pin;
         if (dat & 0x80U)
             OLED_SDA_GPIO_Port->BSRR = OLED_SDA_Pin;
@@ -52,15 +53,19 @@ static const industrial_font_t *lcd_font_data(oled_font_t font)
 static uint8_t next_glyph(const char **text, oled_font_t font)
 {
     uint8_t ch = (uint8_t)*(*text)++;
-    if (font == OLED_FONT_LARGE || font == OLED_FONT_FLOW_DIGITS) {
-        if (ch >= '0' && ch <= '9') return (uint8_t)(ch - '0');
+    if (font == OLED_FONT_LARGE || font == OLED_FONT_FLOW_DIGITS)
+    {
+        if (ch >= '0' && ch <= '9')
+            return (uint8_t)(ch - '0');
         return ch == '.' ? 10U : 11U;
     }
-    if (ch == 0xC2U && (uint8_t)**text == 0xB0U) {
+    if (ch == 0xC2U && (uint8_t)**text == 0xB0U)
+    {
         (*text)++;
         return 95U;
     }
-    if (ch == 0xC2U && (uint8_t)**text == 0xB3U) {
+    if (ch == 0xC2U && (uint8_t)**text == 0xB3U)
+    {
         (*text)++;
         return 96U;
     }
@@ -95,18 +100,24 @@ void OLED_SetRotation(uint8_t rotation)
     LCD_SetRotation(rotation);
 }
 
-void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
-                        uint16_t color)
+void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color)
 {
     uint16_t y;
     uint16_t x;
-    if (x1 > x2 || y1 > y2 || x1 >= OLED_WIDTH || y1 >= OLED_HEIGHT) return;
-    if (x2 >= OLED_WIDTH) x2 = OLED_WIDTH - 1U;
-    if (y2 >= OLED_HEIGHT) y2 = OLED_HEIGHT - 1U;
-    if (s_frame_active) {
-        if (y2 < s_frame_y || y1 >= s_frame_y + LCD_FRAME_ROWS) return;
-        if (y1 < s_frame_y) y1 = s_frame_y;
-        if (y2 >= s_frame_y + LCD_FRAME_ROWS) y2 = s_frame_y + LCD_FRAME_ROWS - 1U;
+    if (x1 > x2 || y1 > y2 || x1 >= OLED_WIDTH || y1 >= OLED_HEIGHT)
+        return;
+    if (x2 >= OLED_WIDTH)
+        x2 = OLED_WIDTH - 1U;
+    if (y2 >= OLED_HEIGHT)
+        y2 = OLED_HEIGHT - 1U;
+    if (s_frame_active)
+    {
+        if (y2 < s_frame_y || y1 >= s_frame_y + LCD_FRAME_ROWS)
+            return;
+        if (y1 < s_frame_y)
+            y1 = s_frame_y;
+        if (y2 >= s_frame_y + LCD_FRAME_ROWS)
+            y2 = s_frame_y + LCD_FRAME_ROWS - 1U;
         for (y = y1; y <= y2; y++)
             for (x = x1; x <= x2; x++)
                 s_frame_pixels[y - s_frame_y][x] = color;
@@ -114,8 +125,10 @@ void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
     }
     LCD_Address_Set(x1, y1, x2, y2);
     LCD_StreamBegin();
-    for (y = y1; y <= y2; y++) {
-        for (x = x1; x <= x2; x++) stream_color(color);
+    for (y = y1; y <= y2; y++)
+    {
+        for (x = x1; x <= x2; x++)
+            stream_color(color);
         /* 大面积填充可能超过看门狗周期。 */
         IWDG->KR = 0xAAAAU;
     }
@@ -127,64 +140,82 @@ void OLED_Clear(uint16_t color)
     OLED_FillRectangle(0, 0, OLED_WIDTH - 1U, OLED_HEIGHT - 1U, color);
 }
 
-static void draw_char(uint16_t x, uint16_t y, uint8_t index, oled_font_t font,
-                      uint16_t fg, uint16_t bg)
+static void draw_char(uint16_t x, uint16_t y, uint8_t index, oled_font_t font, uint16_t fg,
+                      uint16_t bg)
 {
     const industrial_font_t *data = lcd_font_data(font);
     const industrial_glyph_t *glyph = &data->glyphs[index];
     uint16_t row, col, pixel_y;
-    if (x + glyph->advance > OLED_WIDTH || y + data->height > OLED_HEIGHT) return;
-    if (s_frame_active) {
-        if (y + data->height <= s_frame_y || y >= s_frame_y + LCD_FRAME_ROWS) return;
-    } else {
+    if (x + glyph->advance > OLED_WIDTH || y + data->height > OLED_HEIGHT)
+        return;
+    if (s_frame_active)
+    {
+        if (y + data->height <= s_frame_y || y >= s_frame_y + LCD_FRAME_ROWS)
+            return;
+    }
+    else
+    {
         LCD_Address_Set(x, y, x + glyph->advance - 1U, y + data->height - 1U);
         LCD_StreamBegin();
     }
-    for (row = 0; row < data->height; row++) {
+    for (row = 0; row < data->height; row++)
+    {
         pixel_y = (uint16_t)(y + row);
-        if (s_frame_active && (pixel_y < s_frame_y ||
-            pixel_y >= s_frame_y + LCD_FRAME_ROWS)) continue;
-        for (col = 0; col < glyph->advance; col++) {
+        if (s_frame_active && (pixel_y < s_frame_y || pixel_y >= s_frame_y + LCD_FRAME_ROWS))
+            continue;
+        for (col = 0; col < glyph->advance; col++)
+        {
             uint16_t pixel = bg;
-            if (row >= glyph->top && row < glyph->top + glyph->height) {
+            if (row >= glyph->top && row < glyph->top + glyph->height)
+            {
                 uint16_t bit = (uint16_t)((row - glyph->top) * glyph->advance + col);
                 if (data->bitmap[glyph->offset + bit / 8U] & (0x80U >> (bit % 8U)))
                     pixel = fg;
             }
-            if (s_frame_active) s_frame_pixels[pixel_y - s_frame_y][x + col] = pixel;
-            else stream_color(pixel);
+            if (s_frame_active)
+                s_frame_pixels[pixel_y - s_frame_y][x + col] = pixel;
+            else
+                stream_color(pixel);
         }
     }
-    if (!s_frame_active) LCD_StreamEnd();
+    if (!s_frame_active)
+        LCD_StreamEnd();
 }
 
-void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
-                   uint16_t foreground, uint16_t background)
+void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font, uint16_t foreground,
+                   uint16_t background)
 {
     const industrial_font_t *data = lcd_font_data(font);
-    if (!text) return;
-    while (*text) {
+    if (!text)
+        return;
+    while (*text)
+    {
         uint8_t index = next_glyph(&text, font);
         uint8_t step = data->glyphs[index].advance;
-        if (x + step > OLED_WIDTH) break;
+        if (x + step > OLED_WIDTH)
+            break;
         draw_char(x, y, index, font, foreground, background);
         x += step;
     }
 }
 
 /* 在一行缓冲中还原字形，包含空白列；旧字形消失的位置也必须参与比较。 */
-static void raster_text_row(uint16_t *pixels, uint16_t x, uint16_t row,
-                             const char *text, oled_font_t font, uint16_t fg,
-                             uint16_t bg)
+static void raster_text_row(uint16_t *pixels, uint16_t x, uint16_t row, const char *text,
+                            oled_font_t font, uint16_t fg, uint16_t bg)
 {
     const industrial_font_t *data = lcd_font_data(font);
     uint16_t col;
-    for (col = 0; col < OLED_WIDTH; col++) pixels[col] = bg;
-    while (*text) {
+    for (col = 0; col < OLED_WIDTH; col++)
+        pixels[col] = bg;
+    while (*text)
+    {
         const industrial_glyph_t *glyph = &data->glyphs[next_glyph(&text, font)];
-        if (x + glyph->advance > OLED_WIDTH) break;
-        if (row >= glyph->top && row < glyph->top + glyph->height) {
-            for (col = 0; col < glyph->advance; col++) {
+        if (x + glyph->advance > OLED_WIDTH)
+            break;
+        if (row >= glyph->top && row < glyph->top + glyph->height)
+        {
+            for (col = 0; col < glyph->advance; col++)
+            {
                 uint16_t bit = (uint16_t)((row - glyph->top) * glyph->advance + col);
                 if (data->bitmap[glyph->offset + bit / 8U] & (0x80U >> (bit % 8U)))
                     pixels[x + col] = fg;
@@ -194,36 +225,44 @@ static void raster_text_row(uint16_t *pixels, uint16_t x, uint16_t row,
     }
 }
 
-void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text,
-                       uint16_t previous_x, const char *previous, oled_font_t font,
-                       uint16_t foreground, uint16_t background)
+void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text, uint16_t previous_x,
+                       const char *previous, oled_font_t font, uint16_t foreground,
+                       uint16_t background)
 {
     uint16_t row, col, start, pixel;
     uint16_t *old_pixels = s_frame_pixels[0];
     uint16_t *new_pixels = s_frame_pixels[1];
-    if (s_frame_active) {
+    if (s_frame_active)
+    {
         OLED_DrawText(x, y, text, font, foreground, background);
         return;
     }
-    if (x == previous_x && strcmp(text, previous) == 0) return;
-    if (y + OLED_FontHeight(font) > OLED_HEIGHT) return;
-    for (row = 0; row < OLED_FontHeight(font); row++) {
+    if (x == previous_x && strcmp(text, previous) == 0)
+        return;
+    if (y + OLED_FontHeight(font) > OLED_HEIGHT)
+        return;
+    for (row = 0; row < OLED_FontHeight(font); row++)
+    {
         raster_text_row(old_pixels, previous_x, row, previous, font, foreground, background);
         raster_text_row(new_pixels, x, row, text, font, foreground, background);
         col = 0U;
-        while (col < OLED_WIDTH) {
-            if (old_pixels[col] == new_pixels[col]) {
+        while (col < OLED_WIDTH)
+        {
+            if (old_pixels[col] == new_pixels[col])
+            {
                 col++;
                 continue;
             }
             start = col;
-            do {
+            do
+            {
                 col++;
             } while (col < OLED_WIDTH && old_pixels[col] != new_pixels[col]);
             /* 每个窗口只包含本行连续变化的像素，不跨过未变化的背景。 */
             LCD_Address_Set(start, y + row, col - 1U, y + row);
             LCD_StreamBegin();
-            for (pixel = start; pixel < col; pixel++) stream_color(new_pixels[pixel]);
+            for (pixel = start; pixel < col; pixel++)
+                stream_color(new_pixels[pixel]);
             LCD_StreamEnd();
         }
         IWDG->KR = 0xAAAAU;
@@ -234,8 +273,10 @@ uint16_t OLED_TextWidth(const char *text, oled_font_t font)
 {
     const industrial_font_t *data = lcd_font_data(font);
     uint16_t width = 0U;
-    if (text) {
-        while (*text) width += data->glyphs[next_glyph(&text, font)].advance;
+    if (text)
+    {
+        while (*text)
+            width += data->glyphs[next_glyph(&text, font)].advance;
     }
     return width;
 }
@@ -245,20 +286,25 @@ uint8_t OLED_FontHeight(oled_font_t font)
     return lcd_font_data(font)->height;
 }
 
-void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
-                     uint16_t width, uint16_t height, uint16_t color)
+void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap, uint16_t width, uint16_t height,
+                     uint16_t color)
 {
     uint16_t row, col;
-    if (!bitmap) return;
-    for (row = 0; row < height; row++) {
-        for (col = 0; col < width; col++) {
+    if (!bitmap)
+        return;
+    for (row = 0; row < height; row++)
+    {
+        for (col = 0; col < width; col++)
+        {
             if (bitmap[row * ((width + 7U) / 8U) + col / 8U] & (0x80U >> (col % 8U)))
                 OLED_FillRectangle(x + col, y + row, x + col, y + row, color);
         }
     }
 }
 
-void OLED_Present(void) { }
+void OLED_Present(void)
+{
+}
 
 void OLED_RenderFrame(void (*render)(const void *context), const void *context)
 {
@@ -266,7 +312,8 @@ void OLED_RenderFrame(void (*render)(const void *context), const void *context)
     LCD_Address_Set(0, 0, OLED_WIDTH - 1U, OLED_HEIGHT - 1U);
     LCD_StreamBegin();
     s_frame_active = 1U;
-    for (s_frame_y = 0; s_frame_y < OLED_HEIGHT; s_frame_y += LCD_FRAME_ROWS) {
+    for (s_frame_y = 0; s_frame_y < OLED_HEIGHT; s_frame_y += LCD_FRAME_ROWS)
+    {
         memset(s_frame_pixels, 0, sizeof(s_frame_pixels));
         render(context);
         /* 背景和内容在内存中合成后，每个屏幕像素只发送一次。 */
@@ -296,8 +343,10 @@ char OLED_WriteString(const char *text, oled_font_t font, uint16_t color)
 
 static SSD1306_Font_t select_font(oled_font_t font)
 {
-    if (font == OLED_FONT_SMALL) return Font_6x8;
-    if (font == OLED_FONT_LARGE) return Font_11x18;
+    if (font == OLED_FONT_SMALL)
+        return Font_6x8;
+    if (font == OLED_FONT_LARGE)
+        return Font_11x18;
     return Font_7x10;
 }
 
@@ -306,27 +355,37 @@ static SSD1306_COLOR mono_color(uint16_t color)
     return color == OLED_BLACK ? Black : White;
 }
 
-void OLED_Init(void) { ssd1306_Init(); }
-void OLED_Recovery(void) { ssd1306_RecoveryInit(); }
-void OLED_Clear(uint16_t color) { ssd1306_Fill(mono_color(color)); }
-void OLED_Present(void) { ssd1306_UpdateScreen(); }
-
-void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
-                        uint16_t color)
+void OLED_Init(void)
 {
-    ssd1306_FillRectangle((uint8_t)x1, (uint8_t)y1, (uint8_t)x2, (uint8_t)y2,
-                          mono_color(color));
+    ssd1306_Init();
+}
+void OLED_Recovery(void)
+{
+    ssd1306_RecoveryInit();
+}
+void OLED_Clear(uint16_t color)
+{
+    ssd1306_Fill(mono_color(color));
+}
+void OLED_Present(void)
+{
+    ssd1306_UpdateScreen();
 }
 
-void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
-                     uint16_t width, uint16_t height, uint16_t color)
+void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color)
 {
-    ssd1306_DrawBitmap((uint8_t)x, (uint8_t)y, bitmap, (uint8_t)width,
-                       (uint8_t)height, mono_color(color));
+    ssd1306_FillRectangle((uint8_t)x1, (uint8_t)y1, (uint8_t)x2, (uint8_t)y2, mono_color(color));
 }
 
-void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
-                   uint16_t foreground, uint16_t background)
+void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap, uint16_t width, uint16_t height,
+                     uint16_t color)
+{
+    ssd1306_DrawBitmap((uint8_t)x, (uint8_t)y, bitmap, (uint8_t)width, (uint8_t)height,
+                       mono_color(color));
+}
+
+void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font, uint16_t foreground,
+                   uint16_t background)
 {
     (void)background;
     ssd1306_SetCursor((uint8_t)x, (uint8_t)y);

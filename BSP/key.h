@@ -14,13 +14,14 @@
 #include "main.h"
 
 /* 按键事件枚举 */
-typedef enum {
-    KEY_NONE      = 0,  /* 无事件 */
-    KEY_UP        = 1,  /* K3 (PA11):  向上选择 */
-    KEY_DOWN      = 2,  /* K1 (PC15):  向下选择 */
-    KEY_ENTER     = 3,  /* K2 (PA0):   确认/进入 */
-    KEY_BACK      = 4,  /* K1+K2:      返回上一级 */
-    KEY_HOME      = 6   /* K1+K2+K3:   返回主界面 */
+typedef enum
+{
+    KEY_NONE = 0,  /* 无事件 */
+    KEY_UP = 1,    /* K3 (PA11):  向上选择 */
+    KEY_DOWN = 2,  /* K1 (PC15):  向下选择 */
+    KEY_ENTER = 3, /* K2 (PA0):   确认/进入 */
+    KEY_BACK = 4,  /* K1+K2:      返回上一级 */
+    KEY_HOME = 6   /* K1+K2+K3:   返回主界面 */
 } key_event_t;
 
 /**

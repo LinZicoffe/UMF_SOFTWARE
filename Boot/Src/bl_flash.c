@@ -10,15 +10,15 @@
 #include "bl_flash.h"
 
 /* ===== 内部状态 ===== */
-static int s_backup_window;      /* 备份页写窗口（默认关闭）*/
-static int s_app_window = 1;     /* App 区写窗口（默认开；§7.3 备份失败时关）*/
+static int s_backup_window;  /* 备份页写窗口（默认关闭）*/
+static int s_app_window = 1; /* App 区写窗口（默认开；§7.3 备份失败时关）*/
 
 /* 有界等待上限（迭代次数，按 72MHz、每循环 4~15 周期估算）：
  *   半字编程 t_PROG ≤ 4us   ⇒ 100k 次 ≈ 5~20ms，余量 >1000 倍；
  *   页擦除   t_ERASE max 40ms ⇒ 40ms×72MHz/4周期 = 720k 次，
  *           取 2,000,000 次（最保守 4 周期/循环时约 111ms）≈ 2.8 倍余量。*/
-#define BL_FLASH_WAIT_PROGRAM  100000u
-#define BL_FLASH_WAIT_ERASE    2000000u
+#define BL_FLASH_WAIT_PROGRAM 100000u
+#define BL_FLASH_WAIT_ERASE 2000000u
 
 /* ===== 内部辅助 — static ===== */
 
@@ -95,11 +95,11 @@ bl_status_t bl_flash_erase_page(uint32_t addr)
 
     if ((addr & (BL_FLASH_PAGE_SIZE - 1u)) != 0u)
     {
-        return BL_ERR_ADDR;              /* 未页对齐 */
+        return BL_ERR_ADDR; /* 未页对齐 */
     }
     if (!addr_allowed(addr, BL_FLASH_PAGE_SIZE))
     {
-        return BL_ERR_ADDR;              /* 白名单拒绝 */
+        return BL_ERR_ADDR; /* 白名单拒绝 */
     }
 
     flash_unlock();
@@ -112,9 +112,9 @@ bl_status_t bl_flash_erase_page(uint32_t addr)
     }
 
     flash_clear_flags();
-    FLASH->CR |= FLASH_CR_PER;           /* 页擦除模式（RM0008 顺序：PER→AR→STRT）*/
-    FLASH->AR  = addr;                   /* 页地址寄存器 */
-    FLASH->CR |= FLASH_CR_STRT;          /* 启动 */
+    FLASH->CR |= FLASH_CR_PER;  /* 页擦除模式（RM0008 顺序：PER→AR→STRT）*/
+    FLASH->AR = addr;           /* 页地址寄存器 */
+    FLASH->CR |= FLASH_CR_STRT; /* 启动 */
 
     if (!wait_not_busy(BL_FLASH_WAIT_ERASE))
     {
@@ -126,12 +126,21 @@ bl_status_t bl_flash_erase_page(uint32_t addr)
 
     sr = FLASH->SR;
     FLASH->CR &= ~FLASH_CR_PER;
-    flash_clear_flags();                 /* 清 EOP 与错误标志 */
+    flash_clear_flags(); /* 清 EOP 与错误标志 */
     flash_lock();
 
-    if (sr & FLASH_SR_PGERR)             { return BL_ERR_ERASE; }
-    if (sr & FLASH_SR_WRPRTERR)          { return BL_ERR_ERASE; }
-    if ((sr & FLASH_SR_EOP) == 0u)       { return BL_ERR_ERASE; } /* 无 EOP = 未完成 */
+    if (sr & FLASH_SR_PGERR)
+    {
+        return BL_ERR_ERASE;
+    }
+    if (sr & FLASH_SR_WRPRTERR)
+    {
+        return BL_ERR_ERASE;
+    }
+    if ((sr & FLASH_SR_EOP) == 0u)
+    {
+        return BL_ERR_ERASE;
+    } /* 无 EOP = 未完成 */
 
     /* 回读抽检：整页首/末半字须为 0xFFFF（页内逐字由编程期 per-halfword
      * 预检查兜底；此抽检用于拦截"部分擦除"页）*/
@@ -156,7 +165,7 @@ bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint
     }
     if ((addr & 1u) != 0u)
     {
-        return BL_ERR_ADDR;              /* 未半字对齐 */
+        return BL_ERR_ADDR; /* 未半字对齐 */
     }
     if (!addr_allowed(addr, (uint32_t)count * 2u))
     {
@@ -175,23 +184,23 @@ bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint
     for (i = 0; i < count; i++)
     {
         uint32_t target = addr + (uint32_t)i * 2u;
-        uint16_t  value = data[i];
-        uint16_t  current;
+        uint16_t value = data[i];
+        uint16_t current;
         uint32_t sr;
 
         if (value == 0xFFFFu)
         {
-            continue;                    /* 全 1 半字无需编程（擦除态天然一致）*/
+            continue; /* 全 1 半字无需编程（擦除态天然一致）*/
         }
         current = bl_flash_read16(target);
         if (current == value)
         {
-            continue;                    /* 已是期望值（同包重发，T-07）*/
+            continue; /* 已是期望值（同包重发，T-07）*/
         }
         if (current != 0xFFFFu)
         {
             flash_lock();
-            return BL_ERR_PROGRAM;       /* 目标非擦除态且值不同 ⇒ 硬件必 PGERR */
+            return BL_ERR_PROGRAM; /* 目标非擦除态且值不同 ⇒ 硬件必 PGERR */
         }
 
         flash_clear_flags();
@@ -218,14 +227,14 @@ bl_status_t bl_flash_program_halfwords(uint32_t addr, const uint16_t *data, uint
         {
             flash_clear_flags();
             flash_lock();
-            return BL_ERR_ADDR;          /* 写保护（本分区不应出现，防御性处理）*/
+            return BL_ERR_ADDR; /* 写保护（本分区不应出现，防御性处理）*/
         }
         if ((sr & FLASH_SR_EOP) == 0u)
         {
             flash_lock();
             return BL_ERR_PROGRAM;
         }
-        flash_clear_flags();             /* 清 EOP，为下一半字准备 */
+        flash_clear_flags(); /* 清 EOP，为下一半字准备 */
     }
 
     flash_lock();
