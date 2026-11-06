@@ -312,13 +312,14 @@ clang-format --dry-run --Werror (Get-ChildItem BSP,Boot -Recurse -Include *.c,*.
 | IAR 闸门 | `CCRequirePrototypes` 0 → 1（等价 `--require_prototypes`） |
 | 闸门待办 | `CCDiagWarnAreErr` 仍为 0，需在告警清零后作为第二步开启 |
 
-与本节初稿的三处差异（均为实测后增补，理由已写入配置文件注释）：
+与本节初稿的四处差异（均为实测后增补，理由已写入配置文件注释）：
 
-| 新增键 | 值 | 原因 |
+| 键 | 值 | 原因 |
 |---|---|---|
 | `BreakStringLiterals` | `false` | `display.c` 有 `"\xC2\xB0"` 类十六进制转义，拆分字面量有改变语义的风险 |
 | `ReflowComments` | `false` | clang-format 不理解 CJK 显示宽度，重排会打散对齐的中文注释与 ASCII 表格 |
 | `AlignEscapedNewlines` | `DontAlign` | 多行宏的反斜杠不重新对齐，减少无意义 diff |
+| `AlignConsecutiveMacros` | `Consecutive` | 寄存器地址表按列对齐后可扫读；取 `Consecutive` 而非 `AcrossEmptyLinesAndComments`，使空行分隔的语义分组各自成表 |
 
 两个实测结论：
 
