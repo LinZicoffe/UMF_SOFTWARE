@@ -9,8 +9,8 @@
 #include "ftoa.h"
 #include <string.h>
 
-#define FLOW_OVER_RANGE_LPH 2400.0f
-#define FLOW_RECOVER_LPH 2000.0f
+#define FLOW_OVER_RANGE_LPH  2400.0f
+#define FLOW_RECOVER_LPH     2000.0f
 #define FLOW_OVER_RANGE_TEXT "Over range"
 
 /* 内部状态 — 全部 static */

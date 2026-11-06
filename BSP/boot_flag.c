@@ -15,7 +15,7 @@ extern const uint32_t CSTACK$$Limit;
 #define FW_HEADER_ATTR __root
 #elif defined(__GNUC__)
 extern uint32_t _estack;
-#define APP_STACK_TOP ((uint32_t)&_estack)
+#define APP_STACK_TOP  ((uint32_t)&_estack)
 #define FW_HEADER_ATTR __attribute__((section(".fw_header"), used))
 #else
 #error "Unsupported compiler"

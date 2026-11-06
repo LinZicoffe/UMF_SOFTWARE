@@ -18,133 +18,133 @@
 #include <string.h>
 
 /* ===== 默认值 ===== */
-#define DEF_STD_COND 0
-#define DEF_METER_COEFF 1.000f
-#define DEF_MEDIUM_COEFF 1.000f
-#define DEF_FLOW_UNIT 0
-#define DEF_TOTAL_UNIT 0
-#define DEF_SMALL_SIGNAL 2.0f
-#define DEF_FILTER_TIME 1.0f
-#define DEF_FILTER_WINDOW_COUNT 10
-#define DEF_SAMPLE_INTERVAL_MS 500
-#define DEF_DAMPING_TIME 1.0f
-#define DEF_VALUE_4MA 0.0f
-#define DEF_VALUE_20MA 100.0f
-#define DEF_FREQ_OUTPUT 1000.0f
-#define DEF_PULSE_EQUIV 0
-#define DEF_MEDIUM_DENSITY 1000.0f
-#define DEF_PIPE_DIAMETER 25.0f
-#define DEF_GAS_REF_PRESS 101.3f
-#define DEF_GAS_REF_TEMP 20.0f
-#define DEF_REYNOLDS_K 1.000f
-#define DEF_TOTAL_FACTOR 1.000f
-#define DEF_PRESET_TOTAL 0.0f
-#define DEF_DAC_ZERO 12100u
-#define DEF_DAC_FULL 60000u
-#define DEF_FORWARD_TOTAL 0.0f
-#define DEF_REVERSE_TOTAL 0.0f
-#define DEF_MODBUS_ADDR 2
-#define DEF_BAUD_RATE 4 /* BAUD_115200, 与 MX_USART2_UART_INIT 硬编码一致 */
-#define DEF_PWD_OPERATOR 0
-#define DEF_PWD_ENGINEER 123
-#define DEF_LANGUAGE 0
-#define DEF_DISPLAY_ROTATION 0
+#define DEF_STD_COND               0
+#define DEF_METER_COEFF            1.000f
+#define DEF_MEDIUM_COEFF           1.000f
+#define DEF_FLOW_UNIT              0
+#define DEF_TOTAL_UNIT             0
+#define DEF_SMALL_SIGNAL           2.0f
+#define DEF_FILTER_TIME            1.0f
+#define DEF_FILTER_WINDOW_COUNT    10
+#define DEF_SAMPLE_INTERVAL_MS     500
+#define DEF_DAMPING_TIME           1.0f
+#define DEF_VALUE_4MA              0.0f
+#define DEF_VALUE_20MA             100.0f
+#define DEF_FREQ_OUTPUT            1000.0f
+#define DEF_PULSE_EQUIV            0
+#define DEF_MEDIUM_DENSITY         1000.0f
+#define DEF_PIPE_DIAMETER          25.0f
+#define DEF_GAS_REF_PRESS          101.3f
+#define DEF_GAS_REF_TEMP           20.0f
+#define DEF_REYNOLDS_K             1.000f
+#define DEF_TOTAL_FACTOR           1.000f
+#define DEF_PRESET_TOTAL           0.0f
+#define DEF_DAC_ZERO               12100u
+#define DEF_DAC_FULL               60000u
+#define DEF_FORWARD_TOTAL          0.0f
+#define DEF_REVERSE_TOTAL          0.0f
+#define DEF_MODBUS_ADDR            2
+#define DEF_BAUD_RATE              4 /* BAUD_115200, 与 MX_USART2_UART_INIT 硬编码一致 */
+#define DEF_PWD_OPERATOR           0
+#define DEF_PWD_ENGINEER           123
+#define DEF_LANGUAGE               0
+#define DEF_DISPLAY_ROTATION       0
 #define DEF_OLED_RECOVERY_INTERVAL 50 /* 50 × 100ms = 5s, 0=禁用 */
-#define DEF_CAL_ENABLED 0
-#define DEF_CAL_K 1.0f
-#define DEF_CAL_PCT_0 0.0f
-#define DEF_CAL_PCT_1 3.0f
-#define DEF_CAL_PCT_2 10.0f
-#define DEF_CAL_PCT_3 25.0f
-#define DEF_CAL_PCT_4 50.0f
-#define DEF_CAL_PCT_5 75.0f
-#define DEF_CAL_PCT_6 100.0f
+#define DEF_CAL_ENABLED            0
+#define DEF_CAL_K                  1.0f
+#define DEF_CAL_PCT_0              0.0f
+#define DEF_CAL_PCT_1              3.0f
+#define DEF_CAL_PCT_2              10.0f
+#define DEF_CAL_PCT_3              25.0f
+#define DEF_CAL_PCT_4              50.0f
+#define DEF_CAL_PCT_5              75.0f
+#define DEF_CAL_PCT_6              100.0f
 
 /* ===== 范围限制 ===== */
-#define METER_COEFF_MIN 0.001f
-#define METER_COEFF_MAX 99.999f
-#define MEDIUM_COEFF_MIN 0.100f
-#define MEDIUM_COEFF_MAX 10.000f
-#define SMALL_SIGNAL_MIN 0.0f
-#define SMALL_SIGNAL_MAX 10.0f
-#define FILTER_TIME_MIN 0.1f
-#define FILTER_TIME_MAX 100.0f
+#define METER_COEFF_MIN         0.001f
+#define METER_COEFF_MAX         99.999f
+#define MEDIUM_COEFF_MIN        0.100f
+#define MEDIUM_COEFF_MAX        10.000f
+#define SMALL_SIGNAL_MIN        0.0f
+#define SMALL_SIGNAL_MAX        10.0f
+#define FILTER_TIME_MIN         0.1f
+#define FILTER_TIME_MAX         100.0f
 #define FILTER_WINDOW_COUNT_MIN ((uint16_t)2)
 #define FILTER_WINDOW_COUNT_MAX ((uint16_t)10)
-#define SAMPLE_INTERVAL_MIN_MS ((uint16_t)100)
-#define SAMPLE_INTERVAL_MAX_MS ((uint16_t)60000)
-#define DAMPING_TIME_MIN 0.1f
-#define DAMPING_TIME_MAX 100.0f
-#define VALUE_4MA_MIN (-9999.0f)
-#define VALUE_4MA_MAX 99999.0f
-#define VALUE_20MA_MIN 0.1f
-#define VALUE_20MA_MAX 99999.0f
-#define FREQ_OUTPUT_MIN 0.0f
-#define FREQ_OUTPUT_MAX 10000.0f
-#define MEDIUM_DENSITY_MIN 0.001f
-#define MEDIUM_DENSITY_MAX 99999.0f
-#define PIPE_DIAMETER_MIN 0.1f
-#define PIPE_DIAMETER_MAX 99999.0f
-#define GAS_REF_PRESS_MIN 0.0f
-#define GAS_REF_PRESS_MAX 99999.0f
-#define GAS_REF_TEMP_MIN (-40.0f)
-#define GAS_REF_TEMP_MAX 200.0f
-#define REYNOLDS_K_MIN 0.001f
-#define REYNOLDS_K_MAX 10.000f
-#define TOTAL_FACTOR_MIN 0.001f
-#define TOTAL_FACTOR_MAX 99.999f
-#define PRESET_TOTAL_MIN 0.0f
-#define PRESET_TOTAL_MAX 9999999.0f
-#define FORWARD_TOTAL_MIN 0.0f
-#define FORWARD_TOTAL_MAX 9999999.0f
-#define REVERSE_TOTAL_MIN 0.0f
-#define REVERSE_TOTAL_MAX 9999999.0f
-#define MODBUS_ADDR_MIN ((uint16_t)1)
-#define MODBUS_ADDR_MAX ((uint16_t)247)
-#define OLED_RECOVERY_MIN ((uint16_t)0)   /* 0 = 禁用自愈 */
-#define OLED_RECOVERY_MAX ((uint16_t)600) /* 600 × 100ms = 60s */
-#define CAL_K_MIN 0.5f
-#define CAL_K_MAX 2.0f
-#define CAL_PCT_MIN 0.0f
-#define CAL_PCT_MAX 100.0f
-#define CAL_POINT_COUNT 7
+#define SAMPLE_INTERVAL_MIN_MS  ((uint16_t)100)
+#define SAMPLE_INTERVAL_MAX_MS  ((uint16_t)60000)
+#define DAMPING_TIME_MIN        0.1f
+#define DAMPING_TIME_MAX        100.0f
+#define VALUE_4MA_MIN           (-9999.0f)
+#define VALUE_4MA_MAX           99999.0f
+#define VALUE_20MA_MIN          0.1f
+#define VALUE_20MA_MAX          99999.0f
+#define FREQ_OUTPUT_MIN         0.0f
+#define FREQ_OUTPUT_MAX         10000.0f
+#define MEDIUM_DENSITY_MIN      0.001f
+#define MEDIUM_DENSITY_MAX      99999.0f
+#define PIPE_DIAMETER_MIN       0.1f
+#define PIPE_DIAMETER_MAX       99999.0f
+#define GAS_REF_PRESS_MIN       0.0f
+#define GAS_REF_PRESS_MAX       99999.0f
+#define GAS_REF_TEMP_MIN        (-40.0f)
+#define GAS_REF_TEMP_MAX        200.0f
+#define REYNOLDS_K_MIN          0.001f
+#define REYNOLDS_K_MAX          10.000f
+#define TOTAL_FACTOR_MIN        0.001f
+#define TOTAL_FACTOR_MAX        99.999f
+#define PRESET_TOTAL_MIN        0.0f
+#define PRESET_TOTAL_MAX        9999999.0f
+#define FORWARD_TOTAL_MIN       0.0f
+#define FORWARD_TOTAL_MAX       9999999.0f
+#define REVERSE_TOTAL_MIN       0.0f
+#define REVERSE_TOTAL_MAX       9999999.0f
+#define MODBUS_ADDR_MIN         ((uint16_t)1)
+#define MODBUS_ADDR_MAX         ((uint16_t)247)
+#define OLED_RECOVERY_MIN       ((uint16_t)0)   /* 0 = 禁用自愈 */
+#define OLED_RECOVERY_MAX       ((uint16_t)600) /* 600 × 100ms = 60s */
+#define CAL_K_MIN               0.5f
+#define CAL_K_MAX               2.0f
+#define CAL_PCT_MIN             0.0f
+#define CAL_PCT_MAX             100.0f
+#define CAL_POINT_COUNT         7
 
 /* ===== Flash 页分区（与 bl_common.h 冻结契约一致）===== */
 #define STORE_PAGE1_BASE 0x0800F400u /* Page 61 */
 #define STORE_PAGE2_BASE 0x0800F800u /* Page 62 */
 #define STORE_PAGE3_BASE 0x0800FC00u /* Page 63 */
-#define STORE_PAGE_SIZE 1024u
+#define STORE_PAGE_SIZE  1024u
 
 /* 页内偏移（§7.2 冻结，改动需重新评审）*/
-#define PG_OFF_MAGIC 0x000u
-#define PG_OFF_SEQ 0x004u
-#define PG_OFF_STATE 0x006u /* 低字节；0x07 高字节 = fmt_ver */
+#define PG_OFF_MAGIC    0x000u
+#define PG_OFF_SEQ      0x004u
+#define PG_OFF_STATE    0x006u /* 低字节；0x07 高字节 = fmt_ver */
 #define PG_OFF_DATA_CRC 0x008u
-#define PG_OFF_HDR_CRC 0x00Au
-#define PG_OFF_DATA 0x010u
-#define PG_OFF_SLOT 0x100u
+#define PG_OFF_HDR_CRC  0x00Au
+#define PG_OFF_DATA     0x010u
+#define PG_OFF_SLOT     0x100u
 #define PG_COMMIT_BYTES 0x110u /* 每次提交编程 0x000~0x10F */
 
-#define PG_MAGIC 0x50504731u /* "PPG1" */
+#define PG_MAGIC       0x50504731u /* "PPG1" */
 #define PG_STATE_VALID 0xA5u
-#define PG_FMT_VER 0x01u
-#define SLOT_MAGIC 0x424C4346u /* "BLCF" */
+#define PG_FMT_VER     0x01u
+#define SLOT_MAGIC     0x424C4346u /* "BLCF" */
 
 /* 数据区字段偏移（§7.1 字段核算，全部冻结）*/
-#define D_METER_COEFF 0x010u
-#define D_CAL_ENABLED 0x014u
-#define D_CAL_K 0x018u   /* 7 × f32 */
-#define D_CAL_PCT 0x034u /* 7 × f32 */
-#define D_MEDIUM_COEFF 0x050u
-#define D_CFG_F 0x054u   /* 10 × f32 */
-#define D_CFG_U16 0x07Cu /* 4 × u16 */
-#define D_CFG_U8 0x084u  /* 6 × u8 */
-#define D_PRESET_TOTAL 0x08Au
-#define D_DAC_ZERO 0x08Eu
-#define D_DAC_FULL 0x090u
-#define D_SPAN_4MA 0x092u
-#define D_SPAN_20MA 0x096u
-#define D_FORWARD_TOTAL 0x09Au
+#define D_METER_COEFF      0x010u
+#define D_CAL_ENABLED      0x014u
+#define D_CAL_K            0x018u /* 7 × f32 */
+#define D_CAL_PCT          0x034u /* 7 × f32 */
+#define D_MEDIUM_COEFF     0x050u
+#define D_CFG_F            0x054u /* 10 × f32 */
+#define D_CFG_U16          0x07Cu /* 4 × u16 */
+#define D_CFG_U8           0x084u /* 6 × u8 */
+#define D_PRESET_TOTAL     0x08Au
+#define D_DAC_ZERO         0x08Eu
+#define D_DAC_FULL         0x090u
+#define D_SPAN_4MA         0x092u
+#define D_SPAN_20MA        0x096u
+#define D_FORWARD_TOTAL    0x09Au
 #define D_DISPLAY_ROTATION 0x09Eu /* 新增保留字节；旧镜像 0xFF 按 0° 读取 */
 
 /* ===== 枚举字符串 ===== */
@@ -777,10 +777,10 @@ HAL_StatusTypeDef param_storage_init(void)
 /* 旧参数区事实地址：Page 54~63 @ 0x0800D800（不随新分区调整，仅迁移期只读）*/
 #define LEGACY_AREA_BASE 0x0800D800u
 /* BL 备份页（Page 8，0x08002000）：只读！本模块严禁写入 */
-#define BACKUP_PAGE_BASE 0x08002000u
-#define BACKUP_MAGIC 0x424C4B31u /* "BLK1" */
-#define BACKUP_BLOB_BYTES 244u
-#define BACKUP_PAYLOAD_OFF 0x30u
+#define BACKUP_PAGE_BASE     0x08002000u
+#define BACKUP_MAGIC         0x424C4B31u /* "BLK1" */
+#define BACKUP_BLOB_BYTES    244u
+#define BACKUP_PAYLOAD_OFF   0x30u
 #define BACKUP_PAYLOAD_BYTES 152u
 
 /* 各组在备份块 payload 内的固定偏移（与 Boot/Inc/legacy_param_read.h LG_OFF_* 一致）*/

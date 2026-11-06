@@ -8,28 +8,28 @@
 #endif
 
 #if DISPLAY_ST7789
-#define OLED_WIDTH 240U
+#define OLED_WIDTH  240U
 #define OLED_HEIGHT 240U
 #else
-#define OLED_WIDTH 128U
+#define OLED_WIDTH  128U
 #define OLED_HEIGHT 64U
 #endif
 
-#define OLED_BLACK 0x0000U
-#define OLED_WHITE 0xFFFFU
-#define OLED_RED 0xF800U
-#define OLED_GREEN 0x07E0U
+#define OLED_BLACK  0x0000U
+#define OLED_WHITE  0xFFFFU
+#define OLED_RED    0xF800U
+#define OLED_GREEN  0x07E0U
 #define OLED_YELLOW 0xFFE0U
-#define OLED_CYAN 0x07FFU
-#define OLED_BLUE 0x001FU
+#define OLED_CYAN   0x07FFU
+#define OLED_BLUE   0x001FU
 
 /* 工业黑主题，RGB565（红 5 位、绿 6 位、蓝 5 位）。 */
 #define OLED_ACCENT 0x565BU
-#define OLED_MUTED 0xADD8U
-#define OLED_RULE 0x31C8U
+#define OLED_MUTED  0xADD8U
+#define OLED_RULE   0x31C8U
 #define OLED_SELECT 0x1187U
-#define OLED_OK 0x8EF4U
-#define OLED_ERROR 0xFB8EU
+#define OLED_OK     0x8EF4U
+#define OLED_ERROR  0xFB8EU
 
 typedef enum
 {

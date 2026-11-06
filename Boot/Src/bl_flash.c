@@ -18,7 +18,7 @@ static int s_app_window = 1; /* App 区写窗口（默认开；§7.3 备份失�
  *   页擦除   t_ERASE max 40ms ⇒ 40ms×72MHz/4周期 = 720k 次，
  *           取 2,000,000 次（最保守 4 周期/循环时约 111ms）≈ 2.8 倍余量。*/
 #define BL_FLASH_WAIT_PROGRAM 100000u
-#define BL_FLASH_WAIT_ERASE 2000000u
+#define BL_FLASH_WAIT_ERASE   2000000u
 
 /* ===== 内部辅助 — static ===== */
 

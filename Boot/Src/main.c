@@ -29,7 +29,7 @@ void SystemInit(void)
 /* ===== LED（PB5，§4.1：快闪=升级中近似为长亮、慢闪=等待、长亮=完成）===== */
 
 #define LED_PORT GPIOB
-#define LED_PIN (1u << 5u)
+#define LED_PIN  (1u << 5u)
 
 static void led_init(void)
 {
@@ -53,7 +53,7 @@ static void led_set(int on)
 
 /* ===== PA0 物理恢复模式（§4.7 优先级 5）===== */
 
-#define PA0_MASK (1u << 0u)
+#define PA0_MASK      (1u << 0u)
 #define PA0_PRESSED() ((GPIOA->IDR & PA0_MASK) == 0u) /* 上拉，低=按下 */
 
 static void pa0_init(void)
