@@ -1,0 +1,6 @@
+# newOLED/ 目录禁止 clang-format
+# 原因：lcd.c / lcd_init.c / lcdfont.h / pic.h 为 ST7789 屏幕厂商提供的资源代码，
+#       内含大段字模数据与 Tab 缩进，格式化会打散字模对齐且无维护收益。
+# 备注：该目录两个 .c 文件仍是 GBK 编码，编码统一在 P0-4 处理（与本文件无关）。
+---
+DisableFormat: true

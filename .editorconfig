@@ -1,0 +1,34 @@
+# =============================================================================
+# UMF 固件源码编辑器约定（EditorConfig）
+#
+# 作用：让 VS Code / Visual Studio / CLion 在没有 clang-format 的情况下
+#       也不会写出「Tab 缩进 / UTF-8 乱码 / 行尾空格」这三类问题。
+# 配套：.clang-format（负责排版），本文件负责最基础的字符层约定。
+#
+# 踩过的坑：newOLED/lcd.c、lcd_init.c 曾是 GBK 编码，与 UTF-8 混用后
+#           中文注释被固化成乱码（如 bsp_usart.c:598「否则号?号」）。
+#           见 docs/2026-11-06-firmware-code-review.md §3.5 E14/E15
+# =============================================================================
+
+root = true
+
+[*]
+charset = utf-8                  # 全工程统一 UTF-8（无 BOM，IAR CCEncInput=0 自动识别）
+end_of_line = crlf               # 现有文件均为 CRLF，保持一致；改动会引入全文件 diff
+insert_final_newline = true      # 文件末尾留一个换行，避免 IAR 报 "no newline at end of file"
+trim_trailing_whitespace = true  # 去掉行尾空格（当前仓库有 236 处，见文档 §1.2）
+indent_style = space
+indent_size = 4
+
+[*.{c,h}]
+indent_size = 4
+
+[*.md]
+# Markdown 里行尾两个空格是有语义的（强制换行），不能裁剪
+trim_trailing_whitespace = false
+
+[*.{json,yml,yaml,xml,ewp,eww,ioc}]
+indent_size = 2
+
+[*.py]
+indent_size = 4

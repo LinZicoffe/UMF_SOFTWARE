@@ -1,0 +1,6 @@
+# OLED/ 目录禁止 clang-format
+# 原因：ssd1306.c / ssd1306_fonts.c 来自 afiskon/stm32-ssd1306 第三方库，
+#       资源文件（字库/位图）也在此目录，格式化会破坏字模数据的可读对齐。
+# 注意：该目录当前仅有 ssd1306.* 参与编译（oled.c/oledfont.h 已计划在 P0-2 删除）。
+---
+DisableFormat: true
