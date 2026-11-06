@@ -82,8 +82,19 @@
 
 ### D-1 构建真相源：`EWARM/UMF.ewp`
 
-依据：`STM32CubeIDE/` 工程当前**无法链接**——`BSP/display.c:76` 与 `OLED/oled.c:440` 都定义 `OLED_Init`，
-而 `.project` 把 `../BSP`、`../OLED` 整目录链接进工程（`Debug/` 下同时存在 `display.o` 与 `oled.o`）。
+依据：`STM32CubeIDE/` 与 IAR **编的不是同一份源码**，且当前没有可复现的构建证据。
+
+- `.project` 把 `../BSP`、`../OLED`、`../newOLED` 整目录链接进工程，因此 CubeIDE 会编 `BSP/eeprom.c`
+  （IAR 的 `.ewp` 不含它）；`OLED/oled.c` 因整体包在 `#ifdef OLED_LEGACY_DRIVER`（`oled.c:3`–`481`）里，
+  当前是空翻译单元，不产生符号。**两套工具链的输入集合不同，产物自然不同。**
+- `STM32CubeIDE/Debug/UMF.elf` 为 2026-10-29 的产物，而同目录 `eeprom.o`、`oled.o` 停留在 2026-10-27，
+  属增量构建残留；没有任何记录能证明当前 HEAD 能编过。
+
+> 更正（2026-11-06）：本文档早期版本写"两工程无法链接，因为 `display.c` 与 `oled.c` 都定义 `OLED_Init`"。
+> 实测 `oled.c` 全程被 `#ifdef OLED_LEGACY_DRIVER` 包裹，宏未定义时为**
+
+空文件**，不构成符号冲突。该判断有误，已撤回。
+> 若将来有人定义 `OLED_LEGACY_DRIVER` 想切回旧驱动，`OLED_Init` / `OLED_Clear` 才会真的重复。
 
 由此确立三条硬规则：
 
@@ -94,8 +105,8 @@
 | R3 | 构建必须可脚本化（`iarbuild`），不允许只有"点 IDE"这一种方式 |
 
 `STM32CubeIDE/` 处置：**推荐删除**（`syscalls.c`/`sysmem.c`/`startup_stm32f103c8tx.s`/`*.ld` 只服务 GCC，IAR 一个都不引用）；
-次选移入 `legacy/` 并加 README 声明非构建入口。若保留，须在 `.cproject` 两个配置的 `excluding` 里同步排除
-`BSP/Untitled2.c|BSP/eeprom.c|OLED/oled.c`。
+次选移入 `legacy/` 并加 README 声明非构建入口。若保留，"两套产物一致"只能靠人工纪律维持，
+因为 `.cproject` 与 `.ewp` 的文件清单是两份独立维护的列表。
 
 ---
 
