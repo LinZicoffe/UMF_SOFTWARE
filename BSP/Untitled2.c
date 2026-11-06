@@ -1,1 +1,0 @@
-__root const char g_firmware_build_time[] = __DATE__ " " __TIME__;
