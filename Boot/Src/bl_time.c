@@ -8,8 +8,8 @@
 
 void bl_time_init(void)
 {
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;  /* DWT 访问使能 */
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;             /* 计数器使能 */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; /* DWT 访问使能 */
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;            /* 计数器使能 */
     DWT->CYCCNT = 0;
 }
 
@@ -20,7 +20,7 @@ uint32_t bl_time_now(void)
 
 uint32_t bl_time_elapsed_ms(uint32_t since)
 {
-    uint32_t cycles_per_ms = bl_clock_sysclk_hz() / 1000u;   /* 72 或 8 */
+    uint32_t cycles_per_ms = bl_clock_sysclk_hz() / 1000u; /* 72 或 8 */
     return (bl_time_now() - since) / cycles_per_ms;
 }
 

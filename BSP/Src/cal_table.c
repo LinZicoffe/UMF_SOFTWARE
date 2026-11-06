@@ -14,11 +14,13 @@ float cal_correct_flow(float flow)
 {
     int i;
 
-    if (!param_get_cal_enabled()) return flow;
+    if (!param_get_cal_enabled())
+        return flow;
 
     /* 用量程计算流量百分比 */
     float span = param_get_value_20ma() - param_get_value_4ma();
-    if (span <= 0.0f) return flow;
+    if (span <= 0.0f)
+        return flow;
 
     float pct = (flow - param_get_value_4ma()) / span * 100.0f;
 
@@ -26,19 +28,23 @@ float cal_correct_flow(float flow)
     float pct_lo = param_get_cal_pct(0);
     float pct_hi = param_get_cal_pct(CAL_POINT_COUNT - 1);
 
-    if (pct <= pct_lo) return flow * param_get_cal_k(0);
-    if (pct >= pct_hi) return flow * param_get_cal_k(CAL_POINT_COUNT - 1);
+    if (pct <= pct_lo)
+        return flow * param_get_cal_k(0);
+    if (pct >= pct_hi)
+        return flow * param_get_cal_k(CAL_POINT_COUNT - 1);
 
     /* 查找区间 + 线性插值 */
-    for (i = 0; i < CAL_POINT_COUNT - 1; i++) {
-        float cur_pct  = param_get_cal_pct(i);
+    for (i = 0; i < CAL_POINT_COUNT - 1; i++)
+    {
+        float cur_pct = param_get_cal_pct(i);
         float next_pct = param_get_cal_pct(i + 1);
-        if (pct <= next_pct) {
+        if (pct <= next_pct)
+        {
             float seg = next_pct - cur_pct;
-            if (seg <= 0.0f) return flow;  /* 防御: 非法百分比 */
+            if (seg <= 0.0f)
+                return flow; /* 防御: 非法百分比 */
             float frac = (pct - cur_pct) / seg;
-            float k = param_get_cal_k(i)
-                    + frac * (param_get_cal_k(i + 1) - param_get_cal_k(i));
+            float k = param_get_cal_k(i) + frac * (param_get_cal_k(i + 1) - param_get_cal_k(i));
             return flow * k;
         }
     }

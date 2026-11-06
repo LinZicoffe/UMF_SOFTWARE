@@ -12,18 +12,18 @@
  * 注意陷阱：本仓库 CMSIS 的 FLASH_ACR_LATENCY_x 是"第 x 位"掩码
  * （_2 = 0x4 = 字段值 4，非法保留值），HAL 的 FLASH_LATENCY_2 才映射
  * FLASH_ACR_LATENCY_1（=0x2）。此处按语义显式命名，避免误用。*/
-#define BL_ACR_LATENCY_2WS   FLASH_ACR_LATENCY_1   /* 72MHz 需 2 等待周期 */
-#define BL_ACR_LATENCY_0WS   0u                    /* 8MHz 用 0 等待周期 */
+#define BL_ACR_LATENCY_2WS FLASH_ACR_LATENCY_1 /* 72MHz 需 2 等待周期 */
+#define BL_ACR_LATENCY_0WS 0u                  /* 8MHz 用 0 等待周期 */
 
 /* 有界等待（此时 DWT 尚未启用，用空循环计数兜底）：
  * 等待事件为 HSE 就绪（typ <4ms）/ PLL 锁定（<2ms）/ SYSCLK 切换确认（<1us）。
  * 空循环按复位 HSI 8MHz、最保守 8 周期/循环计：100,000 次 ≈ 100ms，
  * 对最慢事件（HSE 4ms）余量 25 倍。上限刻意压低（而非数百 ms）是为了
  * 暖复位路径下尽快走完 HSI 回退——IWDG 残余预算的兜底见 bl_iwdg 契约。*/
-#define BL_CLOCK_TIMEOUT_LOOPS  100000u
+#define BL_CLOCK_TIMEOUT_LOOPS 100000u
 
-static uint32_t s_sysclk_hz = 8000000u;   /* 缺省 HSI */
-static uint32_t s_pclk1_hz  = 8000000u;
+static uint32_t s_sysclk_hz = 8000000u; /* 缺省 HSI */
+static uint32_t s_pclk1_hz = 8000000u;
 
 static int wait_flag_set(volatile uint32_t *reg, uint32_t mask)
 {
@@ -57,10 +57,9 @@ static int wait_flag_value(volatile uint32_t *reg, uint32_t mask, uint32_t value
 static void fallback_to_hsi(void)
 {
     RCC->CFGR &= ~(RCC_CFGR_HPRE | RCC_CFGR_PPRE1 | RCC_CFGR_PPRE2);
-    FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | BL_ACR_LATENCY_0WS
-               | FLASH_ACR_PRFTBE;
+    FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | BL_ACR_LATENCY_0WS | FLASH_ACR_PRFTBE;
     s_sysclk_hz = 8000000u;
-    s_pclk1_hz  = 8000000u;
+    s_pclk1_hz = 8000000u;
 }
 
 void bl_clock_init(void)
@@ -70,16 +69,15 @@ void bl_clock_init(void)
     if (wait_flag_set(&RCC->CR, RCC_CR_HSERDY))
     {
         /* 72MHz 需 Flash 2 等待周期 + 预取使能（先提延时再升频）*/
-        FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk)
-                   | BL_ACR_LATENCY_2WS | FLASH_ACR_PRFTBE;
+        FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | BL_ACR_LATENCY_2WS | FLASH_ACR_PRFTBE;
 
         /* 总线分频：AHB /1（复位值），APB1 /2，APB2 /1 */
-        RCC->CFGR = (RCC->CFGR & ~(RCC_CFGR_HPRE | RCC_CFGR_PPRE1 | RCC_CFGR_PPRE2))
-                  | RCC_CFGR_PPRE1_DIV2;
+        RCC->CFGR =
+            (RCC->CFGR & ~(RCC_CFGR_HPRE | RCC_CFGR_PPRE1 | RCC_CFGR_PPRE2)) | RCC_CFGR_PPRE1_DIV2;
 
         /* PLL = HSE 不分频 ×9（PLLSRC 位写 1 选 HSE，本头文件无 HSE 别名）*/
-        RCC->CFGR = (RCC->CFGR & ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE | RCC_CFGR_PLLMULL))
-                  | RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE_HSE | RCC_CFGR_PLLMULL9;
+        RCC->CFGR = (RCC->CFGR & ~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE | RCC_CFGR_PLLMULL)) |
+                    RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE_HSE | RCC_CFGR_PLLMULL9;
 
         RCC->CR |= RCC_CR_PLLON;
         if (wait_flag_set(&RCC->CR, RCC_CR_PLLRDY))
@@ -88,8 +86,8 @@ void bl_clock_init(void)
             if (wait_flag_value(&RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SWS_PLL))
             {
                 s_sysclk_hz = 72000000u;
-                s_pclk1_hz  = 36000000u;
-                return;                     /* 72MHz 成功 */
+                s_pclk1_hz = 36000000u;
+                return; /* 72MHz 成功 */
             }
 
             /* SW 切换失败：先把 SW 写回 HSI 并等 SWS 确认，再关 PLL。

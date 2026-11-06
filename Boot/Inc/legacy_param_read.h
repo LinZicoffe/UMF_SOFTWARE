@@ -21,36 +21,36 @@
 
 #include "bl_common.h"
 
-#define LEGACY_GROUP_COUNT    10u
-#define LEGACY_PAYLOAD_BYTES  152u
-#define LEGACY_BLOB_BYTES     244u
+#define LEGACY_GROUP_COUNT 10u
+#define LEGACY_PAYLOAD_BYTES 152u
+#define LEGACY_BLOB_BYTES 244u
 
 /* 各组在 payload 内的固定偏移（字节，按页序连续）：
  * 54:2字 55:3 56:3 57:5 58:4 59:2半字 60:1 61:16 62:1 63:2 = 37字+2半字=152B */
-#define LG_OFF_54   0u
-#define LG_OFF_55   8u
-#define LG_OFF_56   20u
-#define LG_OFF_57   32u
-#define LG_OFF_58   52u
-#define LG_OFF_59   68u    /* 16bit API：2 半字 */
-#define LG_OFF_60   72u
-#define LG_OFF_61   76u
-#define LG_OFF_62   140u
-#define LG_OFF_63   144u
+#define LG_OFF_54 0u
+#define LG_OFF_55 8u
+#define LG_OFF_56 20u
+#define LG_OFF_57 32u
+#define LG_OFF_58 52u
+#define LG_OFF_59 68u /* 16bit API：2 半字 */
+#define LG_OFF_60 72u
+#define LG_OFF_61 76u
+#define LG_OFF_62 140u
+#define LG_OFF_63 144u
 
 typedef struct
 {
-    uint8_t page_id;   /* 54~63 */
-    uint8_t len;       /* 实际使用的记录长度（字数；54/61 含旧代回退）*/
-    uint8_t api16;     /* 0=32bit API，1=16bit API（仅页 59 DAC）*/
-    uint8_t found;     /* 1=页内找到有效记录 */
+    uint8_t page_id; /* 54~63 */
+    uint8_t len;     /* 实际使用的记录长度（字数；54/61 含旧代回退）*/
+    uint8_t api16;   /* 0=32bit API，1=16bit API（仅页 59 DAC）*/
+    uint8_t found;   /* 1=页内找到有效记录 */
 } legacy_group_info_t;
 
 typedef struct
 {
     legacy_group_info_t group[LEGACY_GROUP_COUNT];
-    uint8_t  payload[LEGACY_PAYLOAD_BYTES];  /* 0xFF 预填，仅写入已找到字段 */
-    uint8_t  legacy_fmt_id;                  /* 0=全用新代长度，1=有组回退旧代 */
+    uint8_t payload[LEGACY_PAYLOAD_BYTES]; /* 0xFF 预填，仅写入已找到字段 */
+    uint8_t legacy_fmt_id;                 /* 0=全用新代长度，1=有组回退旧代 */
 } legacy_data_t;
 
 /* 抽取全部 10 页（含 54/61 双代回退）。返回 1=至少一组有效（可构建备份），

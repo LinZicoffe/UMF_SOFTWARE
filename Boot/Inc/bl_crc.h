@@ -24,8 +24,8 @@ typedef struct
 } bl_crc32_t;
 
 /* 流式 CRC32：start → update（可多次，段间保持状态）→ result */
-void     bl_crc32_start(bl_crc32_t *ctx);
-void     bl_crc32_update(bl_crc32_t *ctx, const uint8_t *data, uint32_t len);
+void bl_crc32_start(bl_crc32_t *ctx);
+void bl_crc32_update(bl_crc32_t *ctx, const uint8_t *data, uint32_t len);
 uint32_t bl_crc32_result(const bl_crc32_t *ctx);
 
 /* 一次性便利接口（等价于 start+update+result）*/

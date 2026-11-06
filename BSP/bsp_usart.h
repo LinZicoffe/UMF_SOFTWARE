@@ -20,150 +20,156 @@
 
 typedef struct
 {
-    uint8_t  RX_Flag : 1;           // receive flag
-    uint16_t RX_Size;               // receive length
-    uint8_t  RxBuffer[UART_RX_LEN]; // receive buffer
+    uint8_t RX_Flag : 1;           // receive flag
+    uint16_t RX_Size;              // receive length
+    uint8_t RxBuffer[UART_RX_LEN]; // receive buffer
 } Uart_RecTypeDef;
 
 typedef struct
 {
-    uint8_t  TX_Flag : 1;           // Send data flag
-    uint16_t TX_Size;               // Send data length
-    uint8_t  TxBuffer[UART_TX_LEN]; // Send data buffer
+    uint8_t TX_Flag : 1;           // Send data flag
+    uint16_t TX_Size;              // Send data length
+    uint8_t TxBuffer[UART_TX_LEN]; // Send data buffer
 } Uart_SendTypeDef;
 
 typedef union
 {
     uint8_t str[4];
-    float   num;
+    float num;
 } Uart_SendfloatTypeDef;
 
 #define Uart3_Rx_Cnt 1
 
 /* Private define ----------------------------------------------------------*/
-extern uint8_t          Uart1RxBuffer[UART_RX_LEN]; // 数据处理区域
-extern uint8_t          Uart2RxBuffer[UART_RX_LEN]; // 数据处理区域
-extern Uart_RecTypeDef  Uart1ReceiveType;
-extern Uart_RecTypeDef  Uart2ReceiveType;
+extern uint8_t Uart1RxBuffer[UART_RX_LEN]; // 数据处理区域
+extern uint8_t Uart2RxBuffer[UART_RX_LEN]; // 数据处理区域
+extern Uart_RecTypeDef Uart1ReceiveType;
+extern Uart_RecTypeDef Uart2ReceiveType;
 extern Uart_SendTypeDef Uart1SendDataType;
 extern Uart_SendTypeDef Uart2SendDataType;
-extern uint8_t          FlowClearCmdFlag;         // 累积清零命令
-extern uint8_t          FlowRstCmdFlag;           // 流量模组复位
-extern uint8_t          FlowPassiveReadCmdFlag;
-extern uint8_t          FlowPassiveReadCmdEnable; // TRUE:模组被动发送数据
-extern uint8_t          FlowActiveReadCmdEnable;  // TRUE:模组主动发送数据
-extern uint8_t ModuleState;//module state
-#define InputBufferStartMinAddress 0x0            // MODBUS:03function code input zone
+extern uint8_t FlowClearCmdFlag; // 累积清零命令
+extern uint8_t FlowRstCmdFlag;   // 流量模组复位
+extern uint8_t FlowPassiveReadCmdFlag;
+extern uint8_t FlowPassiveReadCmdEnable; // TRUE:模组被动发送数据
+extern uint8_t FlowActiveReadCmdEnable;  // TRUE:模组主动发送数据
+extern uint8_t ModuleState;              //module state
+#define InputBufferStartMinAddress 0x0   // MODBUS:03function code input zone
 #define InputBufferStartMaxAddress 18
-#define InputBufferLength          10
+#define InputBufferLength 10
 extern Uart_SendfloatTypeDef InputBuffer[10];
-#define FlowRateValue   InputBuffer[0] // 瞬时流量,Modbus address 40001, 固定单位 L/h (BCD 解析已按帧 flag 换算, 不随 40023 Flow Unit 变化)
+/* 瞬时流量, Modbus address 40001, 固定单位 L/h
+ * (BCD 解析已按帧 flag 换算, 不随 40023 Flow Unit 变化) */
+#define FlowRateValue InputBuffer[0]
 #define FlowTemperature InputBuffer[1] // 温度,Modbus address 40003
-#define FlowPressure    InputBuffer[2] // 压力,Modbus address 40005
+#define FlowPressure InputBuffer[2]    // 压力,Modbus address 40005
 
-extern uint64_t Cumulativeflow;  // Modbus 40041, UFL-1A BCD 原始计数值, 固件未 ÷1000; LSB 由帧 byte[8] flag 决定 (0x0a=0.001L, 0x1a=0.001m³)
+/* Modbus 40041, UFL-1A BCD 原始计数值, 固件未 ÷1000;
+ * LSB 由帧 byte[8] flag 决定 (0x0a=0.001L, 0x1a=0.001m³) */
+extern uint64_t Cumulativeflow;
 #define CumulativeflowAddress 40 // MODBUS ADDRESS 4X:40041
 
 /* 运行参数寄存器地址 (寄存器 22~29) */
-#define FlowUnitAddress     22  /* 流量单位 (uint16, enum 0~3) */
-#define TotalUnitAddress    23  /* 累积单位 (uint16, enum 0~3) */
-#define MeterCoeffAddress   24  /* 仪表系数 (float, 2 regs) */
-#define MediumCoeffAddress  26  /* 介质系数 (float, 2 regs) */
-#define SmallSignalAddress  28  /* 小信号切除 (float, 2 regs) */
+#define FlowUnitAddress 22    /* 流量单位 (uint16, enum 0~3) */
+#define TotalUnitAddress 23   /* 累积单位 (uint16, enum 0~3) */
+#define MeterCoeffAddress 24  /* 仪表系数 (float, 2 regs) */
+#define MediumCoeffAddress 26 /* 介质系数 (float, 2 regs) */
+#define SmallSignalAddress 28 /* 小信号切除 (float, 2 regs) */
 
 /* 模拟参数寄存器地址 */
-#define SimSwitchAddress       48  /* 模拟总开关 (uint16, 1 reg) */
-#define SimFlowRateAddress     50  /* 模拟瞬时流量 (float, 2 regs) */
-#define SimTemperatureAddress  52  /* 模拟温度 (float, 2 regs) */
-#define SimCumulativeAddress   54  /* 模拟累积流量 (float, 2 regs) */
+#define SimSwitchAddress 48      /* 模拟总开关 (uint16, 1 reg) */
+#define SimFlowRateAddress 50    /* 模拟瞬时流量 (float, 2 regs) */
+#define SimTemperatureAddress 52 /* 模拟温度 (float, 2 regs) */
+#define SimCumulativeAddress 54  /* 模拟累积流量 (float, 2 regs) */
 
 /* 扩展参数寄存器地址 — 第一批 (只读运行数据, 寄存器 60~68) */
-#define RunStateAddr           60  /* 通信状态 ModuleState (uint16, R) */
-#define FwdTotalAddr           61  /* 正向累积 forward_total (float, 2 regs, R) */
-#define RevTotalAddr           63  /* 反向累积 reverse_total (float, 2 regs, R) */
-#define NetTotalAddr           65  /* 净累积 (float, 2 regs, R) */
-#define DacCurrentAddr         67  /* 实时 4-20mA 电流 (float, 2 regs, R) */
+#define RunStateAddr 60   /* 通信状态 ModuleState (uint16, R) */
+#define FwdTotalAddr 61   /* 正向累积 forward_total (float, 2 regs, R) */
+#define RevTotalAddr 63   /* 反向累积 reverse_total (float, 2 regs, R) */
+#define NetTotalAddr 65   /* 净累积 (float, 2 regs, R) */
+#define DacCurrentAddr 67 /* 实时 4-20mA 电流 (float, 2 regs, R) */
 
 /* 扩展参数寄存器地址 — 第二批 (读写配置参数, 寄存器 69~86) */
-#define StdCondAddr            69  /* 标准工况 std_cond (uint16, R/W) */
-#define FilterTimeAddr         70  /* 一阶低通时间常数 filter_time (float, 2 regs, R/W) */
-#define DampingTimeAddr        72  /* 阻尼时间 damping_time (float, 2 regs, R/W) */
-#define FreqOutputAddr         74  /* 频率输出 freq_output (float, 2 regs, R/W) */
-#define PulseEquivAddr         76  /* 脉冲当量 pulse_equiv (uint16, R/W) */
-#define DensityAddr            77  /* 介质密度 medium_density (float, 2 regs, R/W) */
-#define PipeDiaAddr            79  /* 管径 pipe_diameter (float, 2 regs, R/W) */
-#define GasPressAddr           81  /* 气参压力 gas_ref_press (float, 2 regs, R/W) */
-#define GasTempAddr            83  /* 气参温度 gas_ref_temp (float, 2 regs, R/W) */
-#define ReynoldsAddr           85  /* 雷诺系数 reynolds_k (float, 2 regs, R/W) */
+#define StdCondAddr 69     /* 标准工况 std_cond (uint16, R/W) */
+#define FilterTimeAddr 70  /* 一阶低通时间常数 filter_time (float, 2 regs, R/W) */
+#define DampingTimeAddr 72 /* 阻尼时间 damping_time (float, 2 regs, R/W) */
+#define FreqOutputAddr 74  /* 频率输出 freq_output (float, 2 regs, R/W) */
+#define PulseEquivAddr 76  /* 脉冲当量 pulse_equiv (uint16, R/W) */
+#define DensityAddr 77     /* 介质密度 medium_density (float, 2 regs, R/W) */
+#define PipeDiaAddr 79     /* 管径 pipe_diameter (float, 2 regs, R/W) */
+#define GasPressAddr 81    /* 气参压力 gas_ref_press (float, 2 regs, R/W) */
+#define GasTempAddr 83     /* 气参温度 gas_ref_temp (float, 2 regs, R/W) */
+#define ReynoldsAddr 85    /* 雷诺系数 reynolds_k (float, 2 regs, R/W) */
 
 /* 扩展参数寄存器地址 — 第三批 (系统参数, 寄存器 87~94) */
-#define TotalFactorAddr        87  /* 累积系数 total_factor (float, 2 regs, R/W) */
-#define PresetTotalAddr        89  /* 预设总量 preset_total (float, 2 regs, R/W) */
-#define CommAddrReg            91  /* 通信地址 modbus_addr (uint16, R/W) */
-#define BaudRateReg            92  /* UART 配置 uart_config (uint16, R/W)
-                                    *   bit 2:0 = 波特率索引 (0~5)
-                                    *   bit 4:3 = 校验位 (0=无, 1=奇, 2=偶)
-                                    *   bit 5   = 停止位 (0=1位, 1=2位) */
-#define LanguageReg            93  /* 语言 language (uint16, R/W) */
-#define OledRecoveryAddr       94  /* OLED 抗干扰自愈重初始化间隔 (uint16, R/W)
-                                    *   单位: 100ms; 0=禁用; 默认 50=5s; 最大 600=60s */
+#define TotalFactorAddr 87 /* 累积系数 total_factor (float, 2 regs, R/W) */
+#define PresetTotalAddr 89 /* 预设总量 preset_total (float, 2 regs, R/W) */
+#define CommAddrReg 91     /* 通信地址 modbus_addr (uint16, R/W) */
+/* UART 配置 uart_config (uint16, R/W)
+ *   bit 2:0 = 波特率索引 (0~5)
+ *   bit 4:3 = 校验位 (0=无, 1=奇, 2=偶)
+ *   bit 5   = 停止位 (0=1位, 1=2位) */
+#define BaudRateReg 92
+#define LanguageReg 93 /* 语言 language (uint16, R/W) */
+/* OLED 抗干扰自愈重初始化间隔 (uint16, R/W)
+ *   单位: 100ms; 0=禁用; 默认 50=5s; 最大 600=60s */
+#define OledRecoveryAddr 94
 
 /* 扩展参数寄存器地址 — 第四批 (七点标定, 寄存器 95~123) */
-#define CalEnableAddr          95  /* 标定使能 (uint16, R/W) */
-#define CalK0Addr              96  /* k[0] (float, 2 regs, R/W) */
-#define CalK1Addr              98  /* k[1] (float, 2 regs, R/W) */
-#define CalK2Addr             100  /* k[2] (float, 2 regs, R/W) */
-#define CalK3Addr             102  /* k[3] (float, 2 regs, R/W) */
-#define CalK4Addr             104  /* k[4] (float, 2 regs, R/W) */
-#define CalK5Addr             106  /* k[5] (float, 2 regs, R/W) */
-#define CalK6Addr             108  /* k[6] (float, 2 regs, R/W) */
-#define CalPct0Addr           110  /* 标定点百分比 p[0], 默认 0.0 (float, 2 regs, R/W) */
-#define CalPct1Addr           112  /* p[1], 默认 3.0 */
-#define CalPct2Addr           114  /* p[2], 默认 10.0 */
-#define CalPct3Addr           116  /* p[3], 默认 25.0 */
-#define CalPct4Addr           118  /* p[4], 默认 50.0 */
-#define CalPct5Addr           120  /* p[5], 默认 75.0 */
-#define CalPct6Addr           122  /* p[6], 默认 100.0 */
-#define CalEndAddr            123  /* 标定区结束地址 */
+#define CalEnableAddr 95 /* 标定使能 (uint16, R/W) */
+#define CalK0Addr 96     /* k[0] (float, 2 regs, R/W) */
+#define CalK1Addr 98     /* k[1] (float, 2 regs, R/W) */
+#define CalK2Addr 100    /* k[2] (float, 2 regs, R/W) */
+#define CalK3Addr 102    /* k[3] (float, 2 regs, R/W) */
+#define CalK4Addr 104    /* k[4] (float, 2 regs, R/W) */
+#define CalK5Addr 106    /* k[5] (float, 2 regs, R/W) */
+#define CalK6Addr 108    /* k[6] (float, 2 regs, R/W) */
+#define CalPct0Addr 110  /* 标定点百分比 p[0], 默认 0.0 (float, 2 regs, R/W) */
+#define CalPct1Addr 112  /* p[1], 默认 3.0 */
+#define CalPct2Addr 114  /* p[2], 默认 10.0 */
+#define CalPct3Addr 116  /* p[3], 默认 25.0 */
+#define CalPct4Addr 118  /* p[4], 默认 50.0 */
+#define CalPct5Addr 120  /* p[5], 默认 75.0 */
+#define CalPct6Addr 122  /* p[6], 默认 100.0 */
+#define CalEndAddr 123   /* 标定区结束地址 */
 
 /* 扩展参数寄存器地址 — 第五批 (滤波与采样, 寄存器 124~125) */
-#define FilterWindowCountAddr 124  /* 去极值滑动窗口点数 (uint16, 2~10, R/W) */
-#define SampleIntervalAddr    125  /* UFL-1A 被动采样间隔 (uint16, ms, 100~60000, R/W) */
+#define FilterWindowCountAddr 124 /* 去极值滑动窗口点数 (uint16, 2~10, R/W) */
+#define SampleIntervalAddr 125    /* UFL-1A 被动采样间隔 (uint16, ms, 100~60000, R/W) */
 
 /* IAP / 固件信息寄存器 — 第六批 (Bootloader 接口, PDU 126~130 = 4x 40127~40131)
  * 契约见 UMF_Bootloader_Upgrade_Plan.md §5.3 与 boot_flag.h */
-#define IapBootRequestReg     126  /* FC06 写 0x5AA5 → 置 RAM 邮箱 + 复位进 BL */
-#define IapVersionLoReg       127  /* FC03 固件版本低 16 位 (固件头 app_ver) */
-#define IapVersionHiReg       128  /* FC03 固件版本高 16 位 */
-#define IapFlagMirrorReg      129  /* FC03 启动期邮箱 cmd 回显 (0/1) */
-#define ParamStatusReg        130  /* FC03 PARAM_STATUS: bit0 迁移 bit1 部分 bit2 默认值 */
+#define IapBootRequestReg 126 /* FC06 写 0x5AA5 → 置 RAM 邮箱 + 复位进 BL */
+#define IapVersionLoReg 127   /* FC03 固件版本低 16 位 (固件头 app_ver) */
+#define IapVersionHiReg 128   /* FC03 固件版本高 16 位 */
+#define IapFlagMirrorReg 129  /* FC03 启动期邮箱 cmd 回显 (0/1) */
+#define ParamStatusReg 130    /* FC03 PARAM_STATUS: bit0 迁移 bit1 部分 bit2 默认值 */
 
 /* 扩展参数区范围 */
-#define ExtParamStartAddr      60
-#define ExtParamEndAddr       125
+#define ExtParamStartAddr 60
+#define ExtParamEndAddr 125
 
 extern unsigned char strFlowSumBuf[20];
 extern unsigned char strFlowRateBuf[20];
-extern unsigned char         strFlowRate_2Buf[10];
+extern unsigned char strFlowRate_2Buf[10];
 extern unsigned char strFlowTemBuf[20];
 extern unsigned char strFlowPressBuf[20];
 extern uint8_t Sumunit;
-extern uint8_t       GetCheckSum(uint8_t *ptr, uint8_t len);
-extern void          EnableUart_IT_IDLE(UART_HandleTypeDef *huart, Uart_RecTypeDef *pBuf);
-extern void          UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeDef *hdma_uart_rx);
-extern void          Uart1_Communication(void);
-extern void          Uart2_Communication(void);
-extern void          bsp_usart_set_modbus_addr(uint16_t addr);
-extern void          bsp_usart2_apply_uart_config(uint8_t uart_config);
-extern void          bsp_usart2_check_baud_rate_pending(void);
+extern uint8_t GetCheckSum(uint8_t *ptr, uint8_t len);
+extern void EnableUart_IT_IDLE(UART_HandleTypeDef *huart, Uart_RecTypeDef *pBuf);
+extern void UartReceive_IDLE(UART_HandleTypeDef *huart, DMA_HandleTypeDef *hdma_uart_rx);
+extern void Uart1_Communication(void);
+extern void Uart2_Communication(void);
+extern void bsp_usart_set_modbus_addr(uint16_t addr);
+extern void bsp_usart2_apply_uart_config(uint8_t uart_config);
+extern void bsp_usart2_check_baud_rate_pending(void);
 
 /* 模拟参数 API — 自动选择真实值或模拟值 */
-uint8_t              sim_is_active(void);
-float                effective_flow_rate(void);
+uint8_t sim_is_active(void);
+float effective_flow_rate(void);
 /* 对外瞬时流量上限为 2400 L/h；报警判断仍使用未限幅的 effective_flow_rate()。 */
-float                limit_flow_rate(float flow_lph);
-float                effective_temperature(void);
+float limit_flow_rate(float flow_lph);
+float effective_temperature(void);
 const unsigned char *effective_flow_sum_buf(const unsigned char *real_buf);
-float                convert_flow_rate_from_lph(float flow_lph, uint8_t target_unit, float density_kg_m3);
+float convert_flow_rate_from_lph(float flow_lph, uint8_t target_unit, float density_kg_m3);
 
 #endif

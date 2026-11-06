@@ -15,34 +15,34 @@
 #include <string.h>
 
 /* XModem 控制字符 */
-#define XM_SOH   0x01u
-#define XM_STX   0x02u
-#define XM_EOT   0x04u
-#define XM_ACK   0x06u
-#define XM_NAK   0x15u
-#define XM_CAN   0x18u
-#define XM_C     0x43u
+#define XM_SOH 0x01u
+#define XM_STX 0x02u
+#define XM_EOT 0x04u
+#define XM_ACK 0x06u
+#define XM_NAK 0x15u
+#define XM_CAN 0x18u
+#define XM_C 0x43u
 
-#define PROTO_ESTABLISH_MS   15000u   /* 会话建立窗口（§4.6）*/
-#define PROTO_C_PERIOD_MS    1000u    /* 'C' 发送周期 */
-#define PROTO_NAK_LIMIT      6u       /* 连续 NAK 上限 */
-#define PROTO_POLL_MS        50u      /* 建立窗口内轮询片 */
-#define PROTO_CAN_WAIT_MS    1000u    /* 等 CAN 第二字节 */
+#define PROTO_ESTABLISH_MS 15000u /* 会话建立窗口（§4.6）*/
+#define PROTO_C_PERIOD_MS 1000u   /* 'C' 发送周期 */
+#define PROTO_NAK_LIMIT 6u        /* 连续 NAK 上限 */
+#define PROTO_POLL_MS 50u         /* 建立窗口内轮询片 */
+#define PROTO_CAN_WAIT_MS 1000u   /* 等 CAN 第二字节 */
 
 /* App 区 52 页首触擦除位图（7 字节，页数由 BL_APP_REGION_SIZE 推导）*/
-#define ERASE_BITMAP_BYTES   ((BL_APP_REGION_SIZE / BL_FLASH_PAGE_SIZE + 7u) / 8u)
+#define ERASE_BITMAP_BYTES ((BL_APP_REGION_SIZE / BL_FLASH_PAGE_SIZE + 7u) / 8u)
 
 /* 元数据包 "UMFM"（内存字节 55 4D 46 4D；按 u32 数值比较，D2/D6）*/
-#define META_MAGIC   0x4D464D55u
+#define META_MAGIC 0x4D464D55u
 
 /* 会话状态（每次入口重置）*/
-static uint16_t s_pkt[512];            /* 1024B 包数据缓冲（半字对齐使用）*/
-static uint8_t  s_erased[ERASE_BITMAP_BYTES];
-static uint32_t s_total;               /* 已写入字节数（含填充，D1 口径）*/
-static uint32_t s_meta_size;           /* 元数据包声明的 img_size */
-static uint32_t s_meta_crc;            /* 元数据包声明的 crc32 */
-static uint8_t  s_meta_ok;
-static uint8_t  s_hdr_checked;         /* 静态头字段已从 Flash 校验 */
+static uint16_t s_pkt[512]; /* 1024B 包数据缓冲（半字对齐使用）*/
+static uint8_t s_erased[ERASE_BITMAP_BYTES];
+static uint32_t s_total;     /* 已写入字节数（含填充，D1 口径）*/
+static uint32_t s_meta_size; /* 元数据包声明的 img_size */
+static uint32_t s_meta_crc;  /* 元数据包声明的 crc32 */
+static uint8_t s_meta_ok;
+static uint8_t s_hdr_checked; /* 静态头字段已从 Flash 校验 */
 
 static uint8_t *pkt_bytes(void)
 {
@@ -98,7 +98,7 @@ static bl_status_t store_block(uint32_t offset, const uint16_t *data, uint16_t d
 {
     bl_status_t st;
     uint32_t first = offset / BL_FLASH_PAGE_SIZE;
-    uint32_t last   = (offset + (uint32_t)dlen - 1u) / BL_FLASH_PAGE_SIZE;
+    uint32_t last = (offset + (uint32_t)dlen - 1u) / BL_FLASH_PAGE_SIZE;
     uint32_t p;
 
     for (p = first; p <= last; p++)
@@ -115,25 +115,35 @@ static bl_status_t store_block(uint32_t offset, const uint16_t *data, uint16_t d
         }
     }
 
-    st = bl_flash_program_halfwords(BL_APP_BASE + offset, data,
-                                    (uint16_t)(dlen / 2u));
+    st = bl_flash_program_halfwords(BL_APP_BASE + offset, data, (uint16_t)(dlen / 2u));
     if (st != BL_OK)
     {
         return st;
     }
     bl_iwdg_feed();
-    return bl_flash_verify_halfwords(BL_APP_BASE + offset, data,
-                                     (uint16_t)(dlen / 2u));
+    return bl_flash_verify_halfwords(BL_APP_BASE + offset, data, (uint16_t)(dlen / 2u));
 }
 
 /* 静态头字段（App 源码编入部分）从 Flash 校验：magic/hw_id/bl_min_ver/fmt */
 static int check_static_hdr(void)
 {
     uint32_t base = BL_APP_BASE + 0x200u;
-    if (bl_flash_read32(base) != BL_FW_HDR_MAGIC)          { return 0; }
-    if (bl_flash_read16(base + 4u) != (uint16_t)BL_HW_ID)  { return 0; }
-    if (bl_flash_read16(base + 6u) > (uint16_t)BL_VERSION) { return 0; }
-    if ((uint8_t)bl_flash_read16(base + 0x10u) != 1u)      { return 0; }
+    if (bl_flash_read32(base) != BL_FW_HDR_MAGIC)
+    {
+        return 0;
+    }
+    if (bl_flash_read16(base + 4u) != (uint16_t)BL_HW_ID)
+    {
+        return 0;
+    }
+    if (bl_flash_read16(base + 6u) > (uint16_t)BL_VERSION)
+    {
+        return 0;
+    }
+    if ((uint8_t)bl_flash_read16(base + 0x10u) != 1u)
+    {
+        return 0;
+    }
     return 1;
 }
 
@@ -142,12 +152,21 @@ static int is_metadata_packet(const uint8_t *d, uint16_t dlen)
 {
     uint32_t magic;
     uint16_t i;
-    if (dlen != 128u) { return 0; }
+    if (dlen != 128u)
+    {
+        return 0;
+    }
     memcpy(&magic, d, 4u);
-    if (magic != META_MAGIC) { return 0; }
+    if (magic != META_MAGIC)
+    {
+        return 0;
+    }
     for (i = 12u; i < 128u; i++)
     {
-        if (d[i] != 0xFFu) { return 0; }
+        if (d[i] != 0xFFu)
+        {
+            return 0;
+        }
     }
     return 1;
 }
@@ -159,35 +178,35 @@ static bl_proto_result_t finish_session(void)
 
     if (s_total < BL_FW_IMG_MIN_SIZE)
     {
-        return BL_PROTO_ABORTED;                     /* 镜像过小 */
+        return BL_PROTO_ABORTED; /* 镜像过小 */
     }
     if (!s_meta_ok)
     {
-        return BL_PROTO_REJECTED;                    /* 工具不配套（D4/D6）*/
+        return BL_PROTO_REJECTED; /* 工具不配套（D4/D6）*/
     }
     if (s_meta_size != s_total)
     {
-        return BL_PROTO_ABORTED;                     /* 元数据长度不符 */
+        return BL_PROTO_ABORTED; /* 元数据长度不符 */
     }
     if (!s_hdr_checked && !check_static_hdr())
     {
-        return BL_PROTO_REJECTED;                    /* 静态头字段不符 */
+        return BL_PROTO_REJECTED; /* 静态头字段不符 */
     }
     if (!bl_info_vector_ok())
     {
-        return BL_PROTO_ABORTED;                     /* 向量表非法 */
+        return BL_PROTO_ABORTED; /* 向量表非法 */
     }
 
     crc = bl_info_image_crc32(s_total);
     if (crc != s_meta_crc)
     {
-        bl_usart_putc(XM_NAK);                       /* 整镜像 CRC 不符（§6.3）*/
+        bl_usart_putc(XM_NAK); /* 整镜像 CRC 不符（§6.3）*/
         return BL_PROTO_ABORTED;
     }
 
     if (bl_info_hdr_write_bl_fields(s_total, crc) != BL_OK)
     {
-        return BL_PROTO_ABORTED;                     /* 写头失败（state 未写）*/
+        return BL_PROTO_ABORTED; /* 写头失败（state 未写）*/
     }
     return BL_PROTO_DONE;
 }
@@ -203,10 +222,10 @@ static int handle_packet(uint16_t dlen, bl_proto_result_t *result)
     if (is_metadata_packet(d, dlen))
     {
         memcpy(&s_meta_size, &d[4], 4u);
-        memcpy(&s_meta_crc,  &d[8], 4u);
+        memcpy(&s_meta_crc, &d[8], 4u);
         s_meta_ok = 1u;
         bl_usart_putc(XM_ACK);
-        return 1;                                    /* 继续接收（等 EOT）*/
+        return 1; /* 继续接收（等 EOT）*/
     }
 
     /* 越界检查（§6.3 长度上界）*/
@@ -219,7 +238,7 @@ static int handle_packet(uint16_t dlen, bl_proto_result_t *result)
 
     if (store_block(s_total, s_pkt, dlen) != BL_OK)
     {
-        send_can_cancel();                           /* 擦/写/校验失败（§6.3）*/
+        send_can_cancel(); /* 擦/写/校验失败（§6.3）*/
         *result = BL_PROTO_ABORTED;
         return 0;
     }
@@ -239,24 +258,24 @@ static int handle_packet(uint16_t dlen, bl_proto_result_t *result)
     }
 
     bl_usart_putc(XM_ACK);
-    return 1;                                        /* 继续接收 */
+    return 1; /* 继续接收 */
 }
 
 bl_proto_result_t bl_proto_session(void)
 {
-    uint32_t win_start;                             /* 会话建立窗口起点 */
-    uint32_t last_c;                                /* 上次发 'C' 的时间戳 */
-    uint32_t pkt_tmo = packet_timeout_ms();         /* 单包超时（§4.6）*/
-    uint8_t  expected_blk = 1u;                     /* 下一个期望包号（XModem 1~255 回绕）*/
-    uint8_t  nak_count = 0u;                        /* 连续 NAK 计数（§4.6）*/
-    int      first_byte = -1;                       /* 进入接收循环前已读的首字节（SOH/STX）*/
-    uint32_t i;                                     /* 用于擦除位图清零循环 */
+    uint32_t win_start;                     /* 会话建立窗口起点 */
+    uint32_t last_c;                        /* 上次发 'C' 的时间戳 */
+    uint32_t pkt_tmo = packet_timeout_ms(); /* 单包超时（§4.6）*/
+    uint8_t expected_blk = 1u;              /* 下一个期望包号（XModem 1~255 回绕）*/
+    uint8_t nak_count = 0u;                 /* 连续 NAK 计数（§4.6）*/
+    int first_byte = -1;                    /* 进入接收循环前已读的首字节（SOH/STX）*/
+    uint32_t i;                             /* 用于擦除位图清零循环 */
 
-    s_total = 0u;                                   /* 已写入字节数（含填充，D1 口径）*/
-    s_meta_ok = 0u;                                 /* 元数据包已接收且校验通过（D6）*/
-    s_hdr_checked = 0u;                             /* 静态头字段已校验 */
-    s_meta_size = 0u;                               /* 元数据包声明的 img_size */
-    s_meta_crc = 0u;                                /* 元数据包声明的 crc32 */
+    s_total = 0u;       /* 已写入字节数（含填充，D1 口径）*/
+    s_meta_ok = 0u;     /* 元数据包已接收且校验通过（D6）*/
+    s_hdr_checked = 0u; /* 静态头字段已校验 */
+    s_meta_size = 0u;   /* 元数据包声明的 img_size */
+    s_meta_crc = 0u;    /* 元数据包声明的 crc32 */
     // 清零擦除位图
     for (i = 0u; i < ERASE_BITMAP_BYTES; i++)
     {
@@ -283,12 +302,12 @@ bl_proto_result_t bl_proto_session(void)
         c = bl_usart_getc(PROTO_POLL_MS);
         if (c < 0)
         {
-            continue;                                /* 窗口内继续等 */
+            continue; /* 窗口内继续等 */
         }
         if ((c == XM_SOH) || (c == XM_STX))
         {
             first_byte = c;
-            break;                                   /* 进入接收循环 */
+            break; /* 进入接收循环 */
         }
         /* 其它字节：总线噪声，忽略（§4.6 误判只导致重传，不写错数据）*/
     }
@@ -296,12 +315,12 @@ bl_proto_result_t bl_proto_session(void)
     /* ---- 接收循环 ---- */
     for (;;)
     {
-        uint8_t  hdr2[2];                           /* 包号 + 反码 */
-        uint8_t  crc_b[2];                          /* CRC16 高低字节 */
-        uint16_t crc_recv;                          /* 接收的 CRC16 */
-        uint16_t dlen;                              /* 数据长度（128B 或 1024B）*/
-        int      c = first_byte;                    /* 进入循环前已读的首字节（SOH/STX）*/
-        first_byte = -1;                            /* 仅在循环首轮使用，后续循环每次都从 USART 读新字节 */
+        uint8_t hdr2[2];    /* 包号 + 反码 */
+        uint8_t crc_b[2];   /* CRC16 高低字节 */
+        uint16_t crc_recv;  /* 接收的 CRC16 */
+        uint16_t dlen;      /* 数据长度（128B 或 1024B）*/
+        int c = first_byte; /* 进入循环前已读的首字节（SOH/STX）*/
+        first_byte = -1;    /* 仅在循环首轮使用，后续循环每次都从 USART 读新字节 */
         // 期望包号（XModem 1~255 回绕）与连续 NAK 计数（§4.6）在每轮循环末尾更新
         if (c < 0)
         {
@@ -309,7 +328,7 @@ bl_proto_result_t bl_proto_session(void)
             c = bl_usart_getc(pkt_tmo);
             if (c < 0)
             {
-                if (!nak_or_abort(&nak_count))       /* 单包超时（§4.6）*/
+                if (!nak_or_abort(&nak_count)) /* 单包超时（§4.6）*/
                 {
                     return BL_PROTO_ABORTED;
                 }
@@ -327,21 +346,29 @@ bl_proto_result_t bl_proto_session(void)
             c = bl_usart_getc(PROTO_CAN_WAIT_MS);
             if (c == XM_CAN)
             {
-                return BL_PROTO_ABORTED;             /* CAN×2 显式中止（§8 取消）*/
+                return BL_PROTO_ABORTED; /* CAN×2 显式中止（§8 取消）*/
             }
             if ((c == XM_SOH) || (c == XM_STX))
             {
-                first_byte = c;                      /* 回灌：新包首字节不丢弃 */
+                first_byte = c; /* 回灌：新包首字节不丢弃 */
             }
-            continue;                                /* 单 CAN 视为噪声 */
+            continue; /* 单 CAN 视为噪声 */
         }
-        if (c == XM_SOH)      { dlen = 128u; }
-        else if (c == XM_STX) { dlen = 1024u; }
-        else                  { continue; }           /* 噪声字节，重新等包头 */
+        if (c == XM_SOH)
+        {
+            dlen = 128u;
+        }
+        else if (c == XM_STX)
+        {
+            dlen = 1024u;
+        }
+        else
+        {
+            continue;
+        } /* 噪声字节，重新等包头 */
 
         /* 包头后续：包号 + 反码 + 数据 + CRC16（每字节独立超时）*/
-        if (!read_exact(hdr2, 2u, pkt_tmo) ||
-            !read_exact(pkt_bytes(), dlen, pkt_tmo) ||
+        if (!read_exact(hdr2, 2u, pkt_tmo) || !read_exact(pkt_bytes(), dlen, pkt_tmo) ||
             !read_exact(crc_b, 2u, pkt_tmo))
         {
             if (!nak_or_abort(&nak_count))
@@ -352,16 +379,14 @@ bl_proto_result_t bl_proto_session(void)
         }
 
         crc_recv = (uint16_t)(((uint16_t)crc_b[0] << 8) | crc_b[1]);
-        if ((hdr2[0] != expected_blk) ||
-            ((uint8_t)(~hdr2[0]) != hdr2[1]) ||
+        if ((hdr2[0] != expected_blk) || ((uint8_t)(~hdr2[0]) != hdr2[1]) ||
             (bl_crc16_ccitt_false(pkt_bytes(), dlen) != crc_recv))
         {
             /* 重复包恢复（标准 XModem，S8 审查 #3）：ACK 丢失后工具重发
              * "前一包号"且 CRC 通过 ⇒ 该包已成功处理过，ACK 丢弃解死锁
              * （不写盘；bl_flash 等值跳过仅作兜底）。expected_blk==1 时
              * expected-1=0，包号 0 不会出现，自然不误判。*/
-            if ((hdr2[0] == (uint8_t)(expected_blk - 1u)) &&
-                ((uint8_t)(~hdr2[0]) == hdr2[1]) &&
+            if ((hdr2[0] == (uint8_t)(expected_blk - 1u)) && ((uint8_t)(~hdr2[0]) == hdr2[1]) &&
                 (bl_crc16_ccitt_false(pkt_bytes(), dlen) == crc_recv))
             {
                 bl_usart_putc(XM_ACK);
@@ -383,6 +408,6 @@ bl_proto_result_t bl_proto_session(void)
             }
         }
         nak_count = 0u;
-        expected_blk++;                              /* u8 回绕 255→0→1（XModem 惯例）*/
+        expected_blk++; /* u8 回绕 255→0→1（XModem 惯例）*/
     }
 }
