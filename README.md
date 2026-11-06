@@ -32,30 +32,28 @@ UMF (Ultrasonic Meter Firmware) — 基于 STM32F103C8T6 的超声波流量传�
 
 ### 工具链
 
-双工具链并行（v2.4.1 起），App 产物同规格；Bootloader 仅 IAR 构建。
-
-**IAR EWARM**（主工具链，本仓库在 9.60.4 下开发验证）
+**单一工具链：IAR EWARM**（本仓库在 9.60.4 下开发验证，Bootloader 与 App 均由此构建）
 
 - **App 工程**: `EWARM/UMF.ewp`（工作空间 `EWARM/Project.eww`，含 Bootloader 双工程）
 - **Bootloader 工程**: `EWARM/UMF_Boot.ewp`（独立 ICF `EWARM/UMF_Boot.icf`，页 0~7）
 - **启动文件**: `EWARM/startup_stm32f103xb.s`
 
-**STM32CubeIDE**（v2.4.1 起，arm-none-eabi-gcc，仅覆盖 App）
-
-- **工程**: `STM32CubeIDE/`（`.project`/`.cproject`，启动文件 `Application/User/Startup/startup_stm32f103c8tx.s`）
-- **链接脚本**: `STM32CubeIDE/STM32F103C8TX_FLASH.ld`（FLASH 52KB @0x08002400、RAM 19KB，与 IAR ICF 分区一致）
+> **STM32CubeIDE 工程已于 2026-11-06 移除**（原 `STM32CubeIDE/`，v2.4.1 起的 arm-none-eabi-gcc 备选构建路径）。
+> 原因：`.cproject` 与 `.ewp` 是两份独立维护的文件清单，CubeIDE 整目录链接 `BSP`/`OLED`/`newOLED`，
+> 会编入 IAR 不编的 `eeprom.c`，两套产物并非同一固件；且该工程已无复现记录。
+> 决策与证据见 `docs/2026-11-06-firmware-code-review.md` §2 D-1。
+> 需要恢复时：`git checkout 59491eb -- STM32CubeIDE`（历史完整保留）。
 
 ### 编译步骤
 
 1. **IAR 构建 App**：打开 `EWARM/Project.eww`，选择 UMF 配置，Project → Make (F7)；**构建自动生成 `EWARM/UMF_app.bin`，并额外保存 `EWARM/UMF_app_yyyy-MM-dd-HHmmss.bin`**（时间取自导出时的电脑本地时间，精确到秒；两份内容相同，均由 post-build `ielftool --bin --fill 0xFF` 生成，恒 53,248B，供 485 烧录上位机使用）。Make 若没有需要更新的产物，不会重复导出；需要强制重新生成时使用 Rebuild All。
-2. **STM32CubeIDE 构建 App**（可替代 IAR）：导入 `STM32CubeIDE/` 工程，Build (Release)；post-build `arm-none-eabi-objcopy -O binary --gap-fill 0xFF --pad-to 0x0800F400` 生成同规格升级包 `UMF_app.bin`（输出于构建目录）
-3. **Bootloader 工程**（仅首次部署/BL 变更时）：IAR Make `UMF_Boot.ewp` 后用 SWD 烧录 `UMF_Boot.hex` 到页 0~7
-4. 下载 App 到目标板（SWD 或 485 在线升级，上位机见文末链接）
+2. **Bootloader 工程**（仅首次部署/BL 变更时）：IAR Make `UMF_Boot.ewp` 后用 SWD 烧录 `UMF_Boot.hex` 到页 0~7
+3. 下载 App 到目标板（SWD 或 485 在线升级，上位机见文末链接）
 
 ### 注意事项
 
-- 无 Makefile/CMakeLists.txt，仅通过 IAR IDE 或 STM32CubeIDE 构建
-- **新增 `.c` 文件登记**: IAR 必须手动添加到 `EWARM/UMF.ewp` 中对应 `<group>` 节点；CubeIDE 中 BSP/OLED 为整目录链接（自动编译新文件），Core/Drivers 为逐文件链接，新文件需在 `STM32CubeIDE/.project` 中登记
+- 无 Makefile/CMakeLists.txt，仅通过 IAR IDE 构建
+- **新增 `.c` 文件登记**: 必须手动添加到 `EWARM/UMF.ewp` 中对应 `<group>` 节点（IAR 不会自动发现），否则该文件不会被编译且不报错
 - 编译器宏定义: `USE_HAL_DRIVER`, `STM32F103xB`
 - **屏幕选择**: `BSP/display_config.h` 的 `DISPLAY_ST7789` 设为 `1` 构建 ST7789 固件，设为 `0` 构建 SSD1306 固件；切换后重新构建 App。两者不能在同一固件中运行时切换。
 - **Flash 分区 (v2.4.0)**：页 0~7 BL / 页 8 BL 备份 / 页 9~60 App (0x08002400 起，VTOR=0x2400) / 页 61~63 参数三页轮转——**SWD 下载 App 严禁整片擦除（会抹掉 BL 与参数区），必须按段/按范围擦除**
@@ -107,10 +105,6 @@ UMF_SOFTWARE/
 │   ├── UMF.ewp                   # 工程配置
 │   ├── Project.eww               # 工作空间
 │   └── startup_stm32f103xb.s     # 启动文件
-├── STM32CubeIDE/                  # STM32CubeIDE 工程 (v2.4.1, 仅 App)
-│   ├── .project/.cproject        # 工程配置 (post-build 产出 UMF_app.bin)
-│   ├── STM32F103C8TX_FLASH.ld    # 链接脚本 (FLASH 52KB @0x08002400, RAM 19KB)
-│   └── Application/User/         # GNU 工具链运行时 (启动文件/syscalls/sysmem)
 ├── UMF_HMI_Screen_Design.md      # UMF HMI 界面设计规格书 (S03~S43)
 ├── CMF_HMI_Screen_Design_REF.md  # CMF 科里奥利 HMI 参考设计文档
 ├── CLAUDE.md                      # AI 开发辅助文档

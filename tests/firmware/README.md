@@ -16,11 +16,11 @@ GCC（GNU Compiler Collection，GNU 编译器集合）负责交叉编译；ELF�
 
 | 项目 | 实际证据与配置 |
 |---|---|
-| 芯片 | `UMF.ioc` 的 `Mcu.CPN=STM32F103C8T6`；IAR `.ewp` 与 CubeIDE `.cproject` 均选择 F103C8 |
+| 芯片 | `UMF.ioc` 的 `Mcu.CPN=STM32F103C8T6`；IAR `.ewp` 选择 F103C8 |
 | 核心/指令 | Arm Cortex-M3 / Armv7-M / Thumb-2；72MHz；64KB Flash、20KB SRAM（静态随机存取存储器） |
 | 大小端/浮点 | IAR `GEndianMode=0`；测试 ELF 为小端；Cortex-M3 无 FPU（浮点运算单元），使用软件浮点库 |
-| 正式构建 | IAR `EWARM/Project.eww`；App 也支持 `STM32CubeIDE/.project`。AGENTS 中只列 IAR 8.32 的内容落后于工程，README 已记录 IAR 9.60.4 / CubeIDE 双工具链 |
-| 正式优化 | IAR 配置 `CCOptLevel=3, CCOptStrategy=2`（高等级、偏尺寸）；CubeIDE Debug/Release C 配置均为 `-Os`（尺寸优化） |
+| 正式构建 | IAR `EWARM/Project.eww`（2026-11-06 起唯一工具链；原 `STM32CubeIDE/` 工程已移除）。AGENTS 中只列 IAR 8.32 的内容落后于工程，README 已记录 IAR 9.60.4 |
+| 正式优化 | IAR 配置 `CCOptLevel=3, CCOptStrategy=2`（高等级、偏尺寸）；测试 ELF 使用 `-Os`（尺寸优化） |
 | 宏 | `USE_HAL_DRIVER`、`STM32F103xB`；生产显示选择宏不由本测试改动 |
 | 测试编译 | `-mcpu=cortex-m3 -mthumb -mlittle-endian -mfloat-abi=soft -Os -g3 -ffunction-sections -fdata-sections -fno-builtin`，不启用链接时优化；真实 HAL/CMSIS 头文件 |
 

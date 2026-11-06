@@ -104,9 +104,10 @@
 | R2 | "哪些 `.c` 属于固件" = `.ewp` 的 `<file>` 清单，磁盘上不在清单内的源码视为死文件 |
 | R3 | 构建必须可脚本化（`iarbuild`），不允许只有"点 IDE"这一种方式 |
 
-`STM32CubeIDE/` 处置：**推荐删除**（`syscalls.c`/`sysmem.c`/`startup_stm32f103c8tx.s`/`*.ld` 只服务 GCC，IAR 一个都不引用）；
-次选移入 `legacy/` 并加 README 声明非构建入口。若保留，"两套产物一致"只能靠人工纪律维持，
-因为 `.cproject` 与 `.ewp` 的文件清单是两份独立维护的列表。
+`STM32CubeIDE/` 处置：**已于 2026-11-06 删除**（7 个被跟踪文件，含 `.cproject`、`.project`、GNU 启动文件、`syscalls.c`/`sysmem.c` 与
+`STM32F103C8TX_FLASH.ld`）。这些文件只服务 GCC 工具链，IAR 一个都不引用。
+同步更新：`README.md` 构建章节改为单一工具链，`.gitignore` 删除相关规则，`tests/firmware/README.md` 的"正式构建"行同步。
+需要恢复时：`git checkout 59491eb -- STM32CubeIDE`（历史完整保留；恢复后仍需面对"两份文件清单独立维护"的原问题）。
 
 ---
 
