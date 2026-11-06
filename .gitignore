@@ -80,6 +80,8 @@ outputs/
 /.agents/
 /.claude/agents/
 /.dsh/
+/.dsh_tmp/
+
 /.reversa/
 /_reversa_sdd/
 /docs/superpowers/
