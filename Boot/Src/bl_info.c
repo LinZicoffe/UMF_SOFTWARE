@@ -28,16 +28,16 @@ static uint32_t hdr_read32(uint32_t off)
 }
 
 /* 固件头字段偏移（§4.5 表，全部偶偏移）*/
-#define HDR_OFF_MAGIC 0x00u
-#define HDR_OFF_HW_ID 0x04u
-#define HDR_OFF_BL_MIN 0x06u
-#define HDR_OFF_APP_VER 0x08u
-#define HDR_OFF_BUILD_ID 0x0Cu
-#define HDR_OFF_FMT_VER 0x10u
-#define HDR_OFF_IMG_SIZE 0x14u
-#define HDR_OFF_CRC32 0x18u
+#define HDR_OFF_MAGIC     0x00u
+#define HDR_OFF_HW_ID     0x04u
+#define HDR_OFF_BL_MIN    0x06u
+#define HDR_OFF_APP_VER   0x08u
+#define HDR_OFF_BUILD_ID  0x0Cu
+#define HDR_OFF_FMT_VER   0x10u
+#define HDR_OFF_IMG_SIZE  0x14u
+#define HDR_OFF_CRC32     0x18u
 #define HDR_OFF_HDR_CRC16 0x1Cu
-#define HDR_OFF_STATE 0x1Eu
+#define HDR_OFF_STATE     0x1Eu
 
 /* ===== 固件头：层 1 ===== */
 
@@ -363,11 +363,11 @@ bl_backup_result_t bl_info_backup_ensure(void)
 
 /* 参数页头（§7.2）：magic@0, seq@4, state@6, fmt@7, data_crc16@8,
  * hdr_crc16@0x0A（覆盖 0x00~0x09）；BL 槽 @0x100 */
-#define PG_OFF_MAGIC 0x00u
-#define PG_OFF_SEQ 0x04u
-#define PG_OFF_STATE 0x06u
+#define PG_OFF_MAGIC  0x00u
+#define PG_OFF_SEQ    0x04u
+#define PG_OFF_STATE  0x06u
 #define PG_OFF_HDRCRC 0x0Au
-#define PG_OFF_SLOT 0x100u
+#define PG_OFF_SLOT   0x100u
 
 static int page_header_valid(uint32_t page, uint16_t *seq_out)
 {

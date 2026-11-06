@@ -32,12 +32,16 @@ AllowShortLoopsOnASingleLine: false
 PointerAlignment: Right  # float *p（本工程主流写法，如 const uint8_t *p_in）
 SpaceBeforeParens: ControlStatements
 
-# ---------- 对齐（全部关闭，防止大块重排） ----------
-# 关闭原因：bsp_usart.c:362-424 那种「= 对齐到第 30 列」的写法，改一个变量名
-# 就会导致整块重排，diff 噪声淹没真实改动。统一交给格式化器，禁止手工对齐。
+# ---------- 对齐 ----------
+# 赋值/声明对齐关闭：bsp_usart.c:362-424 那种「= 对齐到第 30 列」的写法，
+# 改一个变量名就会整块重排，diff 噪声淹没真实改动。
+# 宏对齐开启：寄存器地址表（#define XxxAddr 92）按列对齐后更易扫读，
+# 且宏块本身很少改动，重排代价可接受。
+# 取 Consecutive（而非 AcrossEmptyLinesAndComments）：只在连续无空行的宏块内对齐，
+# 空行分隔的语义分组各自独立成表，不会把两张表强行拉到同一列。
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
-AlignConsecutiveMacros: false
+AlignConsecutiveMacros: Consecutive
 AlignEscapedNewlines: DontAlign  # 多行宏的反斜杠保持原样，不重新对齐
 
 # ---------- 注释（嵌入式工程关键） ----------

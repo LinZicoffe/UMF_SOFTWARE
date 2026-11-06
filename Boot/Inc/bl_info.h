@@ -71,7 +71,7 @@ int bl_info_slot_uart_config(uint8_t *uart_config_out);
  *       boot_attempt@0x14, last_verified_build_id@0x18(D3), crc32@0x1C
  *       （crc32 覆盖 0x00~0x1B 共 28B；读方必须校验 magic+反码+CRC32 三者）*/
 
-#define BL_MAILBOX_CMD_NONE 0u
+#define BL_MAILBOX_CMD_NONE    0u
 #define BL_MAILBOX_CMD_UPGRADE 1u
 
 typedef struct

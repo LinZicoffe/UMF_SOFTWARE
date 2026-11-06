@@ -21,13 +21,13 @@
 #define XM_ACK 0x06u
 #define XM_NAK 0x15u
 #define XM_CAN 0x18u
-#define XM_C 0x43u
+#define XM_C   0x43u
 
 #define PROTO_ESTABLISH_MS 15000u /* 会话建立窗口（§4.6）*/
-#define PROTO_C_PERIOD_MS 1000u   /* 'C' 发送周期 */
-#define PROTO_NAK_LIMIT 6u        /* 连续 NAK 上限 */
-#define PROTO_POLL_MS 50u         /* 建立窗口内轮询片 */
-#define PROTO_CAN_WAIT_MS 1000u   /* 等 CAN 第二字节 */
+#define PROTO_C_PERIOD_MS  1000u  /* 'C' 发送周期 */
+#define PROTO_NAK_LIMIT    6u     /* 连续 NAK 上限 */
+#define PROTO_POLL_MS      50u    /* 建立窗口内轮询片 */
+#define PROTO_CAN_WAIT_MS  1000u  /* 等 CAN 第二字节 */
 
 /* App 区 52 页首触擦除位图（7 字节，页数由 BL_APP_REGION_SIZE 推导）*/
 #define ERASE_BITMAP_BYTES ((BL_APP_REGION_SIZE / BL_FLASH_PAGE_SIZE + 7u) / 8u)

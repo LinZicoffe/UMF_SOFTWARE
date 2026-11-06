@@ -21,9 +21,9 @@
 
 #include "bl_common.h"
 
-#define LEGACY_GROUP_COUNT 10u
+#define LEGACY_GROUP_COUNT   10u
 #define LEGACY_PAYLOAD_BYTES 152u
-#define LEGACY_BLOB_BYTES 244u
+#define LEGACY_BLOB_BYTES    244u
 
 /* 各组在 payload 内的固定偏移（字节，按页序连续）：
  * 54:2字 55:3 56:3 57:5 58:4 59:2半字 60:1 61:16 62:1 63:2 = 37字+2半字=152B */

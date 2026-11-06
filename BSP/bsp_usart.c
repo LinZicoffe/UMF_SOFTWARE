@@ -17,10 +17,10 @@
 /* Private define ----------------------------------------------------------*/
 
 /* ── 瞬时流量滤波: 去极值滑动窗口 + 一阶低通 ─────────────── */
-#define FLOW_FILTER_DEFAULT_N 10 /* 默认窗口样本数 */
-#define FLOW_FILTER_MIN_N 2      /* 去掉最大值时至少保留 1 个样本 */
-#define FLOW_FILTER_MAX_N 10     /* 固定数组容量, 避免动态分配 */
-#define FLOW_FILTER_DEFAULT_TAU 1.0f
+#define FLOW_FILTER_DEFAULT_N           10 /* 默认窗口样本数 */
+#define FLOW_FILTER_MIN_N               2  /* 去掉最大值时至少保留 1 个样本 */
+#define FLOW_FILTER_MAX_N               10 /* 固定数组容量, 避免动态分配 */
+#define FLOW_FILTER_DEFAULT_TAU         1.0f
 #define FLOW_FILTER_DEFAULT_INTERVAL_MS 500U
 static float s_flt_window[FLOW_FILTER_MAX_N]; // 滤波器滑动窗口样本
 static uint8_t s_flt_write_index;             // 滤波器滑动窗口写入索引
@@ -126,19 +126,19 @@ static void flow_filter_feed(float sample)
 }
 
 /* ── 常量定义 ─────────────────────────────────────── */
-#define PREAMBLE 0XFE             // 帧头
-#define STARTCMD 0X11             // 开始命令
-#define EOFbyte 0x16              // 结束字节
-#define FLWSetReadCmd 0x5c        // 设置读取命令
-#define FLWSetActiveReadPra 0x00  // 主动读取参数
+#define PREAMBLE             0XFE // 帧头
+#define STARTCMD             0X11 // 开始命令
+#define EOFbyte              0x16 // 结束字节
+#define FLWSetReadCmd        0x5c // 设置读取命令
+#define FLWSetActiveReadPra  0x00 // 主动读取参数
 #define FLWSetPassiveReadPra 0x01 // 被动读取参数
-#define FLWStartReadCmd 0x5b      // 开始读取命令
-#define FLWStartReadLongPra 0xcb  // 长帧读取参数
+#define FLWStartReadCmd      0x5b // 开始读取命令
+#define FLWStartReadLongPra  0xcb // 长帧读取参数
 #define FLWStartReadShortPra 0xfd // 短帧读取参数
-#define FLWClearCmd 0x5a          // 累积清零命令
-#define FLWClearCmdPra 0xfd       // 累积清零命令参数
-#define FLWRstCmd 0x5d            // 流量模组复位命令
-#define FLWRstCmdPra 0xcb         // 流量模组复位命令参数
+#define FLWClearCmd          0x5a // 累积清零命令
+#define FLWClearCmdPra       0xfd // 累积清零命令参数
+#define FLWRstCmd            0x5d // 流量模组复位命令
+#define FLWRstCmdPra         0xcb // 流量模组复位命令参数
 /* Private variables ---------------------------------------------------------*/
 Uart_RecTypeDef Uart1ReceiveType;
 Uart_RecTypeDef Uart2ReceiveType;
@@ -205,19 +205,19 @@ static Uart_SendfloatTypeDef s_preset_total_buf; // 预设累积流量
 /* 标定参数 — FC06 分次写入缓冲 */
 static Uart_SendfloatTypeDef s_cal_k_buf[7];
 static Uart_SendfloatTypeDef s_cal_pct_buf[7];
-#define FlowMeterReadDataCommand 0x03        // 读取1或者多字节寄存器数据
-#define FlowMeterWriteSingleDataCommand 0x06 // 写1字寄存器数据
-#define FlowMeterWriteMultiDataCommand 0x10  // 写多字寄存器数据
-#define FlowRateAddress 0x0000               // 流量计瞬时流量地址
-#define CumulativeFlowAddress 0x0002         // 累积流量
-#define FlowMeterPressAddress 0x0005         // 流量计压力地址
-#define FlowMeterTempAddress 0x000c          // 流量计温度地址
-#define SetValueFlowAddress 0xA0A0           // 控制阀流量设定数值
-#define ValveConOpenAddress 0xA0A1           // 阀开地址
-#define ValveConCloseAddress 0xA0A2          // 阀关地址
-#define ValveConCommand 0x7410               // 阀控制命令
-uint8_t ModuleState;                         // 模组状态
-uint32_t ModuleRecTimes;                     // 模组接收次数
+#define FlowMeterReadDataCommand        0x03   // 读取1或者多字节寄存器数据
+#define FlowMeterWriteSingleDataCommand 0x06   // 写1字寄存器数据
+#define FlowMeterWriteMultiDataCommand  0x10   // 写多字寄存器数据
+#define FlowRateAddress                 0x0000 // 流量计瞬时流量地址
+#define CumulativeFlowAddress           0x0002 // 累积流量
+#define FlowMeterPressAddress           0x0005 // 流量计压力地址
+#define FlowMeterTempAddress            0x000c // 流量计温度地址
+#define SetValueFlowAddress             0xA0A0 // 控制阀流量设定数值
+#define ValveConOpenAddress             0xA0A1 // 阀开地址
+#define ValveConCloseAddress            0xA0A2 // 阀关地址
+#define ValveConCommand                 0x7410 // 阀控制命令
+uint8_t ModuleState;                           // 模组状态
+uint32_t ModuleRecTimes;                       // 模组接收次数
 /* Private function prototypes -----------------------------------------------*/
 void Uart1_Communication(void);
 void Uart2_Communication(void);

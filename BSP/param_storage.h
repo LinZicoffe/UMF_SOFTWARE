@@ -314,7 +314,7 @@ HAL_StatusTypeDef param_flush(void); /* 无脏数据时立即返回 HAL_OK */
 
 /* ===== 迁移/存储状态 (Modbus 40131 PARAM_STATUS 回显) ===== */
 #define PARAM_STATUS_MIGRATED 0x01u /* bit0: 新格式直接载入（或迁移完整）*/
-#define PARAM_STATUS_PARTIAL 0x02u  /* bit1: 部分迁移（存在缺失字段）*/
+#define PARAM_STATUS_PARTIAL  0x02u /* bit1: 部分迁移（存在缺失字段）*/
 #define PARAM_STATUS_DEFAULTS 0x04u /* bit2: 含默认值字段 */
 uint8_t param_get_status(void);
 

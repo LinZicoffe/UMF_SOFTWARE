@@ -80,11 +80,11 @@ typedef enum
 } screen_t;
 
 /* ===== 导航栈帧 ===== */
-#define NAV_STACK_DEPTH 5
-#define COEFF_DIGIT_COUNT 5
+#define NAV_STACK_DEPTH           5
+#define COEFF_DIGIT_COUNT         5
 #define PASSWORD_ERROR_DISPLAY_MS 2000U
-#define OPERATOR_COEFF_MIN 0.800f
-#define OPERATOR_COEFF_MAX 1.200f
+#define OPERATOR_COEFF_MIN        0.800f
+#define OPERATOR_COEFF_MAX        1.200f
 
 typedef enum
 {

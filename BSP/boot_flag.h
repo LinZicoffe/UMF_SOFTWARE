@@ -12,10 +12,10 @@
 #include <stdint.h>
 
 /* ===== 固件头（32 B @ App+0x200，静态字段；0x14~0x1F 为 BL 写入区）===== */
-#define BOOT_FW_HDR_MAGIC 0x554D4648u /* "UMFH"，u32 小端（D2 口径）*/
-#define BOOT_FW_HDR_HW_ID 0x0103u     /* STM32F103C8 */
-#define BOOT_FW_HDR_BL_MIN_VER 1u     /* 最低 BL 版本 */
-#define BOOT_FW_HDR_FMT_VER 1u        /* 固件头格式版本 */
+#define BOOT_FW_HDR_MAGIC      0x554D4648u /* "UMFH"，u32 小端（D2 口径）*/
+#define BOOT_FW_HDR_HW_ID      0x0103u     /* STM32F103C8 */
+#define BOOT_FW_HDR_BL_MIN_VER 1u          /* 最低 BL 版本 */
+#define BOOT_FW_HDR_FMT_VER    1u          /* 固件头格式版本 */
 
 typedef struct
 {
@@ -33,9 +33,9 @@ typedef struct
 extern const app_fw_header_t g_app_fw_header;
 
 /* ===== RAM 共享邮箱（32 B @ 0x20004C00，暖复位保持）===== */
-#define BOOT_MAILBOX_BASE 0x20004C00u
-#define BOOT_MAILBOX_MAGIC 0x424C4F54u /* "BLOT" */
-#define BOOT_MAILBOX_CMD_NONE 0u
+#define BOOT_MAILBOX_BASE        0x20004C00u
+#define BOOT_MAILBOX_MAGIC       0x424C4F54u /* "BLOT" */
+#define BOOT_MAILBOX_CMD_NONE    0u
 #define BOOT_MAILBOX_CMD_UPGRADE 1u
 
 typedef struct

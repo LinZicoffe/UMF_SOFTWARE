@@ -26,14 +26,14 @@
 #define BL_FLASH_PAGE_SIZE 1024u /* F103xB 页大小 1KB */
 
 #define BL_REGION_BASE 0x08000000u /* 页 0~7  Bootloader 8,192 B */
-#define BL_REGION_END 0x08001FFFu
+#define BL_REGION_END  0x08001FFFu
 
 #define BL_BACKUP_PAGE_BASE 0x08002000u /* 页 8   旧参数备份页（仅 BL，备份未就绪时可写）*/
-#define BL_BACKUP_PAGE_END 0x080023FFu
+#define BL_BACKUP_PAGE_END  0x080023FFu
 
-#define BL_APP_BASE 0x08002400u /* 页 9~60 Application 53,248 B */
-#define BL_APP_END 0x0800F3FFu
-#define BL_APP_LIMIT 0x0800F400u /* 开区间上界 */
+#define BL_APP_BASE        0x08002400u /* 页 9~60 Application 53,248 B */
+#define BL_APP_END         0x0800F3FFu
+#define BL_APP_LIMIT       0x0800F400u /* 开区间上界 */
 #define BL_APP_REGION_SIZE 53248u
 
 #define BL_PARAM_PAGE1_BASE 0x0800F400u /* 页 61 参数存储（3 页轮转）*/
@@ -41,17 +41,17 @@
 #define BL_PARAM_PAGE3_BASE 0x0800FC00u /* 页 63 */
 
 /* 固件头：App+0x200，与向量表（236 B）同页不重叠（v3.2 §4.5）*/
-#define BL_FW_HDR_OFFSET 0x0200u
-#define BL_FW_HDR_ADDR (BL_APP_BASE + BL_FW_HDR_OFFSET)
-#define BL_FW_HDR_SIZE 32u
+#define BL_FW_HDR_OFFSET   0x0200u
+#define BL_FW_HDR_ADDR     (BL_APP_BASE + BL_FW_HDR_OFFSET)
+#define BL_FW_HDR_SIZE     32u
 #define BL_FW_IMG_MIN_SIZE 0x220u /* 必须保证头区 0x200~0x21F 落在镜像内 */
 #define BL_FW_IMG_MAX_SIZE BL_APP_REGION_SIZE
 
 /* RAM 邮箱（v3.2 §5.2）：位于两工程链接区之外，暖复位保持、冷启动无定义 */
 #define BL_MAILBOX_BASE 0x20004C00u
 #define BL_MAILBOX_SIZE 512u
-#define BL_RAM_BASE 0x20000000u
-#define BL_RAM_LIMIT 0x20004C00u /* 跳转校验：App 初始 SP 上界 */
+#define BL_RAM_BASE     0x20000000u
+#define BL_RAM_LIMIT    0x20004C00u /* 跳转校验：App 初始 SP 上界 */
 
 /* ===== 状态码（模块间统一返回值）===== */
 typedef enum
@@ -69,25 +69,25 @@ typedef enum
 } bl_status_t;
 
 /* ===== 魔数（D2：一律按 u32 小端数值比较，v3.2 附录 B）===== */
-#define BL_FW_HDR_MAGIC 0x554D4648u  /* "UMFH" 固件头（内存字节序为 "HFMU"）*/
-#define BL_PAGE_MAGIC 0x50504731u    /* "PPG1" 参数页头 */
-#define BL_SLOT_MAGIC 0x424C4346u    /* "BLCF" BL 通信配置槽 */
+#define BL_FW_HDR_MAGIC  0x554D4648u /* "UMFH" 固件头（内存字节序为 "HFMU"）*/
+#define BL_PAGE_MAGIC    0x50504731u /* "PPG1" 参数页头 */
+#define BL_SLOT_MAGIC    0x424C4346u /* "BLCF" BL 通信配置槽 */
 #define BL_MAILBOX_MAGIC 0x424C4F54u /* "BLOT" RAM 邮箱 */
-#define BL_BACKUP_MAGIC 0x424C4B31u  /* "BLK1" 旧参数备份块 */
+#define BL_BACKUP_MAGIC  0x424C4B31u /* "BLK1" 旧参数备份块 */
 
 /* 固件头有效性标记（最后写入，v3.2 §4.5 规则 1）*/
 #define BL_FW_STATE_VALID 0xA5u
 
 /* ===== BL 版本标识 ===== */
-#define BL_VERSION 1u    /* 固件头 bl_min_ver 比较基准 */
-#define BL_HW_ID 0x0103u /* STM32F103C8 */
-#define BL_PROTO_VER 1u  /* XModem 变体协议版本（上位机握手参考）*/
+#define BL_VERSION   1u      /* 固件头 bl_min_ver 比较基准 */
+#define BL_HW_ID     0x0103u /* STM32F103C8 */
+#define BL_PROTO_VER 1u      /* XModem 变体协议版本（上位机握手参考）*/
 
 /* ===== uart_config 编解码（与 App param_storage.h:73-81 位域语义完全一致）=====
  *   bit[2:0] = 波特率索引；bit[4:3] = 校验；bit[5] = 停止位；bit[7:6] = 保留 0 */
-#define BL_UART_BAUD_COUNT 6u
+#define BL_UART_BAUD_COUNT   6u
 #define BL_UART_PARITY_COUNT 3u
-#define BL_UART_STOP_COUNT 2u
+#define BL_UART_STOP_COUNT   2u
 
 static inline uint8_t bl_uart_cfg_baud(uint8_t cfg)
 {
