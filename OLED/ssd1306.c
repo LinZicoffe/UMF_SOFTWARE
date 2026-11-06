@@ -695,6 +695,6 @@ void ssd1306_SetDisplayOn(const uint8_t on) {
     ssd1306_WriteCommand(value);
 }
 
-uint8_t ssd1306_GetDisplayOn() {
+uint8_t ssd1306_GetDisplayOn(void) {
     return SSD1306.DisplayOn;
 }
