@@ -18,6 +18,7 @@
 #include "main.h"
 #include "ftoa.h"
 #include "mystring.h"
+#include "app_fw_version.h"
 #include <string.h>
 
 /* ===== 模式枚举 ===== */
@@ -520,6 +521,27 @@ static void handle_confirm(key_event_t evt);
 /* 语言枚举字符串 - 保留单选项以兼容菜单 SCR_LANGUAGE 屏幕 */
 static const char * const s_language_str[LANG_COUNT] = { "English" };
 
+/* 固件版本文本：app_fw_version.h 的 APP_FW_VERSION 是唯一来源。
+ * 设备信息屏曾硬编码版本串，与 .fw_header 不一致。 */
+static void fw_version_text(char *buf, size_t buf_len)
+{
+    uint32_t ver = APP_FW_VERSION;
+
+    if (buf_len < 16U) {
+        buf[0] = '\0';
+        return;
+    }
+    buf[0] = 'F';
+    buf[1] = 'W';
+    buf[2] = ':';
+    buf[3] = 'v';
+    Int2String((int)((ver >> 16) & 0xFFU), &buf[4]);
+    strcat(buf, ".");
+    Int2String((int)((ver >> 8) & 0xFFU), buf + strlen(buf));
+    strcat(buf, ".");
+    Int2String((int)(ver & 0xFFU), buf + strlen(buf));
+}
+
 #if DISPLAY_ST7789
 
 #define LCD_MENU_ROWS 5U
@@ -772,7 +794,8 @@ static void render_readonly(nav_frame_t *f)
         strcpy(buf, "Baud: ");
         strncat(buf, param_get_baud_rate_strings()[param_get_baud_rate()], sizeof(buf) - 7U);
         OLED_DrawText(14, 119, buf, OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
-        OLED_DrawText(14, 151, "FW:v1.0.0", OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
+        fw_version_text(buf, sizeof(buf));
+        OLED_DrawText(14, 151, buf, OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
     } else {
         ftoa(load_readonly_val(f->screen_id), 1, buf, sizeof(buf));
         lcd_center(91, buf, OLED_FONT_LARGE, OLED_WHITE);
@@ -1130,7 +1153,8 @@ static void render_readonly(nav_frame_t *f)
         }
 
         OLED_SetCursor(0, 44);
-        OLED_WriteString("FW:v1.0.0", OLED_FONT_MEDIUM, OLED_WHITE);
+        fw_version_text(buf, sizeof(buf));
+        OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
     } else {
         const char *unit_str = param_get_total_unit_str(param_get_total_unit());
         uint8_t x_start;
