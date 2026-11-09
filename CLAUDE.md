@@ -43,7 +43,7 @@ USART1 (DMA + IDLE中断) ← UFL-1A 超声波流量模组
 
 1. **按键/菜单处理** — `key_get_event()` → `menu_process()` 分发到菜单或运行显示翻页
 2. **运行显示刷新** — 200ms 周期 (`DisplayTimeBase >= 20`)，组装 `run_display_input_t` → `run_display_render()` → `ssd1306_UpdateScreen()`
-3. **IWDG 看门狗刷新** — 重载值 999，约 1 秒超时
+3. **IWDG 看门狗刷新** — 主循环每轮喂狗一次；Prescaler 64 + Reload 624 ≈ 1 秒（LSI 40kHz 标称，30–60kHz 时 0.67–1.33 秒）；配置由 CubeMX / `UMF.ioc` 生成，不要在代码里手写 PR/RLR 覆盖
 4. **UART1/UART2 通信处理**
 5. **DAC PWM 输出** — `PWMConfig()` 配置 TIM1/TIM4
 6. **DAC 线性换算** — 仪表系数×介质系数×流量 → `ConvertFunc()` → 小信号切除判定

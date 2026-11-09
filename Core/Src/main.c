@@ -107,15 +107,6 @@ int main(void)
      * CSTACK 上界断言 + 读取启动期邮箱快照（40130 回显源）。*/
     boot_flag_init();
 
-    /* BL 跳转后 IWDG 仍在运行（无法停止，仅复位可关）：先喂狗消除 BL 残余
-     * 计数的立即复位风险，随即放宽到 ~1s（前置清单 5：Prescaler 64 + 624
-     * → 40kHz/64=625Hz，625 计数=1.0s），覆盖参数迁移（含页擦 20~40ms×n）
-     * 与 OLED 等长初始化路径。*/
-    IWDG->KR = 0xAAAAu;             /* 喂狗 */
-    IWDG->KR = 0x5555u;             /* 允许写 PR/RLR */
-    IWDG->PR = IWDG_PRESCALER_64;
-    IWDG->RLR = 624u;
-    IWDG->KR = 0xAAAAu;             /* 以新值立即重载 */
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -160,7 +151,6 @@ int main(void)
     EnableUart_IT_IDLE(&huart2, &Uart2ReceiveType);
     FlowPassiveReadCmdEnable = 1;
     run_display_init(NULL);  /* NULL = 使用默认配置 (200ms 刷新) */
-    MX_IWDG_Init();
     /* §5.4 启动序列收尾：参数迁移已确认完成（param_storage_init 返回），
      * 清除邮箱 cmd 并清零 G3 计数。此后发生的复位（看门狗/断电）由 BL
      * 按 App 有效性与 G3 重新判定，不会误入升级模式。*/
