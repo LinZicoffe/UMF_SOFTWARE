@@ -564,12 +564,6 @@ static void page_image_decode(void)
                                    FORWARD_TOTAL_MIN, FORWARD_TOTAL_MAX);
 }
 
-/* 看门狗喂狗（提交期间 Flash 擦写可达数十 ms，且 IWDG 可能带 BL 残余计数在跑）*/
-static void feed_iwdg(void)
-{
-    ((IWDG_TypeDef *)IWDG_BASE)->KR = 0xAAAAu;
-}
-
 /* 守卫：目标地址必须是 3 个参数页之一的页基址（T-35，防误擦代码区）*/
 static int store_page_guard(uint32_t base)
 {
@@ -595,12 +589,10 @@ static HAL_StatusTypeDef param_commit(void)
     HAL_FLASH_Unlock();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_BSY | FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPERR);
 
-    feed_iwdg();
     ei.TypeErase   = FLASH_TYPEERASE_PAGES;
     ei.PageAddress = target;
     ei.NbPages     = 1;
     st = HAL_FLASHEx_Erase(&ei, &page_error);
-    feed_iwdg();
     if (st != HAL_OK) { HAL_FLASH_Lock(); return st; }
 
     for (i = 0; i < PG_COMMIT_BYTES; i += 2u)
@@ -609,7 +601,6 @@ static HAL_StatusTypeDef param_commit(void)
         memcpy(&w, &s_page_img[i], 2u);
         st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, target + i, w);
         if (st != HAL_OK) { HAL_FLASH_Lock(); return st; }
-        if ((i & 0x3Fu) == 0u) { feed_iwdg(); }
     }
     HAL_FLASH_Lock();
 

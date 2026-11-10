@@ -165,6 +165,10 @@ int main(void)
      * 清除邮箱 cmd 并清零 G3 计数。此后发生的复位（看门狗/断电）由 BL
      * 按 App 有效性与 G3 重新判定，不会误入升级模式。*/
     boot_mailbox_clear();
+
+    /* 看门狗守卫初始化：使能 DWT 周期计数，进入主循环后由 iwdg_guard_feed()
+     * 统一判定是否刷新 IWDG（全部任务完成 + TIM3 tick 活性）。*/
+    iwdg_guard_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -177,20 +181,28 @@ int main(void)
 
         /* 按键事件 + 菜单处理 */
         app_key_menu_task();
+        iwdg_guard_task(IWDG_TASK_KEY);
 
         /* 屏幕抗干扰自愈 */
         app_display_recovery_task();
+        iwdg_guard_task(IWDG_TASK_RECOVERY);
 
         /* 运行显示刷新 (200ms) */
         app_display_task();
+        iwdg_guard_task(IWDG_TASK_DISPLAY);
 
-        /* 原有逻辑 */
-        HAL_IWDG_Refresh(&hiwdg);
+        /* 流量模组 + Modbus 通信 */
         Uart1_Communication();
+        iwdg_guard_task(IWDG_TASK_UART1);
         Uart2_Communication();
+        iwdg_guard_task(IWDG_TASK_UART2);
 
         /* 输出处理 (先计算，再输出 PWM) */
         app_output_task();
+        iwdg_guard_task(IWDG_TASK_OUTPUT);
+
+        /* 全部任务完成且 TIM3 tick 活性正常才喂狗（驱动内部不再喂狗）*/
+        iwdg_guard_feed(DisplayTimeBase);
     }
   /* USER CODE END 3 */
 }
