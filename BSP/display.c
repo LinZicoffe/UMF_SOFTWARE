@@ -125,12 +125,8 @@ void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint
     }
     LCD_Address_Set(x1, y1, x2, y2);
     LCD_StreamBegin();
-    for (y = y1; y <= y2; y++)
-    {
-        for (x = x1; x <= x2; x++)
-            stream_color(color);
-        /* 大面积填充可能超过看门狗周期。 */
-        IWDG->KR = 0xAAAAU;
+    for (y = y1; y <= y2; y++) {
+        for (x = x1; x <= x2; x++) stream_color(color);
     }
     LCD_StreamEnd();
 }
@@ -265,7 +261,6 @@ void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text, uint16_t previo
                 stream_color(new_pixels[pixel]);
             LCD_StreamEnd();
         }
-        IWDG->KR = 0xAAAAU;
     }
 }
 
@@ -320,7 +315,6 @@ void OLED_RenderFrame(void (*render)(const void *context), const void *context)
         for (row = 0; row < LCD_FRAME_ROWS; row++)
             for (col = 0; col < OLED_WIDTH; col++)
                 stream_color(s_frame_pixels[row][col]);
-        IWDG->KR = 0xAAAAU;
     }
     s_frame_active = 0U;
     LCD_StreamEnd();
