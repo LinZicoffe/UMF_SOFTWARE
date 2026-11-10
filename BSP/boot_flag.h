@@ -12,42 +12,42 @@
 #include <stdint.h>
 
 /* ===== 固件头（32 B @ App+0x200，静态字段；0x14~0x1F 为 BL 写入区）===== */
-#define BOOT_FW_HDR_MAGIC      0x554D4648u  /* "UMFH"，u32 小端（D2 口径）*/
-#define BOOT_FW_HDR_HW_ID      0x0103u      /* STM32F103C8 */
-#define BOOT_FW_HDR_BL_MIN_VER 1u           /* 最低 BL 版本 */
-#define BOOT_FW_HDR_FMT_VER    1u           /* 固件头格式版本 */
+#define BOOT_FW_HDR_MAGIC      0x554D4648u /* "UMFH"，u32 小端（D2 口径）*/
+#define BOOT_FW_HDR_HW_ID      0x0103u     /* STM32F103C8 */
+#define BOOT_FW_HDR_BL_MIN_VER 1u          /* 最低 BL 版本 */
+#define BOOT_FW_HDR_FMT_VER    1u          /* 固件头格式版本 */
 
 typedef struct
 {
-    uint32_t magic;        /* 0x00 */
-    uint16_t hw_id;        /* 0x04 */
-    uint16_t bl_min_ver;   /* 0x06 */
-    uint32_t app_ver;      /* 0x08 (major<<16|minor<<8|patch) */
-    uint32_t build_id;     /* 0x0C */
-    uint8_t  fmt_ver;      /* 0x10 */
-    uint8_t  rsvd0[3];     /* 0x11..0x13 固定 0xFF（上位机预检要求）*/
-    uint8_t  bl_area[12];  /* 0x14..0x1F BL 写入区：img_size/crc32/hdr_crc16/state，固定 0xFF */
+    uint32_t magic;      /* 0x00 */
+    uint16_t hw_id;      /* 0x04 */
+    uint16_t bl_min_ver; /* 0x06 */
+    uint32_t app_ver;    /* 0x08 (major<<16|minor<<8|patch) */
+    uint32_t build_id;   /* 0x0C */
+    uint8_t fmt_ver;     /* 0x10 */
+    uint8_t rsvd0[3];    /* 0x11..0x13 固定 0xFF（上位机预检要求）*/
+    uint8_t bl_area[12]; /* 0x14..0x1F BL 写入区：img_size/crc32/hdr_crc16/state，固定 0xFF */
 } app_fw_header_t;
 
 /* .fw_header 段实体（boot_flag.c 定义，链接器固定放 0x08002600）*/
 extern const app_fw_header_t g_app_fw_header;
 
 /* ===== RAM 共享邮箱（32 B @ 0x20004C00，暖复位保持）===== */
-#define BOOT_MAILBOX_BASE      0x20004C00u
-#define BOOT_MAILBOX_MAGIC     0x424C4F54u  /* "BLOT" */
-#define BOOT_MAILBOX_CMD_NONE     0u
-#define BOOT_MAILBOX_CMD_UPGRADE  1u
+#define BOOT_MAILBOX_BASE        0x20004C00u
+#define BOOT_MAILBOX_MAGIC       0x424C4F54u /* "BLOT" */
+#define BOOT_MAILBOX_CMD_NONE    0u
+#define BOOT_MAILBOX_CMD_UPGRADE 1u
 
 typedef struct
 {
-    uint32_t magic;                   /* 0x00 */
-    uint32_t magic_inv;               /* 0x04 */
-    uint32_t seq;                     /* 0x08 */
-    uint32_t cmd;                     /* 0x0C */
-    uint32_t uart_config;             /* 0x10 低 8 位有效 */
-    uint32_t boot_attempt;            /* 0x14 G3 启动计数 */
-    uint32_t last_verified_build_id;  /* 0x18 D3 */
-    uint32_t crc32;                   /* 0x1C 覆盖 0x00~0x1B（28 B）*/
+    uint32_t magic;                  /* 0x00 */
+    uint32_t magic_inv;              /* 0x04 */
+    uint32_t seq;                    /* 0x08 */
+    uint32_t cmd;                    /* 0x0C */
+    uint32_t uart_config;            /* 0x10 低 8 位有效 */
+    uint32_t boot_attempt;           /* 0x14 G3 启动计数 */
+    uint32_t last_verified_build_id; /* 0x18 D3 */
+    uint32_t crc32;                  /* 0x1C 覆盖 0x00~0x1B（28 B）*/
 } boot_mailbox_t;
 
 /* 读并校验邮箱（magic + 反码 + CRC32 三者全过才算有效）；

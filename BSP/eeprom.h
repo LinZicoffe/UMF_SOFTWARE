@@ -155,7 +155,7 @@
 #define ADDR_FLASH_PAGE_127 ((uint32_t)0x0801FC00) /* Base @ of Page 127, 1 Kbytes */
 
 /* Define the size of the sectors to be used */
-#define PAGE_SIZE (uint32_t) FLASH_PAGE_SIZE /* Page size */
+#define PAGE_SIZE (uint32_t)FLASH_PAGE_SIZE /* Page size */
 
 /* EEPROM start address in Flash */
 #define EEPROM_START_ADDRESS ((uint32_t)ADDR_FLASH_PAGE_64) /* EEPROM emulation start address */
@@ -197,6 +197,6 @@
 
 uint16_t WriteBufferFlash(uint8_t Len, uint32_t Page_Address, uint32_t WriteBuffer[]);
 uint16_t WriteBufferFlash_16(uint8_t Len, uint32_t Page_Address, uint16_t WriteBuffer[]);
-void     ReadBufferFlash(uint8_t Len, uint32_t Page_Address, uint32_t ReadBuffer[]);
-void     ReadBufferFlash_16(uint8_t Len, uint32_t Page_Address, uint16_t ReadBuffer[]);
+void ReadBufferFlash(uint8_t Len, uint32_t Page_Address, uint32_t ReadBuffer[]);
+void ReadBufferFlash_16(uint8_t Len, uint32_t Page_Address, uint16_t ReadBuffer[]);
 #endif /* __EEPROM_H */

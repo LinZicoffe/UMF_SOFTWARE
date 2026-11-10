@@ -16,8 +16,8 @@
 void bl_clock_init(void);
 
 /* 当前实际频率（bl_clock_init 之后有效）*/
-uint32_t bl_clock_sysclk_hz(void);   /* DWT CYCCNT 计数频率 */
-uint32_t bl_clock_pclk1_hz(void);    /* USART2 时钟源 */
+uint32_t bl_clock_sysclk_hz(void); /* DWT CYCCNT 计数频率 */
+uint32_t bl_clock_pclk1_hz(void);  /* USART2 时钟源 */
 
 /* 跳转 App 前去初始化：SYSCLK 切回 HSI → 关 PLL/HSE → Flash 延时恢复 0WS */
 void bl_clock_deinit(void);

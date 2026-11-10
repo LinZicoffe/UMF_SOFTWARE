@@ -10,10 +10,10 @@
 
 #include "stm32f1xx_hal.h"
 
-#define CAL_POINT_COUNT  7
+#define CAL_POINT_COUNT 7
 
 /* 初始化 (当前为空操作, 保留接口) */
-void  cal_table_init(void);
+void cal_table_init(void);
 
 /* 标定修正: 未启用时原值返回, 启用时按七点插值修正 */
 float cal_correct_flow(float flow);

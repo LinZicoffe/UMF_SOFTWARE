@@ -22,7 +22,7 @@ bl_status_t bl_jump_to_app(void)
 
     SysTick->CTRL = 0u;
     SysTick->LOAD = 0u;
-    SysTick->VAL  = 0u;
+    SysTick->VAL = 0u;
 
     for (i = 0u; i < 8u; i++)
     {
@@ -55,5 +55,5 @@ bl_status_t bl_jump_to_app(void)
 
     ((void (*)(void))(*(volatile uint32_t *)(BL_APP_BASE + 4u)))();
 
-    return BL_OK;    /* 不会到达；到达即异常 */
+    return BL_OK; /* 不会到达；到达即异常 */
 }

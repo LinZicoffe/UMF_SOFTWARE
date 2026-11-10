@@ -14,7 +14,7 @@
 #define FLOW_OVER_RANGE_TEXT "Over range"
 
 /* 内部状态 — 全部 static */
-static run_page_t  s_current_page   = RUN_PAGE_MAIN;
+static run_page_t s_current_page = RUN_PAGE_MAIN;
 static uint8_t s_flow_over_range;
 #if DISPLAY_ST7789
 static uint8_t s_display_dirty = 1U;
@@ -26,10 +26,13 @@ static float dac_to_mA(uint16_t dac_val, const uint16_t *p_dac_buf)
     uint16_t zero = p_dac_buf[0];
     uint16_t full = p_dac_buf[1];
     float ratio;
-    if (full == zero) return 4.0f;
+    if (full == zero)
+        return 4.0f;
     ratio = (float)(dac_val - zero) / (float)(full - zero);
-    if (ratio < 0.0f) ratio = 0.0f;
-    if (ratio > 1.0f) ratio = 1.0f;
+    if (ratio < 0.0f)
+        ratio = 0.0f;
+    if (ratio > 1.0f)
+        ratio = 1.0f;
     return 4.0f + ratio * 16.0f;
 }
 
@@ -43,8 +46,8 @@ static char s_total_text[32];
 static char s_aux_text[8][32];
 static run_page_t s_drawn_page = RUN_PAGE_COUNT;
 /* 数值由旧/新字形直接求像素差异，避免先清空数值矩形造成闪烁。 */
-static void draw_value(uint16_t x, uint16_t previous_x, uint16_t y,
-                        char *previous, const char *value, oled_font_t font)
+static void draw_value(uint16_t x, uint16_t previous_x, uint16_t y, char *previous,
+                       const char *value, oled_font_t font)
 {
     if (s_display_dirty)
         OLED_DrawText(x, y, value, font, OLED_WHITE, OLED_BLACK);
@@ -53,26 +56,26 @@ static void draw_value(uint16_t x, uint16_t previous_x, uint16_t y,
     strcpy(previous, value);
 }
 
-// ---- 绘制字段 ---- 
-static void draw_field(uint16_t x, uint16_t y, uint16_t width,
-                       char *previous, const char *value, oled_font_t font,
-                       uint16_t color)
+// ---- 绘制字段 ----
+static void draw_field(uint16_t x, uint16_t y, uint16_t width, char *previous, const char *value,
+                       oled_font_t font, uint16_t color)
 {
-    if (!s_display_dirty && strcmp(previous, value) == 0) return;
-    OLED_FillRectangle(x, y, x + width - 1U,
-                       y + OLED_FontHeight(font) - 1U, OLED_BLACK);
+    if (!s_display_dirty && strcmp(previous, value) == 0)
+        return;
+    OLED_FillRectangle(x, y, x + width - 1U, y + OLED_FontHeight(font) - 1U, OLED_BLACK);
     OLED_DrawText(x, y, value, font, color, OLED_BLACK);
     strcpy(previous, value);
 }
 
 static const char *main_unit_text(const char *unit)
 {
-    if (strcmp(unit, "m3/h") == 0) return "m\xC2\xB3/h";
-    if (strcmp(unit, "m3") == 0) return "m\xC2\xB3";
+    if (strcmp(unit, "m3/h") == 0)
+        return "m\xC2\xB3/h";
+    if (strcmp(unit, "m3") == 0)
+        return "m\xC2\xB3";
     return unit;
 }
-static void draw_centered(uint16_t y, const char *text, oled_font_t font,
-                          uint16_t color)
+static void draw_centered(uint16_t y, const char *text, oled_font_t font, uint16_t color)
 {
     uint16_t width = OLED_TextWidth(text, font);
     OLED_DrawText((OLED_WIDTH - width) / 2U, y, text, font, color, OLED_BLACK);
@@ -84,38 +87,50 @@ static void render_page_main(const run_display_input_t *p_in)
     char buf[32];
     float rate = p_in->p_flow_rate->num;
     float temp = p_in->p_temperature->num;
-    if (s_display_dirty) {
+    if (s_display_dirty)
+    {
         OLED_FillRectangle(14, 39, 225, 39, OLED_RULE);
         draw_centered(50, "Flow rate", OLED_FONT_MEDIUM, OLED_ACCENT);
-        draw_centered(141, main_unit_text(p_in->p_flow_unit_str),
-                       OLED_FONT_MEDIUM, OLED_MUTED);
+        draw_centered(141, main_unit_text(p_in->p_flow_unit_str), OLED_FONT_MEDIUM, OLED_MUTED);
         OLED_FillRectangle(14, 170, 225, 170, OLED_RULE);
         OLED_DrawText(14, 183, "Total", OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
-        OLED_DrawText(225U - OLED_TextWidth(main_unit_text(p_in->p_total_unit_str),
-                      OLED_FONT_SMALL), 183, main_unit_text(p_in->p_total_unit_str),
-                      OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
+        OLED_DrawText(
+            225U - OLED_TextWidth(main_unit_text(p_in->p_total_unit_str), OLED_FONT_SMALL), 183,
+            main_unit_text(p_in->p_total_unit_str), OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
     }
-    if (temp > 999.9f) temp = 999.9f;
-    if (temp < -99.9f) temp = -99.9f;
+    if (temp > 999.9f)
+        temp = 999.9f;
+    if (temp < -99.9f)
+        temp = -99.9f;
     ftoa(temp, 1, buf, sizeof(buf));
-    strcat(buf, " \xC2\xB0" "C");
+    strcat(buf, " \xC2\xB0"
+                "C");
     draw_field(14, 11, 135, s_temp_text, buf, OLED_FONT_MEDIUM, OLED_MUTED);
-    draw_field(185, 11, 41, s_aux_text[0],
-               *(p_in->p_module_state) ? "ER" : "OK", OLED_FONT_MEDIUM,
+    draw_field(185, 11, 41, s_aux_text[0], *(p_in->p_module_state) ? "ER" : "OK", OLED_FONT_MEDIUM,
                *(p_in->p_module_state) ? OLED_ERROR : OLED_OK);
     /* 数字和提示的字体不同，仅切换时清除原流量区域，避免残留笔画。 */
-    if (!s_display_dirty && s_rate_over_range != s_flow_over_range) {
+    if (!s_display_dirty && s_rate_over_range != s_flow_over_range)
+    {
         OLED_FillRectangle(0, 74, OLED_WIDTH - 1U, 133, OLED_BLACK);
         s_rate_text[0] = '\0';
     }
-    if (s_flow_over_range) {
+    if (s_flow_over_range)
+    {
         if (s_display_dirty || !s_rate_over_range)
             draw_centered(96, FLOW_OVER_RANGE_TEXT, OLED_FONT_MEDIUM, OLED_WHITE);
-    } else {
-        if (rate < 0.0f) rate = 0.0f;
-        ftoa(rate, rate >= 1000.0f ? 0U : rate >= 100.0f ? 1U :
-              rate >= 10.0f ? 2U : 3U, buf, sizeof(buf));
-        if (s_display_dirty || s_rate_over_range || strcmp(s_rate_text, buf) != 0) {
+    }
+    else
+    {
+        if (rate < 0.0f)
+            rate = 0.0f;
+        ftoa(rate,
+             rate >= 1000.0f  ? 0U
+             : rate >= 100.0f ? 1U
+             : rate >= 10.0f  ? 2U
+                              : 3U,
+             buf, sizeof(buf));
+        if (s_display_dirty || s_rate_over_range || strcmp(s_rate_text, buf) != 0)
+        {
             oled_font_t font = OLED_FONT_FLOW_DIGITS;
             uint16_t width = OLED_TextWidth(buf, font);
             uint16_t x = (OLED_WIDTH - width) / 2U;
@@ -124,8 +139,7 @@ static void render_page_main(const run_display_input_t *p_in)
         }
     }
     s_rate_over_range = s_flow_over_range;
-    draw_value(14, 14, 204, s_total_text, (const char *)p_in->p_flow_sum_buf,
-               OLED_FONT_MEDIUM);
+    draw_value(14, 14, 204, s_total_text, (const char *)p_in->p_flow_sum_buf, OLED_FONT_MEDIUM);
 }
 
 /* S02：七项实时数据使用同一套字体和列对齐。 */
@@ -133,16 +147,15 @@ static void render_page_aux(const run_display_input_t *p_in)
 {
     char buf[32];
     float current = dac_to_mA(*(p_in->p_dac_value), p_in->p_dac_buf);
-    static const char * const labels[7] = {
-        "Flow", "Velocity", "Temp", "Pressure", "Current", "Freq", "Comm"
-    };
+    static const char *const labels[7] = {"Flow",    "Velocity", "Temp", "Pressure",
+                                          "Current", "Freq",     "Comm"};
     uint8_t i;
-    if (s_display_dirty) {
+    if (s_display_dirty)
+    {
         OLED_DrawText(14, 11, "Live data", OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
         OLED_FillRectangle(14, 39, 225, 39, OLED_RULE);
         for (i = 0; i < 7U; i++)
-            OLED_DrawText(14, 48U + i * 21U, labels[i], OLED_FONT_SMALL,
-                          OLED_MUTED, OLED_BLACK);
+            OLED_DrawText(14, 48U + i * 21U, labels[i], OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
         OLED_FillRectangle(14, 196, 225, 196, OLED_RULE);
         OLED_DrawText(14, 201, "Total", OLED_FONT_SMALL, OLED_MUTED, OLED_BLACK);
     }
@@ -152,7 +165,8 @@ static void render_page_aux(const run_display_input_t *p_in)
     draw_value(90, 90, 48, s_aux_text[0], buf, OLED_FONT_SMALL);
     draw_field(90, 69, 136, s_aux_text[1], "0.00 m/s", OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_temperature->num, 1, buf, sizeof(buf));
-    strcat(buf, " \xC2\xB0" "C");
+    strcat(buf, " \xC2\xB0"
+                "C");
     draw_field(90, 90, 136, s_aux_text[2], buf, OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_pressure->num, 1, buf, sizeof(buf));
     strcat(buf, " KPa");
@@ -161,9 +175,8 @@ static void render_page_aux(const run_display_input_t *p_in)
     strcat(buf, " mA");
     draw_field(90, 132, 136, s_aux_text[4], buf, OLED_FONT_SMALL, OLED_WHITE);
     draw_field(90, 153, 136, s_aux_text[5], "0.0 Hz", OLED_FONT_SMALL, OLED_WHITE);
-    draw_field(90, 174, 136, s_aux_text[6],
-               *(p_in->p_module_state) ? "Tx Err" : "Tx OK", OLED_FONT_SMALL,
-               *(p_in->p_module_state) ? OLED_ERROR : OLED_OK);
+    draw_field(90, 174, 136, s_aux_text[6], *(p_in->p_module_state) ? "Tx Err" : "Tx OK",
+               OLED_FONT_SMALL, *(p_in->p_module_state) ? OLED_ERROR : OLED_OK);
     strcpy(buf, (const char *)p_in->p_flow_sum_buf);
     strncat(buf, " ", sizeof(buf) - strlen(buf) - 1U);
     strncat(buf, main_unit_text(p_in->p_total_unit_str), sizeof(buf) - strlen(buf) - 1U);
@@ -189,8 +202,10 @@ static void render_page_main(const run_display_input_t *p_in)
 
     /* 温度 + 6x8 度符号位图（字母和数字均为 7x10 字体） */
     temp = p_in->p_temperature->num;
-    if (temp > 999.9f)  temp = 999.9f;
-    if (temp < -99.9f)  temp = -99.9f;
+    if (temp > 999.9f)
+        temp = 999.9f;
+    if (temp < -99.9f)
+        temp = -99.9f;
     ftoa(temp, 1, buf, sizeof(buf));
     OLED_SetCursor(x_start, 0);
     OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
@@ -204,22 +219,33 @@ static void render_page_main(const run_display_input_t *p_in)
     OLED_WriteString((char *)(*(p_in->p_module_state) ? "ER" : "OK"), OLED_FONT_MEDIUM, OLED_WHITE);
 #endif
 
-    if (s_flow_over_range) {
-        OLED_SetCursor((OLED_WIDTH - OLED_TextWidth(FLOW_OVER_RANGE_TEXT,
-                       OLED_FONT_MEDIUM)) / 2U, 27);
+    if (s_flow_over_range)
+    {
+        OLED_SetCursor((OLED_WIDTH - OLED_TextWidth(FLOW_OVER_RANGE_TEXT, OLED_FONT_MEDIUM)) / 2U,
+                       27);
         OLED_WriteString(FLOW_OVER_RANGE_TEXT, OLED_FONT_MEDIUM, OLED_WHITE);
-    } else {
+    }
+    else
+    {
 #ifdef SSD1306_INCLUDE_FONT_16x26
         /* Zone B: 瞬时流量 (16×26 大字, 垂直居中于状态栏与累积栏之间) */
         rate = p_in->p_flow_rate->num;
-        if (rate < 0.0f) rate = 0.0f;
-        if (rate >= 1000.0f) {
+        if (rate < 0.0f)
+            rate = 0.0f;
+        if (rate >= 1000.0f)
+        {
             ftoa(rate, 0, buf, sizeof(buf));
-        } else if (rate >= 100.0f) {
+        }
+        else if (rate >= 100.0f)
+        {
             ftoa(rate, 1, buf, sizeof(buf));
-        } else if (rate >= 10.0f) {
+        }
+        else if (rate >= 10.0f)
+        {
             ftoa(rate, 2, buf, sizeof(buf));
-        } else {
+        }
+        else
+        {
             ftoa(rate, 3, buf, sizeof(buf));
         }
         len = (uint8_t)strlen(buf);
@@ -229,14 +255,22 @@ static void render_page_main(const run_display_input_t *p_in)
 #elif defined(SSD1306_INCLUDE_FONT_11x18)
         /* Zone B: 瞬时流量 (11×18, 4位有效数字自适应小数位) */
         rate = p_in->p_flow_rate->num;
-        if (rate < 0.0f) rate = 0.0f;
-        if (rate >= 1000.0f) {
+        if (rate < 0.0f)
+            rate = 0.0f;
+        if (rate >= 1000.0f)
+        {
             ftoa(rate, 0, buf, sizeof(buf));
-        } else if (rate >= 100.0f) {
+        }
+        else if (rate >= 100.0f)
+        {
             ftoa(rate, 1, buf, sizeof(buf));
-        } else if (rate >= 10.0f) {
+        }
+        else if (rate >= 10.0f)
+        {
             ftoa(rate, 2, buf, sizeof(buf));
-        } else {
+        }
+        else
+        {
             ftoa(rate, 3, buf, sizeof(buf));
         }
         len = (uint8_t)strlen(buf);
@@ -267,50 +301,71 @@ static void render_page_aux(const run_display_input_t *p_in)
 
 #ifdef SSD1306_INCLUDE_FONT_6x8
     /* y=0: Flow */
-    OLED_SetCursor(0, 0);  OLED_WriteString("Flow:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 0);
+    OLED_WriteString("Flow:", OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_flow_rate->num, 1, buf, sizeof(buf));
-    OLED_SetCursor(42, 0); OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(42, 0);
+    OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
     OLED_SetCursor(90, 0);
     OLED_WriteString((char *)p_in->p_flow_unit_str, OLED_FONT_SMALL, OLED_WHITE);
 
     /* y=8: Vel (占位) */
-    OLED_SetCursor(0, 8);  OLED_WriteString("Vel:", OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(42, 8); OLED_WriteString("0.00", OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(90, 8); OLED_WriteString("m/s", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 8);
+    OLED_WriteString("Vel:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(42, 8);
+    OLED_WriteString("0.00", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(90, 8);
+    OLED_WriteString("m/s", OLED_FONT_SMALL, OLED_WHITE);
 
     /* y=16: Temp */
-    OLED_SetCursor(0, 16); OLED_WriteString("Temp:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 16);
+    OLED_WriteString("Temp:", OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_temperature->num, 1, buf, sizeof(buf));
-    OLED_SetCursor(42, 16); OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(90, 16); OLED_WriteString("C", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(42, 16);
+    OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(90, 16);
+    OLED_WriteString("C", OLED_FONT_SMALL, OLED_WHITE);
 
     /* y=24: Press */
-    OLED_SetCursor(0, 24); OLED_WriteString("Press:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 24);
+    OLED_WriteString("Press:", OLED_FONT_SMALL, OLED_WHITE);
     ftoa(p_in->p_pressure->num, 1, buf, sizeof(buf));
-    OLED_SetCursor(42, 24); OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(90, 24); OLED_WriteString("KPa", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(42, 24);
+    OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(90, 24);
+    OLED_WriteString("KPa", OLED_FONT_SMALL, OLED_WHITE);
 
     /* y=32: Cur (4~20mA) */
-    OLED_SetCursor(0, 32); OLED_WriteString("Cur:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 32);
+    OLED_WriteString("Cur:", OLED_FONT_SMALL, OLED_WHITE);
     fval = dac_to_mA(*(p_in->p_dac_value), p_in->p_dac_buf);
     ftoa(fval, 1, buf, sizeof(buf));
-    OLED_SetCursor(42, 32); OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(90, 32); OLED_WriteString("mA", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(42, 32);
+    OLED_WriteString(buf, OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(90, 32);
+    OLED_WriteString("mA", OLED_FONT_SMALL, OLED_WHITE);
 
     /* y=40: Freq (占位) */
-    OLED_SetCursor(0, 40); OLED_WriteString("Freq:", OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(42, 40); OLED_WriteString("0.0", OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(90, 40); OLED_WriteString("Hz", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 40);
+    OLED_WriteString("Freq:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(42, 40);
+    OLED_WriteString("0.0", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(90, 40);
+    OLED_WriteString("Hz", OLED_FONT_SMALL, OLED_WHITE);
 
     /* y=48: Comm */
-    OLED_SetCursor(0, 48); OLED_WriteString("Comm:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 48);
+    OLED_WriteString("Comm:", OLED_FONT_SMALL, OLED_WHITE);
     OLED_SetCursor(42, 48);
-    OLED_WriteString((char *)(*(p_in->p_module_state) ? "Tx Err" : "Tx ok"), OLED_FONT_SMALL, OLED_WHITE);
+    OLED_WriteString((char *)(*(p_in->p_module_state) ? "Tx Err" : "Tx ok"), OLED_FONT_SMALL,
+                     OLED_WHITE);
 
     /* y=56: TOT — 同样修正布局覆盖问题
      * 流量串13char×6px=78px，从x=30到x=107；单位从x=108起，不再覆盖小数位 */
-    OLED_SetCursor(0, 56); OLED_WriteString("TOT:", OLED_FONT_SMALL, OLED_WHITE);
-    OLED_SetCursor(30, 56); OLED_WriteString((char *)p_in->p_flow_sum_buf, OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(0, 56);
+    OLED_WriteString("TOT:", OLED_FONT_SMALL, OLED_WHITE);
+    OLED_SetCursor(30, 56);
+    OLED_WriteString((char *)p_in->p_flow_sum_buf, OLED_FONT_SMALL, OLED_WHITE);
     OLED_SetCursor(108, 56);
     OLED_WriteString((char *)p_in->p_total_unit_str, OLED_FONT_SMALL, OLED_WHITE);
 #endif
@@ -321,10 +376,17 @@ static void render_page_aux(const run_display_input_t *p_in)
 static void render_run_frame(const void *context)
 {
     const run_display_input_t *p_input = context;
-    switch (s_current_page) {
-    case RUN_PAGE_MAIN: render_page_main(p_input); break;
-    case RUN_PAGE_AUX:  render_page_aux(p_input);  break;
-    default:           render_page_main(p_input); break;
+    switch (s_current_page)
+    {
+    case RUN_PAGE_MAIN:
+        render_page_main(p_input);
+        break;
+    case RUN_PAGE_AUX:
+        render_page_aux(p_input);
+        break;
+    default:
+        render_page_main(p_input);
+        break;
     }
 }
 
@@ -357,7 +419,8 @@ void run_display_render(const run_display_input_t *p_input)
     OLED_Clear(OLED_BLACK);
     render_run_frame(p_input);
 #else
-    if (s_drawn_page != s_current_page) s_display_dirty = 1U;
+    if (s_drawn_page != s_current_page)
+        s_display_dirty = 1U;
     if (s_display_dirty)
         OLED_RenderFrame(render_run_frame, p_input);
     else
@@ -372,7 +435,8 @@ void run_display_render(const run_display_input_t *p_input)
 
 void run_display_set_page(run_page_t page)
 {
-    if (page < RUN_PAGE_COUNT) s_current_page = page;
+    if (page < RUN_PAGE_COUNT)
+        s_current_page = page;
 }
 
 run_page_t run_display_get_page(void)

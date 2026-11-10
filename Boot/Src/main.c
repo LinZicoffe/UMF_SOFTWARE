@@ -28,22 +28,22 @@ void SystemInit(void)
 
 /* ===== LED（PB5，§4.1：快闪=升级中近似为长亮、慢闪=等待、长亮=完成）===== */
 
-#define LED_PORT      GPIOB
-#define LED_PIN       (1u << 5u)
+#define LED_PORT GPIOB
+#define LED_PIN  (1u << 5u)
 
 static void led_init(void)
 {
     RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
     /* PB5 推挽输出 2MHz：CRL 位段 [23:20] = 0b0010 */
     GPIOB->CRL = (GPIOB->CRL & ~((uint32_t)0xFu << 20)) | ((uint32_t)0x2u << 20);
-    GPIOB->BSRR = (LED_PIN << 16);       /* 初始熄灭（假设高=灭，实测可调）*/
+    GPIOB->BSRR = (LED_PIN << 16); /* 初始熄灭（假设高=灭，实测可调）*/
 }
 
 static void led_set(int on)
 {
     if (on)
     {
-        GPIOB->BSRR = (LED_PIN << 16);   /* 低电平点亮（假设低有效）*/
+        GPIOB->BSRR = (LED_PIN << 16); /* 低电平点亮（假设低有效）*/
     }
     else
     {
@@ -54,14 +54,14 @@ static void led_set(int on)
 /* ===== PA0 物理恢复模式（§4.7 优先级 5）===== */
 
 #define PA0_MASK      (1u << 0u)
-#define PA0_PRESSED() ((GPIOA->IDR & PA0_MASK) == 0u)   /* 上拉，低=按下 */
+#define PA0_PRESSED() ((GPIOA->IDR & PA0_MASK) == 0u) /* 上拉，低=按下 */
 
 static void pa0_init(void)
 {
     /* PA0 输入上拉：CRL 位段 [3:0] = 0b1000（输入带上/下拉），ODR=1 选上拉 */
     RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
     GPIOA->CRL = (GPIOA->CRL & ~((uint32_t)0xFu)) | 0x8u;
-    GPIOA->BSRR = PA0_MASK;              /* ODR=1：上拉 */
+    GPIOA->BSRR = PA0_MASK; /* ODR=1：上拉 */
 }
 
 /* 上电时 PA0 已按下才进入检测：按住 ≥3s → 等释放 → 10s 内再按一次确认。
@@ -81,22 +81,22 @@ static int pa0_recovery_requested(void)
         bl_iwdg_feed();
         if (!PA0_PRESSED())
         {
-            return 0;                    /* 提前松开：正常启动 */
+            return 0; /* 提前松开：正常启动 */
         }
     }
 
     while (PA0_PRESSED())
     {
-        bl_iwdg_feed();                  /* 等待释放 */
+        bl_iwdg_feed(); /* 等待释放 */
     }
 
-    t0 = bl_time_now();                  /* 释放后 10s 确认窗口 */
+    t0 = bl_time_now(); /* 释放后 10s 确认窗口 */
     while (bl_time_elapsed_ms(t0) < 10000u)
     {
         bl_iwdg_feed();
         if (PA0_PRESSED())
         {
-            return 1;                    /* 二次确认：进入恢复模式 */
+            return 1; /* 二次确认：进入恢复模式 */
         }
     }
     return 0;
@@ -118,8 +118,8 @@ static int app_layers_1_2_ok(uint32_t *img_size, uint32_t *build_id)
  * 返回 1=通过（或合法跳过），0=整镜像 CRC 不符（App 不可信）。
  * *verified_this_boot：本靴是否实际复算并通过（合法跳过时置 0——
  * S9 审查 #1：回跳路径的 pre_jump 不得把"未复算"标成"已验证"）。*/
-static int app_layer3_ok(uint32_t img_size, uint32_t build_id, int mb_valid,
-                         const bl_mailbox_t *mb, int *verified_this_boot)
+static int app_layer3_ok(uint32_t img_size, uint32_t build_id, int mb_valid, const bl_mailbox_t *mb,
+                         int *verified_this_boot)
 {
     uint32_t crc_expect;
 
@@ -127,7 +127,7 @@ static int app_layer3_ok(uint32_t img_size, uint32_t build_id, int mb_valid,
 
     if (mb_valid && (mb->last_verified_build_id == build_id))
     {
-        return 1;                        /* 暖复位且未变：跳过（D3）*/
+        return 1; /* 暖复位且未变：跳过（D3）*/
     }
 
     crc_expect = bl_flash_read32(BL_FW_HDR_ADDR + 0x18u);
@@ -142,13 +142,13 @@ static int app_layer3_ok(uint32_t img_size, uint32_t build_id, int mb_valid,
 int main(void)
 {
     bl_mailbox_t mb;
-    int      mb_valid;
-    uint8_t  uart_cfg = BL_UART_CFG_DEFAULT;
+    int mb_valid;
+    uint8_t uart_cfg = BL_UART_CFG_DEFAULT;
     uint32_t img_size = 0u;
     uint32_t build_id = 0u;
-    int      app_ok;
-    int      g3_lockout = 0;
-    int      app_verified = 0;   /* App 当前镜像已通过层 3（本靴复算或既往合法验证）*/
+    int app_ok;
+    int g3_lockout = 0;
+    int app_verified = 0; /* App 当前镜像已通过层 3（本靴复算或既往合法验证）*/
     bl_backup_result_t bk;
 
     /* ---- 基础初始化（§4.3；喂狗先于时钟初始化——S4 审查修正）---- */
@@ -181,13 +181,13 @@ int main(void)
     }
     else if (!bl_info_slot_uart_config(&uart_cfg))
     {
-        uart_cfg = BL_UART_CFG_DEFAULT;  /* 优先级 3：缺省 115200 8N1 */
+        uart_cfg = BL_UART_CFG_DEFAULT; /* 优先级 3：缺省 115200 8N1 */
     }
     (void)bl_usart_init(uart_cfg);
 
     /* ---- 固件头层 1/2 + 备份 ---- */
     app_ok = app_layers_1_2_ok(&img_size, &build_id);
-    bk = bl_info_backup_ensure();        /* 前置条件不满足时内部跳过 */
+    bk = bl_info_backup_ensure(); /* 前置条件不满足时内部跳过 */
 
     /* ---- 模式判定（§4.3）---- */
     {
@@ -195,16 +195,16 @@ int main(void)
 
         if (mb_valid && (mb.cmd == BL_MAILBOX_CMD_UPGRADE))
         {
-            enter_upgrade = 1;                       /* App 主动请求 */
+            enter_upgrade = 1; /* App 主动请求 */
         }
         if (mb_valid && (mb.boot_attempt >= 3u))
         {
-            enter_upgrade = 1;                       /* G3：启动即崩 */
+            enter_upgrade = 1; /* G3：启动即崩 */
             g3_lockout = 1;
         }
         if (!app_ok)
         {
-            enter_upgrade = 1;                       /* App 不可信 */
+            enter_upgrade = 1; /* App 不可信 */
         }
         if (bk == BL_BACKUP_FAILED)
         {
@@ -212,11 +212,11 @@ int main(void)
              * 协议层任何擦/写立即失败，旧 App 保持完好；停留等待窗口。*/
             bl_flash_set_app_window(0);
             enter_upgrade = 1;
-            g3_lockout = 1;                          /* 不回跳，等待窗口慢闪 */
+            g3_lockout = 1; /* 不回跳，等待窗口慢闪 */
         }
         if (!enter_upgrade && pa0_recovery_requested())
         {
-            enter_upgrade = 1;                       /* 物理恢复（§4.7 优先级 5：
+            enter_upgrade = 1; /* 物理恢复（§4.7 优先级 5：
                                                        固定 115200 守候——重配串口）*/
             uart_cfg = BL_UART_CFG_DEFAULT;
             (void)bl_usart_init(uart_cfg);
@@ -227,11 +227,11 @@ int main(void)
             /* 层 3 整镜像 CRC32（冷启动必做 / 暖复位按 D3 跳过）*/
             if (!app_layer3_ok(img_size, build_id, mb_valid, &mb, &verified_now))
             {
-                enter_upgrade = 1;                   /* 域外损坏：App 不可信 */
+                enter_upgrade = 1; /* 域外损坏：App 不可信 */
             }
             else
             {
-                app_verified = 1;                    /* 复算通过或既往合法验证 */
+                app_verified = 1; /* 复算通过或既往合法验证 */
             }
         }
 
@@ -246,7 +246,7 @@ int main(void)
 
     /* ==== 升级模式（§4.3/§6）==== */
     bl_iwdg_start_5s();
-    led_set(1);                          /* 会话进行指示（长亮）*/
+    led_set(1); /* 会话进行指示（长亮）*/
 
     for (;;)
     {

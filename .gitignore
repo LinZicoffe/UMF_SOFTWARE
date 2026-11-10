@@ -40,12 +40,8 @@ EWARM/**/settings/
 *.swp
 *~
 
-# STM32CubeIDE 构建产物与本机索引
-/STM32CubeIDE/Debug/
-/STM32CubeIDE/Release/
-/STM32CubeIDE/.settings/language.settings.xml
-/STM32CubeIDE/.settings/stm32cubeide.project.prefs
-/STM32CubeIDE/UMF.launch
+# STM32CubeIDE 工程已于 2026-11-06 移除，相关忽略规则一并删除
+# （历史记录仍可用 git checkout <commit> -- STM32CubeIDE 恢复）
 /artifacts/cubeide-debug-workspace/
 
 # OS 生成文件
@@ -80,6 +76,8 @@ outputs/
 /.agents/
 /.claude/agents/
 /.dsh/
+/.dsh_tmp/
+
 /.reversa/
 /_reversa_sdd/
 /docs/superpowers/

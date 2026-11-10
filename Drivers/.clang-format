@@ -1,0 +1,5 @@
+# Drivers/ 目录禁止 clang-format
+# 原因：ST HAL / CMSIS 厂商代码，随固件包升级整体替换。
+# 格式化它没有任何收益，只会在升级时制造无法合并的冲突。
+---
+DisableFormat: true

@@ -1,0 +1,6 @@
+# Core/ 目录禁止 clang-format
+# 原因：本目录由 STM32CubeMX 生成，重新生成会覆盖（2 空格缩进是 CubeMX 的固定风格）。
+# 若在此格式化，每次改 .ioc 重新生成都会产生一整片与业务无关的 diff。
+# 业务代码只允许写在 /* USER CODE BEGIN/END */ 块内，那些代码沿用 CubeMX 的 2 空格缩进即可。
+---
+DisableFormat: true

@@ -16,19 +16,19 @@
 #include "key.h"
 
 /* ---------- 位掩码定义 (按面板功能 K1/K2/K3 编号) ---------- */
-#define BIT_K1  0x01  /* K_MOV  (PC15) 面板"向下"键 */
-#define BIT_K2  0x04  /* K_SUB  (PA0)  面板"确认"键 */
-#define BIT_K3  0x02  /* K_ADD  (PA11) 面板"向上"键 */
+#define BIT_K1 0x01 /* K_MOV  (PC15) 面板"向下"键 */
+#define BIT_K2 0x04 /* K_SUB  (PA0)  面板"确认"键 */
+#define BIT_K3 0x02 /* K_ADD  (PA11) 面板"向上"键 */
 
 /* ---------- 消抖参数 ---------- */
-#define DEBOUNCE_THRESHOLD  2  /* 连续 N 次 (×10ms) 一致则有效 */
+#define DEBOUNCE_THRESHOLD 2 /* 连续 N 次 (×10ms) 一致则有效 */
 
 /* ---------- 内部状态 (static 封装) ---------- */
-static volatile uint8_t  s_raw;             /* 当前原始 GPIO 读取 */
-static          uint8_t  s_debounce_cnt;    /* 消抖计数器 */
-static          uint8_t  s_stable;          /* 消抖后的稳态 */
-static          uint8_t  s_pressed_mask;    /* 按下期间累积的按键位 (OR) */
-static volatile key_event_t s_event;        /* 待取事件 (深度1) */
+static volatile uint8_t s_raw;       /* 当前原始 GPIO 读取 */
+static uint8_t s_debounce_cnt;       /* 消抖计数器 */
+static uint8_t s_stable;             /* 消抖后的稳态 */
+static uint8_t s_pressed_mask;       /* 按下期间累积的按键位 (OR) */
+static volatile key_event_t s_event; /* 待取事件 (深度1) */
 
 /* ---------- 内部函数 ---------- */
 
@@ -65,9 +65,12 @@ static key_event_t decode_event(uint8_t mask)
         return KEY_BACK;
 
     /* 单键 */
-    if (mask & BIT_K1) return KEY_DOWN;    /* K1: 向下 */
-    if (mask & BIT_K2) return KEY_ENTER;   /* K2: 确定 */
-    if (mask & BIT_K3) return KEY_UP;      /* K3: 向上 */
+    if (mask & BIT_K1)
+        return KEY_DOWN; /* K1: 向下 */
+    if (mask & BIT_K2)
+        return KEY_ENTER; /* K2: 确定 */
+    if (mask & BIT_K3)
+        return KEY_UP; /* K3: 向上 */
 
     return KEY_NONE;
 }
@@ -76,11 +79,11 @@ static key_event_t decode_event(uint8_t mask)
 
 void key_init(void)
 {
-    s_raw          = 0;
+    s_raw = 0;
     s_debounce_cnt = 0;
-    s_stable       = 0;
+    s_stable = 0;
     s_pressed_mask = 0;
-    s_event        = KEY_NONE;
+    s_event = KEY_NONE;
 }
 
 void key_scan_10ms(void)
@@ -88,23 +91,30 @@ void key_scan_10ms(void)
     uint8_t cur = read_keys();
 
     /* 消抖: 与上次一致则计数+1，否则重置 */
-    if (cur == s_raw) {
+    if (cur == s_raw)
+    {
         if (s_debounce_cnt < 255)
             s_debounce_cnt++;
-    } else {
+    }
+    else
+    {
         s_debounce_cnt = 1;
         s_raw = cur;
     }
 
     /* 消抖通过后更新稳态 */
-    if (s_debounce_cnt >= DEBOUNCE_THRESHOLD) {
+    if (s_debounce_cnt >= DEBOUNCE_THRESHOLD)
+    {
         uint8_t prev_stable = s_stable;
         s_stable = cur;
 
-        if (s_stable != 0) {
+        if (s_stable != 0)
+        {
             /* 有键按下: 累积按键位 */
             s_pressed_mask |= s_stable;
-        } else if (prev_stable != 0) {
+        }
+        else if (prev_stable != 0)
+        {
             /* 从按下→释放: 产生事件 */
             s_event = decode_event(s_pressed_mask);
             s_pressed_mask = 0;

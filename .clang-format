@@ -1,0 +1,63 @@
+# =============================================================================
+# UMF 固件 C 代码格式化配置（clang-format）
+#
+# 执行：clang-format -i (Get-ChildItem BSP,Boot -Recurse -Include *.c,*.h).FullName
+# 检查：clang-format --dry-run --Werror (同上文件列表)
+#
+# 适用范围：BSP/、Boot/（自己维护的代码）
+# 不适用：Core/（CubeMX 生成）、Drivers/（ST HAL）、OLED/、newOLED/（第三方）
+#         —— 这些目录用子目录级 DisableFormat 关掉，见各目录下的 .clang-format
+#
+# 制定依据：docs/2026-11-06-firmware-code-review.md §4 P0-1
+# =============================================================================
+
+---
+Language: Cpp            # clang-format 对 .c 文件也套用 Cpp 规则集
+BasedOnStyle: LLVM       # 以 LLVM 为基线，下面逐项覆盖
+
+# ---------- 缩进与行宽 ----------
+IndentWidth: 4           # 项目规范：4 空格缩进（AGENTS.md）
+TabWidth: 4
+UseTab: Never            # 禁止 Tab，避免编辑器间显示不一致
+ColumnLimit: 100         # 80 列对本工程偏紧（中文注释 + 长寄存器名），取 100
+
+# ---------- 大括号 ----------
+BreakBeforeBraces: Allman              # 大括号独占一行：本工程 BSP/Boot 已是该风格
+AllowShortBlocksOnASingleLine: Never   # 禁止 { ... } 单行块
+AllowShortFunctionsOnASingleLine: None # 禁止函数单行（包括一行 getter，保持一致性）
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# ---------- 指针与空格 ----------
+PointerAlignment: Right  # float *p（本工程主流写法，如 const uint8_t *p_in）
+SpaceBeforeParens: ControlStatements
+
+# ---------- 对齐 ----------
+# 赋值/声明对齐关闭：bsp_usart.c:362-424 那种「= 对齐到第 30 列」的写法，
+# 改一个变量名就会整块重排，diff 噪声淹没真实改动。
+# 宏对齐开启：寄存器地址表（#define XxxAddr 92）按列对齐后更易扫读，
+# 且宏块本身很少改动，重排代价可接受。
+# 取 Consecutive（而非 AcrossEmptyLinesAndComments）：只在连续无空行的宏块内对齐，
+# 空行分隔的语义分组各自独立成表，不会把两张表强行拉到同一列。
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignConsecutiveMacros: Consecutive
+AlignEscapedNewlines: DontAlign  # 多行宏的反斜杠保持原样，不重新对齐
+
+# ---------- 注释（嵌入式工程关键） ----------
+ReflowComments: false    # 不重排注释：本工程有大量对齐的中文注释和 ASCII 表格，
+                         # clang-format 不理解 CJK 显示宽度，重排会把表格打散
+MaxEmptyLinesToKeep: 1   # 连续空行压缩为 1 行
+
+# ---------- 字符串（嵌入式工程关键） ----------
+BreakStringLiterals: false  # 不拆分字符串字面量：display.c 里有 "\xC2\xB0" 这类
+                            # 十六进制转义序列，一旦被拆开可能改变语义
+
+# ---------- include（不做自动整理） ----------
+# 项目规范有明确的四段式 include 顺序（标准库 → HAL → BSP → 应用层），
+# 但当前代码普遍不合规；先不自动重排，避免把「顺序错误」问题悄悄掩盖掉。
+SortIncludes: false
+IncludeBlocks: Preserve
+
+# ---------- switch ----------
+IndentCaseLabels: false  # case 与 switch 同级，本工程现有写法

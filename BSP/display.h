@@ -31,7 +31,8 @@
 #define OLED_OK     0x8EF4U
 #define OLED_ERROR  0xFB8EU
 
-typedef enum {
+typedef enum
+{
     OLED_FONT_SMALL = 0,
     OLED_FONT_MEDIUM,
     OLED_FONT_LARGE,
@@ -43,12 +44,11 @@ typedef enum {
 void OLED_Init(void);
 void OLED_Recovery(void);
 void OLED_Clear(uint16_t color);
-void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
-                        uint16_t color);
-void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap,
-                     uint16_t width, uint16_t height, uint16_t color);
-void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font,
-                   uint16_t foreground, uint16_t background);
+void OLED_FillRectangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color);
+void OLED_DrawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap, uint16_t width, uint16_t height,
+                     uint16_t color);
+void OLED_DrawText(uint16_t x, uint16_t y, const char *text, oled_font_t font, uint16_t foreground,
+                   uint16_t background);
 uint16_t OLED_TextWidth(const char *text, oled_font_t font);
 uint8_t OLED_FontHeight(oled_font_t font);
 void OLED_Present(void);
@@ -56,9 +56,9 @@ void OLED_Present(void);
 /* rotation: 0/1/2/3 分别为顺时针 0°/90°/180°/270°；调用后需重绘整页。 */
 void OLED_SetRotation(uint8_t rotation);
 /* 同字体、同颜色的数值更新；旧/新坐标分别计算，仅发送颜色变化的像素。 */
-void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text,
-                       uint16_t previous_x, const char *previous, oled_font_t font,
-                       uint16_t foreground, uint16_t background);
+void OLED_DrawTextDiff(uint16_t x, uint16_t y, const char *text, uint16_t previous_x,
+                       const char *previous, oled_font_t font, uint16_t foreground,
+                       uint16_t background);
 /* 按 8 行分段合成整页；回调会重复调用，只能绘制，不能推进业务状态。 */
 void OLED_RenderFrame(void (*render)(const void *context), const void *context);
 #endif

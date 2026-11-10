@@ -10,9 +10,9 @@
 
 #include "bl_common.h"
 
-void     bl_time_init(void);              /* DEMCR.TRCENA + DWT.CYCCNTENA */
-uint32_t bl_time_now(void);               /* 当前 CYCCNT */
+void bl_time_init(void);                     /* DEMCR.TRCENA + DWT.CYCCNTENA */
+uint32_t bl_time_now(void);                  /* 当前 CYCCNT */
 uint32_t bl_time_elapsed_ms(uint32_t since); /* now-since 换算毫秒（回绕安全）*/
-void     bl_time_delay_ms(uint32_t ms);   /* 忙等（不喂狗，调用方自行安排）*/
+void bl_time_delay_ms(uint32_t ms);          /* 忙等（不喂狗，调用方自行安排）*/
 
 #endif /* BL_TIME_H */
