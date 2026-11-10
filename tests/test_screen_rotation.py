@@ -26,7 +26,6 @@ class RotationTests(unittest.TestCase):
         for bits in [16, 32]:
             storage = replace_function(storage, f'flash_rd{bits}',
                                        f'return sim_flash_read(addr, {bits // 8}U);')
-        storage = replace_function(storage, 'feed_iwdg', '')
         (cls.work / 'storage.c').write_text(storage, encoding='utf-8')
         lcd = (ROOT / 'newOLED/lcd_init.c').read_bytes().decode('gb18030').replace('\r\n', '\n')
         lcd = replace_function(lcd, 'LCD_Writ_Bus', 'sim_bus_write(dat);')

@@ -18,6 +18,7 @@
 #include "main.h"
 #include "ftoa.h"
 #include "mystring.h"
+#include "app_fw_version.h"
 #include <string.h>
 
 /* ===== 模式枚举 ===== */
@@ -64,19 +65,20 @@ typedef enum
     SCR_REV_TOTAL = 30,
     SCR_NET_TOTAL = 31,
     SCR_CLEAR_TOTALS = 32,
-    SCR_SET_TOTAL = 33,
-    SCR_CALIB_LIST = 34,
-    SCR_DAC_ZERO = 35,
-    SCR_DAC_FULL = 36,
-    SCR_SPAN_ZERO = 37,
-    SCR_SPAN_FULL = 38,
-    SCR_SYSTEM_LIST = 39,
-    SCR_FACTORY_RST = 40,
-    SCR_COMM_ADDR = 41,
-    SCR_BAUD_RATE = 42,
-    SCR_DEVICE_INFO = 43,
-    SCR_LANGUAGE = 44,
-    SCR_COUNT = 45
+    SCR_SET_TOTAL    = 33,
+    SCR_CALIB_LIST   = 34,
+    SCR_DAC_ZERO     = 35,
+    SCR_DAC_FULL     = 36,
+    SCR_SPAN_ZERO    = 37,
+    SCR_SPAN_FULL    = 38,
+    SCR_SYSTEM_LIST  = 39,
+    SCR_FACTORY_RST  = 40,
+    SCR_COMM_ADDR    = 41,
+    SCR_BAUD_RATE    = 42,
+    SCR_DEVICE_INFO  = 43,
+    SCR_LANGUAGE     = 44,
+    SCR_ROTATION     = 45,
+    SCR_COUNT        = 46
 } screen_t;
 
 /* ===== 导航栈帧 ===== */
@@ -182,12 +184,18 @@ static const list_item_t c_calib_set[] = {
 };
 #define CALIB_SET_COUNT 4
 
-/* S39 系统设置 (5 项) */
+/* S39 系统设置 (彩屏 6 项，单色屏 5 项) */
 static const list_item_t c_system_set[] = {
-    {"Language", SCR_LANGUAGE},   {"Factory Rst", SCR_FACTORY_RST}, {"Comm Addr", SCR_COMM_ADDR},
-    {"Baud Rate", SCR_BAUD_RATE}, {"Device Info", SCR_DEVICE_INFO},
+    { "Language",     SCR_LANGUAGE    },
+#if DISPLAY_ST7789
+    { "Rotation",     SCR_ROTATION    },
+#endif
+    { "Factory Rst",  SCR_FACTORY_RST },
+    { "Comm Addr",    SCR_COMM_ADDR   },
+    { "Baud Rate",    SCR_BAUD_RATE   },
+    { "Device Info",  SCR_DEVICE_INFO },
 };
-#define SYSTEM_SET_COUNT 5
+#define SYSTEM_SET_COUNT  (sizeof(c_system_set) / sizeof(c_system_set[0]))
 
 /* ===== 数值参数描述符 ===== */
 typedef struct
@@ -300,8 +308,9 @@ static void get_list_data(screen_t scr, const list_item_t **pp_items, uint8_t *p
 static menu_mode_t detect_mode(screen_t scr)
 {
     /* 枚举屏幕 */
-    if (scr == SCR_STD_COND || scr == SCR_FLOW_UNIT || scr == SCR_TOTAL_UNIT ||
-        scr == SCR_PULSE_EQUIV || scr == SCR_BAUD_RATE || scr == SCR_LANGUAGE)
+    if (scr == SCR_STD_COND || scr == SCR_FLOW_UNIT ||
+        scr == SCR_TOTAL_UNIT || scr == SCR_PULSE_EQUIV ||
+        scr == SCR_BAUD_RATE || scr == SCR_LANGUAGE || scr == SCR_ROTATION)
         return MODE_ENUM;
 
     /* 只读屏幕 */
@@ -459,53 +468,38 @@ static void save_param_val(screen_t scr, float val)
 
 static uint8_t load_enum_idx(screen_t scr)
 {
-    switch (scr)
-    {
-    case SCR_STD_COND:
-        return param_get_std_cond();
-    case SCR_FLOW_UNIT:
-        return param_get_flow_unit();
-    case SCR_TOTAL_UNIT:
-        return param_get_total_unit();
-    case SCR_PULSE_EQUIV:
-        return param_get_pulse_equiv();
-    case SCR_BAUD_RATE:
-        return param_get_baud_rate();
-    case SCR_LANGUAGE:
-        return param_get_language();
-    default:
-        return 0;
+    switch (scr) {
+    case SCR_STD_COND:    return param_get_std_cond();
+    case SCR_FLOW_UNIT:   return param_get_flow_unit();
+    case SCR_TOTAL_UNIT:  return param_get_total_unit();
+    case SCR_PULSE_EQUIV: return param_get_pulse_equiv();
+    case SCR_BAUD_RATE:   return param_get_baud_rate();
+    case SCR_LANGUAGE:    return param_get_language();
+    case SCR_ROTATION:    return param_get_display_rotation();
+    default:              return 0;
     }
 }
 
 static void save_enum_idx(screen_t scr, uint8_t idx)
 {
-    switch (scr)
-    {
-    case SCR_STD_COND:
-        param_set_std_cond(idx);
-        break;
-    case SCR_FLOW_UNIT:
-        param_set_flow_unit(idx);
-        break;
-    case SCR_TOTAL_UNIT:
-        param_set_total_unit(idx);
-        break;
-    case SCR_PULSE_EQUIV:
-        param_set_pulse_equiv(idx);
-        break;
-    case SCR_BAUD_RATE:
-        param_set_baud_rate(idx);
-        (void)param_flush(); /* 先落盘再切硬件，掉电后软硬件波特率保持一致 */
-        bsp_usart2_apply_uart_config(param_get_uart_config());
-        break;
-    case SCR_LANGUAGE:
-        param_set_language(idx);
-        break;
-    default:
-        break;
+    switch (scr) {
+    case SCR_STD_COND:    param_set_std_cond(idx);    break;
+    case SCR_FLOW_UNIT:   param_set_flow_unit(idx);   break;
+    case SCR_TOTAL_UNIT:  param_set_total_unit(idx);  break;
+    case SCR_PULSE_EQUIV: param_set_pulse_equiv(idx); break;
+    case SCR_BAUD_RATE:   param_set_baud_rate(idx);
+                          (void)param_flush();   /* 先落盘再切硬件，掉电后软硬件波特率保持一致 */
+                          bsp_usart2_apply_uart_config(param_get_uart_config()); break;
+    case SCR_LANGUAGE:    param_set_language(idx);    break;
+#if DISPLAY_ST7789
+    case SCR_ROTATION:    param_set_display_rotation(idx); break;
+#endif
+    default: break;
     }
-    (void)param_flush(); /* 保存动作语义: ENTER = 已落盘 */
+    (void)param_flush();   /* 保存动作语义: ENTER = 已落盘 */
+#if DISPLAY_ST7789
+    if (scr == SCR_ROTATION) OLED_SetRotation(param_get_display_rotation());
+#endif
 }
 
 static float load_readonly_val(screen_t scr)
@@ -583,92 +577,50 @@ static void init_mode_state(nav_frame_t *f)
 /* ===== 标题获取 ===== */
 static const char *get_screen_title(screen_t scr)
 {
-    switch (scr)
-    {
-    case SCR_MAIN_MENU:
-        return "Main Menu";
-    case SCR_BASIC_LIST:
-        return "Basic Setting";
-    case SCR_STD_COND:
-        return "Std Cond";
-    case SCR_METER_COEFF:
-        return "Meter Coeff";
-    case SCR_MEDIUM_COEFF:
-        return "Medium Coeff";
-    case SCR_FLOW_UNIT:
-        return "Flow Unit";
-    case SCR_TOTAL_UNIT:
-        return "Total Unit";
-    case SCR_SMALL_SIGNAL:
-        return "Small Sig Cut";
-    case SCR_FILTER_TIME:
-        return "Filter Parm";
-    case SCR_DAMPING_TIME:
-        return "Damping Time";
-    case SCR_OUTPUT_LIST:
-        return "Output Set";
-    case SCR_4MA_VALUE:
-        return "4mA Value";
-    case SCR_20MA_VALUE:
-        return "20mA Value";
-    case SCR_FREQ_OUTPUT:
-        return "Freq Output";
-    case SCR_PULSE_EQUIV:
-        return "Pulse Equiv";
-    case SCR_MEDIUM_LIST:
-        return "Medium/Cond";
-    case SCR_DENSITY:
-        return "Density";
-    case SCR_PIPE_DIA:
-        return "Pipe Dia";
-    case SCR_GAS_PRESS:
-        return "Gas Press";
-    case SCR_GAS_TEMP:
-        return "Gas Temp";
-    case SCR_REYNOLDS:
-        return "Reynolds K";
-    case SCR_TOTALIZER_LIST:
-        return "Totalizer Set";
-    case SCR_TOTAL_FACTOR:
-        return "Total Factor";
-    case SCR_PRESET_TOTAL:
-        return "Preset Total";
-    case SCR_ACCUM_LIST:
-        return "Total Accum";
-    case SCR_FWD_TOTAL:
-        return "Forward Total";
-    case SCR_REV_TOTAL:
-        return "Reverse Total";
-    case SCR_NET_TOTAL:
-        return "Net Total";
-    case SCR_CLEAR_TOTALS:
-        return "Clear All?";
-    case SCR_SET_TOTAL:
-        return "Set Total";
-    case SCR_CALIB_LIST:
-        return "Calibration";
-    case SCR_DAC_ZERO:
-        return "DAC Zero";
-    case SCR_DAC_FULL:
-        return "DAC Full";
-    case SCR_SPAN_ZERO:
-        return "Span Zero";
-    case SCR_SPAN_FULL:
-        return "Span Full";
-    case SCR_SYSTEM_LIST:
-        return "System";
-    case SCR_FACTORY_RST:
-        return "Factory Reset?";
-    case SCR_COMM_ADDR:
-        return "Comm Addr";
-    case SCR_BAUD_RATE:
-        return "Baud Rate";
-    case SCR_DEVICE_INFO:
-        return "Device Info";
-    case SCR_LANGUAGE:
-        return "Language";
-    default:
-        return "Menu";
+    switch (scr) {
+    case SCR_MAIN_MENU:    return "Main Menu";
+    case SCR_BASIC_LIST:   return "Basic Setting";
+    case SCR_STD_COND:     return "Std Cond";
+    case SCR_METER_COEFF:  return "Meter Coeff";
+    case SCR_MEDIUM_COEFF: return "Medium Coeff";
+    case SCR_FLOW_UNIT:    return "Flow Unit";
+    case SCR_TOTAL_UNIT:   return "Total Unit";
+    case SCR_SMALL_SIGNAL: return "Small Sig Cut";
+    case SCR_FILTER_TIME:  return "Filter Parm";
+    case SCR_DAMPING_TIME: return "Damping Time";
+    case SCR_OUTPUT_LIST:  return "Output Set";
+    case SCR_4MA_VALUE:    return "4mA Value";
+    case SCR_20MA_VALUE:   return "20mA Value";
+    case SCR_FREQ_OUTPUT:  return "Freq Output";
+    case SCR_PULSE_EQUIV:  return "Pulse Equiv";
+    case SCR_MEDIUM_LIST:  return "Medium/Cond";
+    case SCR_DENSITY:      return "Density";
+    case SCR_PIPE_DIA:     return "Pipe Dia";
+    case SCR_GAS_PRESS:    return "Gas Press";
+    case SCR_GAS_TEMP:     return "Gas Temp";
+    case SCR_REYNOLDS:     return "Reynolds K";
+    case SCR_TOTALIZER_LIST: return "Totalizer Set";
+    case SCR_TOTAL_FACTOR: return "Total Factor";
+    case SCR_PRESET_TOTAL: return "Preset Total";
+    case SCR_ACCUM_LIST:   return "Total Accum";
+    case SCR_FWD_TOTAL:    return "Forward Total";
+    case SCR_REV_TOTAL:    return "Reverse Total";
+    case SCR_NET_TOTAL:    return "Net Total";
+    case SCR_CLEAR_TOTALS: return "Clear All?";
+    case SCR_SET_TOTAL:    return "Set Total";
+    case SCR_CALIB_LIST:   return "Calibration";
+    case SCR_DAC_ZERO:     return "DAC Zero";
+    case SCR_DAC_FULL:     return "DAC Full";
+    case SCR_SPAN_ZERO:    return "Span Zero";
+    case SCR_SPAN_FULL:    return "Span Full";
+    case SCR_SYSTEM_LIST:  return "System";
+    case SCR_FACTORY_RST:  return "Factory Reset?";
+    case SCR_COMM_ADDR:    return "Comm Addr";
+    case SCR_BAUD_RATE:    return "Baud Rate";
+    case SCR_DEVICE_INFO:  return "Device Info";
+    case SCR_LANGUAGE:     return "Language";
+    case SCR_ROTATION:     return "Rotation (CW)";
+    default:               return "Menu";
     }
 }
 
@@ -684,13 +636,39 @@ static void handle_confirm(key_event_t evt);
 /* ===== 语言支持 (仅英文, 中文已移除以释放 Flash) ===== */
 
 /* 语言枚举字符串 - 保留单选项以兼容菜单 SCR_LANGUAGE 屏幕 */
-static const char *const s_language_str[LANG_COUNT] = {"English"};
+static const char * const s_language_str[LANG_COUNT] = { "English" };
+
+/* 固件版本文本：app_fw_version.h 的 APP_FW_VERSION 是唯一来源。
+ * 设备信息屏曾硬编码版本串，与 .fw_header 不一致。 */
+static void fw_version_text(char *buf, size_t buf_len)
+{
+    uint32_t ver = APP_FW_VERSION;
+
+    if (buf_len < 16U) {
+        buf[0] = '\0';
+        return;
+    }
+    buf[0] = 'F';
+    buf[1] = 'W';
+    buf[2] = ':';
+    buf[3] = 'v';
+    Int2String((int)((ver >> 16) & 0xFFU), &buf[4]);
+    strcat(buf, ".");
+    Int2String((int)((ver >> 8) & 0xFFU), buf + strlen(buf));
+    strcat(buf, ".");
+    Int2String((int)(ver & 0xFFU), buf + strlen(buf));
+}
 
 #if DISPLAY_ST7789
 
 #define LCD_MENU_ROWS 5U
 
-static void lcd_center(uint16_t y, const char *text, oled_font_t font, uint16_t color)
+static const char * const s_rotation_str[DISPLAY_ROTATION_COUNT] = {
+    "0\xC2\xB0", "90\xC2\xB0", "180\xC2\xB0", "270\xC2\xB0"
+};
+
+static void lcd_center(uint16_t y, const char *text, oled_font_t font,
+                       uint16_t color)
 {
     uint16_t width = OLED_TextWidth(text, font);
     uint16_t x = width < OLED_WIDTH ? (uint16_t)((OLED_WIDTH - width) / 2U) : 0U;
@@ -852,34 +830,15 @@ static void get_enum_data(screen_t screen, const char *const **opts, uint8_t *co
 {
     *opts = NULL;
     *count = 0U;
-    switch (screen)
-    {
-    case SCR_STD_COND:
-        *opts = param_get_std_cond_strings();
-        *count = STD_COND_COUNT;
-        break;
-    case SCR_FLOW_UNIT:
-        *opts = param_get_flow_unit_strings();
-        *count = FLOW_UNIT_COUNT;
-        break;
-    case SCR_TOTAL_UNIT:
-        *opts = param_get_total_unit_strings();
-        *count = TOTAL_UNIT_COUNT;
-        break;
-    case SCR_PULSE_EQUIV:
-        *opts = param_get_pulse_equiv_strings();
-        *count = PULSE_EQUIV_COUNT;
-        break;
-    case SCR_BAUD_RATE:
-        *opts = param_get_baud_rate_strings();
-        *count = BAUD_RATE_COUNT;
-        break;
-    case SCR_LANGUAGE:
-        *opts = s_language_str;
-        *count = LANG_COUNT;
-        break;
-    default:
-        break;
+    switch (screen) {
+    case SCR_STD_COND: *opts = param_get_std_cond_strings(); *count = STD_COND_COUNT; break;
+    case SCR_FLOW_UNIT: *opts = param_get_flow_unit_strings(); *count = FLOW_UNIT_COUNT; break;
+    case SCR_TOTAL_UNIT: *opts = param_get_total_unit_strings(); *count = TOTAL_UNIT_COUNT; break;
+    case SCR_PULSE_EQUIV: *opts = param_get_pulse_equiv_strings(); *count = PULSE_EQUIV_COUNT; break;
+    case SCR_BAUD_RATE: *opts = param_get_baud_rate_strings(); *count = BAUD_RATE_COUNT; break;
+    case SCR_LANGUAGE: *opts = s_language_str; *count = LANG_COUNT; break;
+    case SCR_ROTATION: *opts = s_rotation_str; *count = DISPLAY_ROTATION_COUNT; break;
+    default: break;
     }
 }
 
@@ -977,10 +936,9 @@ static void render_readonly(nav_frame_t *f)
         strcpy(buf, "Baud: ");
         strncat(buf, param_get_baud_rate_strings()[param_get_baud_rate()], sizeof(buf) - 7U);
         OLED_DrawText(14, 119, buf, OLED_FONT_MEDIUM, OLED_WHITE, OLED_BLACK);
-        OLED_DrawText(14, 151, "FW:v1.0.0", OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
-    }
-    else
-    {
+        fw_version_text(buf, sizeof(buf));
+        OLED_DrawText(14, 151, buf, OLED_FONT_MEDIUM, OLED_MUTED, OLED_BLACK);
+    } else {
         ftoa(load_readonly_val(f->screen_id), 1, buf, sizeof(buf));
         lcd_center(91, buf, OLED_FONT_LARGE, OLED_WHITE);
         lcd_center(137, param_get_total_unit_str(param_get_total_unit()), OLED_FONT_MEDIUM,
@@ -1398,10 +1356,9 @@ static void render_readonly(nav_frame_t *f)
         }
 
         OLED_SetCursor(0, 44);
-        OLED_WriteString("FW:v1.0.0", OLED_FONT_MEDIUM, OLED_WHITE);
-    }
-    else
-    {
+        fw_version_text(buf, sizeof(buf));
+        OLED_WriteString(buf, OLED_FONT_MEDIUM, OLED_WHITE);
+    } else {
         const char *unit_str = param_get_total_unit_str(param_get_total_unit());
         uint8_t x_start;
 
@@ -1697,28 +1654,15 @@ static void handle_enum(key_event_t evt)
 #endif
 
     /* 获取枚举最大值 */
-    switch (f->screen_id)
-    {
-    case SCR_STD_COND:
-        max_val = (uint8_t)(STD_COND_COUNT - 1);
-        break;
-    case SCR_FLOW_UNIT:
-        max_val = (uint8_t)(FLOW_UNIT_COUNT - 1);
-        break;
-    case SCR_TOTAL_UNIT:
-        max_val = (uint8_t)(TOTAL_UNIT_COUNT - 1);
-        break;
-    case SCR_PULSE_EQUIV:
-        max_val = (uint8_t)(PULSE_EQUIV_COUNT - 1);
-        break;
-    case SCR_BAUD_RATE:
-        max_val = (uint8_t)(BAUD_RATE_COUNT - 1);
-        break;
-    case SCR_LANGUAGE:
-        max_val = (uint8_t)(LANG_COUNT - 1);
-        break;
-    default:
-        break;
+    switch (f->screen_id) {
+    case SCR_STD_COND:    max_val = (uint8_t)(STD_COND_COUNT - 1);    break;
+    case SCR_FLOW_UNIT:   max_val = (uint8_t)(FLOW_UNIT_COUNT - 1);   break;
+    case SCR_TOTAL_UNIT:  max_val = (uint8_t)(TOTAL_UNIT_COUNT - 1);  break;
+    case SCR_PULSE_EQUIV: max_val = (uint8_t)(PULSE_EQUIV_COUNT - 1); break;
+    case SCR_BAUD_RATE:   max_val = (uint8_t)(BAUD_RATE_COUNT - 1);   break;
+    case SCR_LANGUAGE:    max_val = (uint8_t)(LANG_COUNT - 1);        break;
+    case SCR_ROTATION:    max_val = (uint8_t)(DISPLAY_ROTATION_COUNT - 1); break;
+    default: break;
     }
 
     switch (evt)
@@ -1906,6 +1850,9 @@ static void handle_confirm(key_event_t evt)
                 /* 参数缓存/Flash 已恢复默认值，同步更新当前运行中的通信配置。 */
                 bsp_usart_set_modbus_addr(param_get_modbus_addr());
                 bsp_usart2_apply_uart_config(param_get_uart_config());
+#if DISPLAY_ST7789
+                OLED_SetRotation(param_get_display_rotation());
+#endif
                 /* DAC/Span 默认值已随统一存储复位，同步 RAM 镜像 */
                 DacZeroValue = param_get_dac_zero();
                 DacFullValue = param_get_dac_full();

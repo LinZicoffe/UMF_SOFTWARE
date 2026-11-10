@@ -36,11 +36,11 @@ def menu_source():
     source = (ROOT / 'BSP/bsp_menu.c').read_text(encoding='utf-8-sig')
     params = (ROOT / 'BSP/param_storage.c').read_text(encoding='utf-8-sig')
     header = (ROOT / 'BSP/param_storage.h').read_text(encoding='utf-8-sig')
-    body = '#include "display.h"\n#include "ftoa.h"\n#include <stdio.h>\n#include <string.h>\n'
+    body = '#include "display.h"\n#include "ftoa.h"\n#include "app_fw_version.h"\n#include <stdio.h>\n#include <string.h>\n'
     body += source[source.index('typedef enum'):source.index('/* ===== 模块静态变量')]
     body += header[header.index('typedef enum'):header.index('/* ===== 参数集合结构体')]
     body += '\n'.join(re.findall(r'^#define DEF_.*', params, re.M)) + '\n'
-    body += params[params.index('static const char * const s_std_cond_str'):params.index('/* ===== 内部 RAM')]
+    body += params[params.index('/* ===== 枚举字符串'):params.index('/* ===== 内部 RAM')]
     macros = dict(re.findall(r'^#define DEF_(\w+)\s+([^\s/]+)', params, re.M))
     for kind, key in re.findall(r'^(uint8_t|uint16_t|float)\s+param_get_(\w+)\(void\);', header, re.M):
         if key.upper() in macros:
@@ -54,6 +54,9 @@ static float SpanLoValue = 4.0f, SpanHiValue = 20.0f;
 static const char * const s_language_str[LANG_COUNT] = { "English" };
 static void Int2String(int n, char *text) { itoa_local(n, text); }
 '''
+    # 格式分支尚未包含版本函数；存在时始终使用生产实现。
+    if re.search(r'\bfw_version_text\s*\(', source):
+        body += function(source, 'fw_version_text')
     for name in ['get_list_data', 'detect_mode', 'load_param_val', 'load_enum_idx',
                  'load_readonly_val', 'is_coeff_screen', 'get_numeric_range',
                  'coeff_digits_from_value', 'get_screen_title']:
@@ -74,11 +77,10 @@ class DisplayTests(unittest.TestCase):
             source = replace_function(source, name, '')
         source = replace_function(source, 'LCD_StreamWrite8', '(void)dat;')
         source = replace_function(source, 'stream_color', 'sim_pixel(color);')
-        source = source.replace('    const industrial_font_t *data = lcd_font_data(font);\n    if (!text) return;',
-                                '    const industrial_font_t *data = lcd_font_data(font);\n'
-                                '    sim_check_text(x, y, text, font);\n    if (!text) return;')
-        if '    sim_check_text(x, y, text, font);' not in source:
-            raise RuntimeError('DrawText bounds instrumentation did not match production source')
+        draw_text = function(source, 'OLED_DrawText')
+        checked_draw_text = draw_text.replace(
+            '{', '{\n    sim_check_text(x, y, text, font);', 1)
+        source = source.replace(draw_text, checked_draw_text, 1)
         source += '''\nvoid sim_check_text(uint16_t x, uint16_t y, const char *text, oled_font_t font)
 {
     if (text && *text && (x + OLED_TextWidth(text, font) > OLED_WIDTH ||
@@ -90,7 +92,8 @@ class DisplayTests(unittest.TestCase):
 '''
         source = '#include <stdio.h>\n#include <stdlib.h>\n' + source
         (cls.work / 'display.c').write_text(source, encoding='utf-8')
-        for name in ['display.h', 'run_display.h', 'run_display.c', 'ftoa.c', 'ftoa.h']:
+        for name in ['display.h', 'run_display.h', 'run_display.c', 'ftoa.c', 'ftoa.h',
+                     'app_fw_version.h']:
             shutil.copyfile(ROOT / 'BSP' / name, cls.work / name)
         for name in ['industrial_fonts.h', 'bmp.h']:
             shutil.copyfile(ROOT / 'OLED' / name, cls.work / name)
